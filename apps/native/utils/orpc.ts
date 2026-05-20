@@ -18,7 +18,7 @@ export const queryClient = new QueryClient({
 
 export const link = new RPCLink({
   url: `${env.EXPO_PUBLIC_SERVER_URL}/rpc`,
-  fetch: function (url, options) {
+  fetch(url, options) {
     return fetch(url, {
       ...options,
       // Better Auth Expo forwards the session cookie manually on native.

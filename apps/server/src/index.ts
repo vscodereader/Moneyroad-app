@@ -10,10 +10,18 @@ import { OpenAPIReferencePlugin } from "@orpc/openapi/plugins";
 import { onError } from "@orpc/server";
 import { RPCHandler } from "@orpc/server/fastify";
 import { ZodToJsonSchemaConverter } from "@orpc/zod/zod4";
-import { streamText, type UIMessage, convertToModelMessages, wrapLanguageModel } from "ai";
+import {
+  convertToModelMessages,
+  streamText,
+  type UIMessage,
+  wrapLanguageModel,
+} from "ai";
 import { initLogger } from "evlog";
 import { createAILogger, createEvlogIntegration } from "evlog/ai";
-import { createAuthMiddleware, type BetterAuthInstance } from "evlog/better-auth";
+import {
+  type BetterAuthInstance,
+  createAuthMiddleware,
+} from "evlog/better-auth";
 import { evlog, useLogger } from "evlog/fastify";
 import Fastify from "fastify";
 
@@ -22,7 +30,7 @@ const baseCorsConfig = {
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
   credentials: true,
-  maxAge: 86400,
+  maxAge: 86_400,
 };
 
 const rpcHandler = new RPCHandler(appRouter, {
@@ -102,7 +110,9 @@ fastify.route({
       const url = new URL(request.url, `http://${request.headers.host}`);
       const headers = new Headers();
       Object.entries(request.headers).forEach(([key, value]) => {
-        if (value) headers.append(key, value.toString());
+        if (value) {
+          headers.append(key, value.toString());
+        }
       });
       const req = new Request(url.toString(), {
         method: request.method,
@@ -128,7 +138,7 @@ interface AiRequestBody {
   messages: UIMessage[];
 }
 
-fastify.post("/ai", async function (request) {
+fastify.post("/ai", async (request) => {
   const { messages } = request.body as AiRequestBody;
   const ai = createAILogger(useLogger());
   const model = wrapLanguageModel({
@@ -147,9 +157,7 @@ fastify.post("/ai", async function (request) {
   return result.toUIMessageStreamResponse();
 });
 
-fastify.get("/", async () => {
-  return "OK";
-});
+fastify.get("/", async () => "OK");
 
 fastify.listen({ port: 3000 }, (err) => {
   if (err) {

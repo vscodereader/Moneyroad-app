@@ -12,13 +12,18 @@ export function createAuth() {
     database: drizzleAdapter(db, {
       provider: "pg",
 
-      schema: schema,
+      schema,
     }),
     trustedOrigins: [
       env.CORS_ORIGIN,
       "moneyroad-app://",
       ...(env.NODE_ENV === "development"
-        ? ["exp://", "exp://**", "exp://192.168.*.*:*/**", "http://localhost:8081"]
+        ? [
+            "exp://",
+            "exp://**",
+            "exp://192.168.*.*:*/**",
+            "http://localhost:8081",
+          ]
         : []),
     ],
     emailAndPassword: {

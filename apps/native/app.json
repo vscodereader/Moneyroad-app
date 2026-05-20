@@ -12,6 +12,12 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "android": {
+      "package": "com.mkvista.moneyroadapp"
+    },
+    "ios": {
+      "bundleIdentifier": "com.mkvista.moneyroadapp"
     }
   }
 }

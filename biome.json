@@ -25,7 +25,13 @@
       "!**/.svelte-kit",
       "!**/wrangler.jsonc",
       "!**/.source",
-      "!**/convex/_generated"
+      "!**/convex/_generated",
+      "!**/.agents",
+      "!**/.codex",
+      "!**/.claude",
+      "!**/.gemini",
+      "!**/android",
+      "!**/ios/Pods"
     ]
   },
   "formatter": {

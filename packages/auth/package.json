@@ -1,0 +1,25 @@
+{
+  "name": "@moneyroad-app/auth",
+  "type": "module",
+  "exports": {
+    ".": {
+      "default": "./src/index.ts"
+    },
+    "./*": {
+      "default": "./src/*.ts"
+    }
+  },
+  "scripts": {},
+  "dependencies": {
+    "@better-auth/expo": "catalog:",
+    "@moneyroad-app/db": "workspace:*",
+    "@moneyroad-app/env": "workspace:*",
+    "better-auth": "catalog:",
+    "dotenv": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@moneyroad-app/config": "workspace:*",
+    "typescript": "^6"
+  }
+}

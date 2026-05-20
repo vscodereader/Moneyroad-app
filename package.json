@@ -1,0 +1,38 @@
+{
+  "name": "moneyroad-app",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "type": "module",
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "check-types": "turbo check-types",
+    "dev:native": "turbo -F native dev",
+    "dev:web": "turbo -F web dev",
+    "dev:server": "turbo -F server dev",
+    "db:push": "turbo -F @moneyroad-app/db db:push",
+    "db:studio": "turbo -F @moneyroad-app/db db:studio",
+    "db:generate": "turbo -F @moneyroad-app/db db:generate",
+    "db:migrate": "turbo -F @moneyroad-app/db db:migrate",
+    "check": "ultracite check",
+    "fix": "ultracite fix"
+  },
+  "dependencies": {
+    "@moneyroad-app/env": "workspace:*",
+    "dotenv": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.4.15",
+    "@moneyroad-app/config": "workspace:*",
+    "@types/node": "^22.13.14",
+    "lefthook": "latest",
+    "turbo": "^2.8.12",
+    "typescript": "^6",
+    "ultracite": "7.7.0"
+  },
+  "packageManager": "pnpm@11.0.0-rc.5"
+}

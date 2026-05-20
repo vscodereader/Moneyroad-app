@@ -1,0 +1,24 @@
+{
+  "$schema": "https://ui.shadcn.com/schema.json",
+  "style": "base-lyra",
+  "rsc": true,
+  "tsx": true,
+  "tailwind": {
+    "config": "",
+    "css": "src/styles/globals.css",
+    "baseColor": "neutral",
+    "cssVariables": true,
+    "prefix": ""
+  },
+  "iconLibrary": "lucide",
+  "aliases": {
+    "components": "@moneyroad-app/ui/components",
+    "utils": "@moneyroad-app/ui/lib/utils",
+    "hooks": "@moneyroad-app/ui/hooks",
+    "lib": "@moneyroad-app/ui/lib",
+    "ui": "@moneyroad-app/ui/components"
+  },
+  "menuColor": "default",
+  "menuAccent": "subtle",
+  "registries": {}
+}

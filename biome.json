@@ -86,6 +86,69 @@
       "tailwindDirectives": true
     }
   },
+  "overrides": [
+    {
+      "includes": ["apps/native/**", "apps/web/**"],
+      "linter": {
+        "rules": {
+          "correctness": {
+            "useExhaustiveDependencies": "off",
+            "noUnusedVariables": "off",
+            "noUnusedFunctionParameters": "off",
+            "noGlobalDirnameFilename": "off"
+          },
+          "suspicious": {
+            "noArrayIndexKey": "off"
+          },
+          "style": {
+            "noNestedTernary": "off",
+            "useConsistentTypeDefinitions": "off"
+          },
+          "performance": {
+            "noNamespaceImport": "off"
+          },
+          "complexity": {
+            "noUselessFragments": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": ["apps/server/**", "packages/api/**"],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "useAwait": "off",
+            "useIterableCallbackReturn": "off"
+          },
+          "complexity": {
+            "noForEach": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": ["packages/auth/**", "packages/db/**"],
+      "linter": {
+        "rules": {
+          "performance": {
+            "noNamespaceImport": "off",
+            "noBarrelFile": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": ["packages/ui/**"],
+      "linter": {
+        "rules": {
+          "a11y": {
+            "noLabelWithoutControl": "off"
+          }
+        }
+      }
+    }
+  ],
   "extends": [
     "ultracite/biome/core",
     "ultracite/biome/next",

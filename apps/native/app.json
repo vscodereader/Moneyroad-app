@@ -18,6 +18,12 @@
     },
     "ios": {
       "bundleIdentifier": "kr.ai.moneyroad"
-    }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "b2ba4ca6-8c07-4b3a-8862-6517c665fe7c"
+      }
+    },
+    "owner": "mkvista"
   }
 }

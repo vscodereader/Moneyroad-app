@@ -1,9 +1,10 @@
-import { Tabs } from "expo-router";
+import { type Href, Redirect, Tabs } from "expo-router";
 import { Pressable, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Icon, type IconProps } from "@/components/icons";
 import { useMrTheme } from "@/hooks/use-mr-theme";
+import { useOnboarded } from "@/utils/onboarding";
 
 interface TabBarProps {
   navigation: {
@@ -86,6 +87,17 @@ function MrTabBar({ state, navigation }: TabBarProps) {
 }
 
 export default function TabsLayout() {
+  const { t } = useMrTheme();
+  const onboarded = useOnboarded();
+
+  // Hold a blank themed screen until the persisted flag is hydrated, so an
+  // already-onboarded user never sees the onboarding flash.
+  if (onboarded === null) {
+    return <View style={{ flex: 1, backgroundColor: t.bg }} />;
+  }
+  if (!onboarded) {
+    return <Redirect href={"/(moneyroad)/onboarding" as Href} />;
+  }
   return (
     <Tabs
       screenOptions={{ headerShown: false }}

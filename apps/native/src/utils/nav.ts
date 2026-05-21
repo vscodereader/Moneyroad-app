@@ -4,6 +4,8 @@
 
 import { type Href, router } from "expo-router";
 
+import { setOnboarded } from "@/utils/onboarding";
+
 const BASE = "/(moneyroad)";
 
 export type TabName = "home" | "signals" | "news" | "discuss" | "mypage";
@@ -20,7 +22,10 @@ export const nav = {
     router.navigate(
       `${BASE}/(tabs)${name === "home" ? "" : `/${name}`}` as Href
     ),
-  finishOnboarding: () => router.replace(`${BASE}/(tabs)` as Href),
+  finishOnboarding: () => {
+    setOnboarded(true);
+    router.replace(`${BASE}/(tabs)` as Href);
+  },
   back: () => {
     if (router.canGoBack()) {
       router.back();

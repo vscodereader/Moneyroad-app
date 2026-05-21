@@ -1,12 +1,12 @@
 {
   "expo": {
-    "scheme": "moneyroad-app",
+    "scheme": "moneyroad.ai.kr",
     "userInterfaceStyle": "automatic",
     "orientation": "default",
     "web": {
       "bundler": "metro"
     },
-    "name": "moneyroad-app",
+    "name": "머니로드",
     "slug": "moneyroad-app",
     "plugins": ["expo-font"],
     "experiments": {
@@ -14,10 +14,10 @@
       "reactCompiler": true
     },
     "android": {
-      "package": "com.mkvista.moneyroadapp"
+      "package": "kr.ai.moneyroad"
     },
     "ios": {
-      "bundleIdentifier": "com.mkvista.moneyroadapp"
+      "bundleIdentifier": "kr.ai.moneyroad"
     }
   }
 }

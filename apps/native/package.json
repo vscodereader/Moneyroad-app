@@ -15,8 +15,10 @@
     "build:dev:android": "eas build --profile development --platform android",
     "build:preview": "eas build --profile preview --platform all",
     "build:prod": "eas build --profile production --platform all",
-    "submit:ios": "eas submit --profile production --platform ios",
-    "submit:android": "eas submit --profile production --platform android"
+    "submit:ios": "eas submit --profile internal --platform ios",
+    "submit:ios:prod": "eas submit --profile production --platform ios",
+    "submit:android": "eas submit --profile internal --platform android",
+    "submit:android:prod": "eas submit --profile production --platform android"
   },
   "dependencies": {
     "@ai-sdk/react": "catalog:",

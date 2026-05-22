@@ -254,6 +254,31 @@ importers:
         specifier: ~5.9.2
         version: 5.9.3
 
+  apps/realtime:
+    dependencies:
+      fastify:
+        specifier: ^5.3.3
+        version: 5.8.5
+      zod:
+        specifier: 'catalog:'
+        version: 4.4.3
+    devDependencies:
+      '@moneyroad-app/config':
+        specifier: workspace:*
+        version: link:../../packages/config
+      '@types/node':
+        specifier: ^22.13.14
+        version: 22.19.19
+      tsdown:
+        specifier: ^0.21.9
+        version: 0.21.10(typescript@6.0.3)
+      tsx:
+        specifier: ^4.19.2
+        version: 4.22.3
+      typescript:
+        specifier: ^6
+        version: 6.0.3
+
   apps/server:
     dependencies:
       '@ai-sdk/devtools':
@@ -265,18 +290,6 @@ importers:
       '@fastify/cors':
         specifier: ^11.0.1
         version: 11.2.0
-      '@moneyroad-app/api':
-        specifier: workspace:*
-        version: link:../../packages/api
-      '@moneyroad-app/auth':
-        specifier: workspace:*
-        version: link:../../packages/auth
-      '@moneyroad-app/db':
-        specifier: workspace:*
-        version: link:../../packages/db
-      '@moneyroad-app/env':
-        specifier: workspace:*
-        version: link:../../packages/env
       '@orpc/openapi':
         specifier: 'catalog:'
         version: 1.14.3(@opentelemetry/api@1.9.1)(fastify@5.8.5)(ws@8.20.1)
@@ -295,19 +308,37 @@ importers:
       dotenv:
         specifier: 'catalog:'
         version: 17.4.2
+      drizzle-orm:
+        specifier: 'catalog:'
+        version: 0.45.2(@opentelemetry/api@1.9.1)(@types/pg@8.20.0)(kysely@0.28.17)(pg@8.21.0)
       evlog:
         specifier: 'catalog:'
         version: 2.17.0(ai@6.0.185(zod@4.4.3))(express@5.2.1)(fastify@5.8.5)(hono@4.12.21)(next@16.2.6(@opentelemetry/api@1.9.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(react@19.2.6)
       fastify:
         specifier: ^5.3.3
         version: 5.8.5
+      pg:
+        specifier: ^8.17.1
+        version: 8.21.0
       zod:
         specifier: 'catalog:'
         version: 4.4.3
     devDependencies:
+      '@moneyroad-app/api':
+        specifier: workspace:*
+        version: link:../../packages/api
+      '@moneyroad-app/auth':
+        specifier: workspace:*
+        version: link:../../packages/auth
       '@moneyroad-app/config':
         specifier: workspace:*
         version: link:../../packages/config
+      '@moneyroad-app/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@moneyroad-app/env':
+        specifier: workspace:*
+        version: link:../../packages/env
       '@types/node':
         specifier: ^22.13.14
         version: 22.19.19

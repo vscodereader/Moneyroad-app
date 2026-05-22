@@ -1,0 +1,28 @@
+# Dependencies (reinstalled inside the image)
+**/node_modules
+
+# Build outputs (rebuilt inside the image)
+**/dist
+**/.next
+**/.turbo
+**/build
+**/out
+
+# Secrets / local env (injected at runtime instead)
+**/.env
+**/.env.*
+!**/.env.example
+
+# VCS & tooling
+.git
+.github
+.idea
+.vscode
+.omc
+.agents
+.codex
+
+# Misc
+**/*.log
+**/.DS_Store
+**/*.tsbuildinfo

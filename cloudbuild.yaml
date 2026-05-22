@@ -1,0 +1,21 @@
+# Builds an app image on Cloud Build (native linux/amd64) using a monorepo
+# Dockerfile with the repo root as the build context.
+#
+#   # server (default)
+#   gcloud builds submit --config cloudbuild.yaml \
+#     --substitutions=_IMAGE=asia-northeast3-docker.pkg.dev/PROJECT/moneyroad/server:TAG
+#
+#   # realtime
+#   gcloud builds submit --config cloudbuild.yaml \
+#     --substitutions=_IMAGE=...moneyroad/realtime:TAG,_DOCKERFILE=apps/realtime/Dockerfile
+steps:
+  - name: "gcr.io/cloud-builders/docker"
+    env:
+      - "DOCKER_BUILDKIT=1"
+    args: ["build", "-f", "${_DOCKERFILE}", "-t", "${_IMAGE}", "."]
+substitutions:
+  _DOCKERFILE: apps/server/Dockerfile
+images:
+  - "${_IMAGE}"
+options:
+  logging: CLOUD_LOGGING_ONLY

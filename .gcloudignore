@@ -1,0 +1,36 @@
+# Controls what gets uploaded to Cloud Build as the source context.
+# Keep all source (package.json, lockfile, workspace config, migrations); the
+# image is built fresh inside Cloud Build, so installed/built artifacts are excluded.
+.git
+.github
+
+# Dependencies & build outputs (regenerated in the image)
+node_modules
+**/node_modules
+**/dist
+**/.next
+**/.turbo
+**/build
+**/out
+
+# Native build artifacts (the server build never needs these — 2GB+)
+apps/native/android
+apps/native/ios
+**/.expo
+
+# Secrets / local env
+**/.env
+**/.env.*
+!**/.env.example
+
+# Tooling / editor
+.idea
+.vscode
+.omc
+.agents
+.codex
+
+# Misc
+**/*.log
+**/.DS_Store
+**/*.tsbuildinfo

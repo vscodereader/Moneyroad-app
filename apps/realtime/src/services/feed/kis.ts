@@ -2,9 +2,11 @@ import { env } from "@moneyroad-app/env/realtime";
 import { createError, log } from "evlog";
 import type { MarketDataFeed, Quote } from "./types";
 
+// One persistent connection multiplexes all symbols (KIS allows a single
+// realtime connection per credential). Path is /tryitout per KIS examples.
 const WS_URL = {
-  prod: "ws://ops.koreainvestment.com:21000",
-  paper: "ws://ops.koreainvestment.com:31000",
+  prod: "ws://ops.koreainvestment.com:21000/tryitout",
+  paper: "ws://ops.koreainvestment.com:31000/tryitout",
 } as const;
 
 const REST_URL = {
@@ -12,23 +14,47 @@ const REST_URL = {
   paper: "https://openapivts.koreainvestment.com:29443",
 } as const;
 
-// 실시간 체결가 TR. 호가(H0STASP0) 등 다른 스트림은 별도 TR로 추가한다.
+// 실시간 체결가(KRX) TR. 호가(H0STASP0) 등은 별도 TR로 추가.
 const TR_TRADE = "H0STCNT0";
 const TR_TYPE_SUBSCRIBE = "1";
-const TR_TYPE_UNSUBSCRIBE = "2";
+const TR_TYPE_UNSUBSCRIBE = "0";
+
+// KIS limits ~41 registrations per connection.
+const MAX_SYMBOLS = 40;
+
+// Field indices within one 46-field 체결가 record (KIS ccnl_krx columns).
+const FIELD_COUNT = 46;
+const F_SYMBOL = 0;
+const F_PRICE = 2;
+const F_SIGN = 3; // 1:상한 2:상승 3:보합 4:하한 5:하락
+const F_DIFF = 4; // 전일 대비 (magnitude)
+const F_RATE = 5; // 전일 대비율 (%)
+const F_ACML_VOL = 13; // 누적 거래량
+
+const RECONNECT_BASE_MS = 1000;
+const RECONNECT_MAX_MS = 30_000;
+
+function signed(magnitude: number, signCode: string | undefined): number {
+  // Down when 하한(4)/하락(5); KIS sends the magnitude unsigned.
+  const negative = signCode === "4" || signCode === "5";
+  return negative ? -Math.abs(magnitude) : Math.abs(magnitude);
+}
 
 /**
- * KIS(한국투자증권) 실시간 시세 어댑터 — Phase 1 스켈레톤.
+ * KIS(한국투자증권) 실시간 체결가 어댑터.
  *
- * 흐름: approval_key 발급(REST) → WebSocket 접속 → tr_id별 등록/해제 →
- * 파이프 구분 프레임 파싱. tr_id별 필드 인덱스와 PINGPONG/암호화 처리는
- * KIS 문서로 검증한 뒤 채워야 한다(아래 TODO).
+ * approval_key 발급(REST) → WebSocket(/tryitout) 1연결 → tr_id별 등록/해제 →
+ * 파이프 구분 프레임 파싱. 체결가(H0STCNT0)는 평문이라 복호화 불필요.
+ * 연결이 끊기면 지수 백오프로 재연결하고 등록 종목을 다시 구독한다.
  */
 export class KisFeed implements MarketDataFeed {
   private socket: WebSocket | null = null;
   private approvalKey = "";
   private handler: ((quote: Quote) => void) | null = null;
   private readonly registered = new Set<string>();
+  private stopped = false;
+  private reconnectAttempts = 0;
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
   async start(): Promise<void> {
     if (!(env.KIS_APP_KEY && env.KIS_APP_SECRET)) {
@@ -39,16 +65,33 @@ export class KisFeed implements MarketDataFeed {
         fix: "Set KIS_APP_KEY and KIS_APP_SECRET, or run with FEED=mock",
       });
     }
+    this.stopped = false;
     this.approvalKey = await this.fetchApprovalKey();
     this.connect();
   }
 
   stop(): void {
+    this.stopped = true;
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
     this.socket?.close();
     this.socket = null;
   }
 
   subscribe(symbol: string): void {
+    if (!this.registered.has(symbol) && this.registered.size >= MAX_SYMBOLS) {
+      log.warn({
+        kis: {
+          event: "limit",
+          why: "max symbols reached",
+          symbol,
+          MAX_SYMBOLS,
+        },
+      });
+      return;
+    }
     this.registered.add(symbol);
     this.send(symbol, TR_TYPE_SUBSCRIBE);
   }
@@ -95,7 +138,9 @@ export class KisFeed implements MarketDataFeed {
 
   private connect(): void {
     const socket = new WebSocket(WS_URL[env.KIS_ENV]);
+
     socket.addEventListener("open", () => {
+      this.reconnectAttempts = 0;
       log.info({
         kis: {
           event: "connected",
@@ -107,19 +152,41 @@ export class KisFeed implements MarketDataFeed {
         this.send(symbol, TR_TYPE_SUBSCRIBE);
       }
     });
+
     socket.addEventListener("message", (event) => {
       this.handleMessage(typeof event.data === "string" ? event.data : "");
     });
+
     socket.addEventListener("error", () => {
       log.error({
         kis: { event: "error", why: "upstream KIS connection errored" },
       });
     });
+
     socket.addEventListener("close", () => {
-      log.warn({ kis: { event: "disconnected" } });
-      // TODO: 지수 백오프 재연결, approval_key 만료 갱신
+      this.socket = null;
+      if (!this.stopped) {
+        this.scheduleReconnect();
+      }
     });
+
     this.socket = socket;
+  }
+
+  private scheduleReconnect(): void {
+    this.reconnectAttempts += 1;
+    const delay = Math.min(
+      RECONNECT_BASE_MS * 2 ** (this.reconnectAttempts - 1),
+      RECONNECT_MAX_MS
+    );
+    log.warn({
+      kis: {
+        event: "reconnect",
+        attempt: this.reconnectAttempts,
+        delayMs: delay,
+      },
+    });
+    this.reconnectTimer = setTimeout(() => this.connect(), delay);
   }
 
   private send(symbol: string, trType: string): void {
@@ -143,35 +210,68 @@ export class KisFeed implements MarketDataFeed {
     if (!raw) {
       return;
     }
-    // 제어 메시지(JSON): 등록 응답, PINGPONG 등
+    // 제어 메시지(JSON): PINGPONG / 구독 응답. Node 글로벌 WebSocket은 pong()을
+    // 노출하지 않으므로 KIS의 PINGPONG 텍스트 프레임을 그대로 echo 한다.
     if (raw.startsWith("{")) {
-      // TODO: PINGPONG 수신 시 동일 페이로드로 echo 응답
+      if (raw.includes("PINGPONG")) {
+        this.socket?.send(raw);
+        return;
+      }
+      // 구독 등록 응답(SUBSCRIBE SUCCESS / 오류) 로깅 — 핸드셰이크 가시성.
+      try {
+        const msg = JSON.parse(raw) as {
+          body?: { rt_cd?: string; msg1?: string };
+        };
+        if (msg.body) {
+          log.info({
+            kis: { event: "control", rtCd: msg.body.rt_cd, msg: msg.body.msg1 },
+          });
+        }
+      } catch {
+        // 비정형 제어 메시지는 무시
+      }
       return;
     }
-    const quote = this.parseTradeFrame(raw);
-    if (quote) {
+    for (const quote of parseTradeFrames(raw)) {
       this.handler?.(quote);
     }
   }
+}
 
-  private parseTradeFrame(raw: string): Quote | null {
-    // 형식: `0|H0STCNT0|001|005930^체결시각^현재가^...`
-    const parts = raw.split("|");
-    const trId = parts[1];
-    const payload = parts[3];
-    if (trId !== TR_TRADE || !payload) {
-      return null;
-    }
-    const fields = payload.split("^");
-    const symbol = fields[0];
-    const priceText = fields[2]; // TODO: 현재가 인덱스를 KIS 문서로 확인
-    if (!(symbol && priceText)) {
-      return null;
-    }
-    const price = Number(priceText);
-    if (Number.isNaN(price)) {
-      return null;
-    }
-    return { symbol, price, ts: Date.now() };
+/**
+ * Parses a KIS 체결가 frame into quotes. Pure (no I/O) so it can be unit-tested
+ * against synthetic frames without a live connection.
+ * 형식: `<암호화>|H0STCNT0|<건수>|rec1^rec2^...` (각 레코드 46필드)
+ */
+export function parseTradeFrames(raw: string): Quote[] {
+  const parts = raw.split("|");
+  const encrypted = parts[0];
+  const trId = parts[1];
+  const count = Number(parts[2]);
+  const payload = parts[3];
+  // 체결가는 평문(0). 암호화 프레임(1)은 구독하지 않으므로 무시.
+  if (encrypted !== "0" || trId !== TR_TRADE || !payload || count < 1) {
+    return [];
   }
+
+  const fields = payload.split("^");
+  const ts = Date.now();
+  const quotes: Quote[] = [];
+  for (let i = 0; i < count; i += 1) {
+    const base = i * FIELD_COUNT;
+    const symbol = fields[base + F_SYMBOL];
+    const price = Number(fields[base + F_PRICE]);
+    if (!symbol || Number.isNaN(price)) {
+      continue;
+    }
+    quotes.push({
+      symbol,
+      price,
+      change: signed(Number(fields[base + F_DIFF]), fields[base + F_SIGN]),
+      changeRate: signed(Number(fields[base + F_RATE]), fields[base + F_SIGN]),
+      volume: Number(fields[base + F_ACML_VOL]) || undefined,
+      ts,
+    });
+  }
+  return quotes;
 }

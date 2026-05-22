@@ -19,6 +19,12 @@
       "autoIncrement": true,
       "node": "22.13.0",
       "environment": "production"
+    },
+    "staging": {
+      "distribution": "store",
+      "autoIncrement": true,
+      "node": "22.13.0",
+      "environment": "preview"
     }
   },
   "submit": {

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { ScrollView, Text, View } from "react-native";
 
 import {
-  AiBriefCard,
+  // AiBriefCard,
   IndexStrip,
   NewsCard,
   SignalCard,
@@ -97,12 +97,12 @@ export default function HomeScreen() {
 
         <IndexStrip indices={indices} />
 
-        <View style={{ paddingHorizontal: 16, paddingTop: 16 }}>
-          <AiBriefCard
-            body="관심 종목 6건 중 4건이 긍정 이벤트. 두산에너빌리티 체코 원전 본계약과 SK하이닉스 HBM4 양산 일정 단축이 오늘의 핵심."
-            time="오전 7:30"
-          />
-        </View>
+        {/*<View style={{ paddingHorizontal: 16, paddingTop: 16 }}>*/}
+        {/*  <AiBriefCard*/}
+        {/*    body="관심 종목 6건 중 4건이 긍정 이벤트. 두산에너빌리티 체코 원전 본계약과 SK하이닉스 HBM4 양산 일정 단축이 오늘의 핵심."*/}
+        {/*    time="오전 7:30"*/}
+        {/*  />*/}
+        {/*</View>*/}
 
         <SectionHead
           more="전체보기 →"

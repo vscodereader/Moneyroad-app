@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Modal, Pressable, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { AiBriefCard, NewsCard } from "@/components/cards";
+import { NewsCard } from "@/components/cards";
 import { Icon } from "@/components/icons";
 import {
   Chip,
@@ -241,13 +241,13 @@ export default function NewsScreen() {
           ))}
         </ScrollView>
 
-        <View style={{ paddingHorizontal: 16, paddingBottom: 14 }}>
-          <AiBriefCard
-            body="관심 종목 6건 중 4건이 긍정 이벤트. 두산에너빌리티 체코 원전 본계약과 SK하이닉스 HBM4 양산 일정 단축이 오늘의 핵심."
-            onMore={() => setOpenNews(news[1])}
-            time="오전 7:30 업데이트"
-          />
-        </View>
+        {/*<View style={{ paddingHorizontal: 16, paddingBottom: 14 }}>*/}
+        {/*  <AiBriefCard*/}
+        {/*    body="관심 종목 6건 중 4건이 긍정 이벤트. 두산에너빌리티 체코 원전 본계약과 SK하이닉스 HBM4 양산 일정 단축이 오늘의 핵심."*/}
+        {/*    onMore={() => setOpenNews(news[1])}*/}
+        {/*    time="오전 7:30 업데이트"*/}
+        {/*  />*/}
+        {/*</View>*/}
 
         {list.map((n) => (
           <NewsCard

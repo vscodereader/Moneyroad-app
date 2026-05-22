@@ -23,12 +23,11 @@ export class MockFeed implements MarketDataFeed {
     return Promise.resolve();
   }
 
-  stop(): Promise<void> {
+  stop(): void {
     if (this.timer) {
       clearInterval(this.timer);
       this.timer = null;
     }
-    return Promise.resolve();
   }
 
   subscribe(symbol: string): void {

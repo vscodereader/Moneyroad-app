@@ -15,7 +15,7 @@ export interface Quote {
 export interface MarketDataFeed {
   onQuote(handler: (quote: Quote) => void): void;
   start(): Promise<void>;
-  stop(): Promise<void>;
+  stop(): void;
   subscribe(symbol: string): void;
   unsubscribe(symbol: string): void;
 }

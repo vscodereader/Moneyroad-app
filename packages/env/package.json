@@ -5,6 +5,7 @@
   "type": "module",
   "exports": {
     "./server": "./src/server.ts",
+    "./realtime": "./src/realtime.ts",
     "./web": "./src/web.ts",
     "./native": "./src/native.ts"
   },

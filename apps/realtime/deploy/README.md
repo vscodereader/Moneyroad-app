@@ -62,7 +62,8 @@ gcloud run deploy $SERVICE \
 ## 4. 확인
 ```bash
 URL=$(gcloud run services describe $SERVICE --region=$REGION --format='value(status.url)')
-curl -N "$URL/stream/quotes?symbols=005930,000660"   # event: quote 가 흘러나오면 정상
+# SSE 협상을 위해 Accept 헤더 필수 (없으면 406). EventSource/react-native-sse는 자동 전송.
+curl -N -H "Accept: text/event-stream" "$URL/stream/quotes?symbols=005930,000660"
 ```
 
 ## 참고

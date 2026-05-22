@@ -1,4 +1,5 @@
-import type { Env } from "../env";
+import { env } from "@moneyroad-app/env/realtime";
+import { createError, log } from "evlog";
 import type { MarketDataFeed, Quote } from "./types";
 
 const WS_URL = {
@@ -28,24 +29,23 @@ export class KisFeed implements MarketDataFeed {
   private approvalKey = "";
   private handler: ((quote: Quote) => void) | null = null;
   private readonly registered = new Set<string>();
-  private readonly env: Env;
-
-  constructor(env: Env) {
-    this.env = env;
-  }
 
   async start(): Promise<void> {
-    if (!(this.env.KIS_APP_KEY && this.env.KIS_APP_SECRET)) {
-      throw new Error("KIS_APP_KEY/KIS_APP_SECRET are required when FEED=kis");
+    if (!(env.KIS_APP_KEY && env.KIS_APP_SECRET)) {
+      throw createError({
+        message: "KIS feed cannot start",
+        status: 500,
+        why: "KIS_APP_KEY/KIS_APP_SECRET are not set",
+        fix: "Set KIS_APP_KEY and KIS_APP_SECRET, or run with FEED=mock",
+      });
     }
     this.approvalKey = await this.fetchApprovalKey();
     this.connect();
   }
 
-  stop(): Promise<void> {
+  stop(): void {
     this.socket?.close();
     this.socket = null;
-    return Promise.resolve();
   }
 
   subscribe(symbol: string): void {
@@ -63,28 +63,46 @@ export class KisFeed implements MarketDataFeed {
   }
 
   private async fetchApprovalKey(): Promise<string> {
-    const res = await fetch(`${REST_URL[this.env.KIS_ENV]}/oauth2/Approval`, {
+    const res = await fetch(`${REST_URL[env.KIS_ENV]}/oauth2/Approval`, {
       method: "POST",
       headers: { "content-type": "application/json; charset=utf-8" },
       body: JSON.stringify({
         grant_type: "client_credentials",
-        appkey: this.env.KIS_APP_KEY,
-        secretkey: this.env.KIS_APP_SECRET,
+        appkey: env.KIS_APP_KEY,
+        secretkey: env.KIS_APP_SECRET,
       }),
     });
     if (!res.ok) {
-      throw new Error(`KIS approval key request failed: ${res.status}`);
+      throw createError({
+        message: "KIS approval key request failed",
+        status: 502,
+        why: `KIS /oauth2/Approval responded ${res.status}`,
+        fix: "Verify KIS credentials and KIS_ENV",
+        internal: { status: res.status, kisEnv: env.KIS_ENV },
+      });
     }
     const json = (await res.json()) as { approval_key?: string };
     if (!json.approval_key) {
-      throw new Error("KIS approval key missing in response");
+      throw createError({
+        message: "KIS approval key missing",
+        status: 502,
+        why: "KIS approval response did not include approval_key",
+        fix: "Check KIS API status and credentials",
+      });
     }
     return json.approval_key;
   }
 
   private connect(): void {
-    const socket = new WebSocket(WS_URL[this.env.KIS_ENV]);
+    const socket = new WebSocket(WS_URL[env.KIS_ENV]);
     socket.addEventListener("open", () => {
+      log.info({
+        kis: {
+          event: "connected",
+          env: env.KIS_ENV,
+          symbols: this.registered.size,
+        },
+      });
       for (const symbol of this.registered) {
         this.send(symbol, TR_TYPE_SUBSCRIBE);
       }
@@ -92,7 +110,15 @@ export class KisFeed implements MarketDataFeed {
     socket.addEventListener("message", (event) => {
       this.handleMessage(typeof event.data === "string" ? event.data : "");
     });
-    // TODO: close 시 지수 백오프 재연결, approval_key 만료 갱신
+    socket.addEventListener("error", () => {
+      log.error({
+        kis: { event: "error", why: "upstream KIS connection errored" },
+      });
+    });
+    socket.addEventListener("close", () => {
+      log.warn({ kis: { event: "disconnected" } });
+      // TODO: 지수 백오프 재연결, approval_key 만료 갱신
+    });
     this.socket = socket;
   }
 

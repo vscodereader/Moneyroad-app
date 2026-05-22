@@ -256,6 +256,12 @@ importers:
 
   apps/realtime:
     dependencies:
+      '@fastify/sse':
+        specifier: ^0.4.0
+        version: 0.4.0(fastify@5.8.5)
+      evlog:
+        specifier: 'catalog:'
+        version: 2.17.0(ai@6.0.185(zod@4.4.3))(express@5.2.1)(fastify@5.8.5)(hono@4.12.21)(next@16.2.6(@opentelemetry/api@1.9.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(react@19.2.6)
       fastify:
         specifier: ^5.3.3
         version: 5.8.5
@@ -266,6 +272,9 @@ importers:
       '@moneyroad-app/config':
         specifier: workspace:*
         version: link:../../packages/config
+      '@moneyroad-app/env':
+        specifier: workspace:*
+        version: link:../../packages/env
       '@types/node':
         specifier: ^22.13.14
         version: 22.19.19
@@ -2088,6 +2097,12 @@ packages:
 
   '@fastify/proxy-addr@5.1.0':
     resolution: {integrity: sha512-INS+6gh91cLUjB+PVHfu1UqcB76Sqtpyp7bnL+FYojhjygvOPA9ctiD/JDKsyD9Xgu4hUhCSJBPig/w7duNajw==}
+
+  '@fastify/sse@0.4.0':
+    resolution: {integrity: sha512-bBV96iT2kHEw6h3i8IMkZGaqA7Gk81ugUzTNctXuE6N2BEC/qBnUuzlD/O17V43OkJP73h0/kf3Bp/asXlSuFA==}
+    engines: {node: '>=20'}
+    peerDependencies:
+      fastify: ^5.x
 
   '@floating-ui/core@1.7.5':
     resolution: {integrity: sha512-1Ih4WTWyw0+lKyFMcBHGbb5U5FtuHJuujoyyr5zTaWS5EYMeT6Jb2AuDeftsCsEuchO+mM2ij5+q9crhydzLhQ==}
@@ -9682,6 +9697,11 @@ snapshots:
     dependencies:
       '@fastify/forwarded': 3.0.1
       ipaddr.js: 2.4.0
+
+  '@fastify/sse@0.4.0(fastify@5.8.5)':
+    dependencies:
+      fastify: 5.8.5
+      fastify-plugin: 5.1.0
 
   '@floating-ui/core@1.7.5':
     dependencies:

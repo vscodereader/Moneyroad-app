@@ -82,6 +82,8 @@ printf '%s' "$(openssl rand -base64 32)"    | gcloud secrets create better-auth-
 printf '%s' "https://PLACEHOLDER"           | gcloud secrets create better-auth-url         --data-file=-   # 8단계에서 실제 URL로 갱신
 printf '%s' "https://<앱-도메인>"            | gcloud secrets create cors-origin             --data-file=-
 printf '%s' "<GOOGLE_GENERATIVE_AI_API_KEY>"| gcloud secrets create google-ai-key           --data-file=-
+# realtime SSE 스트림 토큰 서명/검증 공유 시크릿 (realtime 배포에서 동일 시크릿 사용)
+printf '%s' "$(openssl rand -base64 32)"    | gcloud secrets create stream-token-secret     --data-file=-
 ```
 
 값 갱신은 `gcloud secrets versions add <name> --data-file=-`.
@@ -122,7 +124,7 @@ gcloud run deploy $SERVICE \
   --allow-unauthenticated \
   --port=8080 \
   --set-cloudsql-instances=$CONN_NAME \
-  --set-secrets=DATABASE_URL=database-url:latest,BETTER_AUTH_SECRET=better-auth-secret:latest,BETTER_AUTH_URL=better-auth-url:latest,CORS_ORIGIN=cors-origin:latest,GOOGLE_GENERATIVE_AI_API_KEY=google-ai-key:latest \
+  --set-secrets=DATABASE_URL=database-url:latest,BETTER_AUTH_SECRET=better-auth-secret:latest,BETTER_AUTH_URL=better-auth-url:latest,CORS_ORIGIN=cors-origin:latest,GOOGLE_GENERATIVE_AI_API_KEY=google-ai-key:latest,STREAM_TOKEN_SECRET=stream-token-secret:latest \
   --min-instances=0 --max-instances=4 \
   --cpu=1 --memory=512Mi
 

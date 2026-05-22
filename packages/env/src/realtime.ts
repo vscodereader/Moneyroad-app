@@ -7,6 +7,8 @@ export const env = createEnv({
     // Cloud Run injects PORT (8080). Defaults to 3000 for local dev.
     PORT: z.coerce.number().default(3000),
     FEED: z.enum(["mock", "kis"]).default("mock"),
+    // Shared with the API server; used to verify stream tokens (no DB needed).
+    STREAM_TOKEN_SECRET: z.string().min(32),
     HEARTBEAT_MS: z.coerce.number().default(15_000),
     MOCK_INTERVAL_MS: z.coerce.number().default(1000),
     // KIS settings are only required when FEED=kis.

@@ -31,6 +31,7 @@
     "@moneyroad-app/config": "workspace:*",
     "@moneyroad-app/db": "workspace:*",
     "@moneyroad-app/env": "workspace:*",
+    "@moneyroad-app/stream-token": "workspace:*",
     "@types/node": "^22.13.14",
     "tsdown": "^0.21.9",
     "tsx": "^4.19.2",

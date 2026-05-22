@@ -11,6 +11,7 @@ import Fastify from "fastify";
 import { registerAiPlugin } from "./plugins/ai";
 import { registerAuthPlugin } from "./plugins/auth";
 import { registerOrpcPlugin } from "./plugins/orpc";
+import { registerStreamTokenPlugin } from "./plugins/stream-token";
 
 const baseCorsConfig = {
   origin: env.CORS_ORIGIN,
@@ -46,6 +47,7 @@ export function buildServer() {
   app.register(registerOrpcPlugin);
   app.register(registerAuthPlugin);
   app.register(registerAiPlugin);
+  app.register(registerStreamTokenPlugin);
 
   app.get("/", () => "OK");
 

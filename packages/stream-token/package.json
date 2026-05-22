@@ -1,0 +1,14 @@
+{
+  "name": "@moneyroad-app/stream-token",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "devDependencies": {
+    "@moneyroad-app/config": "workspace:*",
+    "@types/node": "^22.13.14",
+    "typescript": "^6"
+  }
+}

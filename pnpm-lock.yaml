@@ -275,6 +275,9 @@ importers:
       '@moneyroad-app/env':
         specifier: workspace:*
         version: link:../../packages/env
+      '@moneyroad-app/stream-token':
+        specifier: workspace:*
+        version: link:../../packages/stream-token
       '@types/node':
         specifier: ^22.13.14
         version: 22.19.19
@@ -348,6 +351,9 @@ importers:
       '@moneyroad-app/env':
         specifier: workspace:*
         version: link:../../packages/env
+      '@moneyroad-app/stream-token':
+        specifier: workspace:*
+        version: link:../../packages/stream-token
       '@types/node':
         specifier: ^22.13.14
         version: 22.19.19
@@ -576,6 +582,18 @@ importers:
       zod:
         specifier: 'catalog:'
         version: 4.4.3
+    devDependencies:
+      '@moneyroad-app/config':
+        specifier: workspace:*
+        version: link:../config
+      '@types/node':
+        specifier: ^22.13.14
+        version: 22.19.19
+      typescript:
+        specifier: ^6
+        version: 6.0.3
+
+  packages/stream-token:
     devDependencies:
       '@moneyroad-app/config':
         specifier: workspace:*

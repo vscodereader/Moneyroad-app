@@ -28,9 +28,27 @@
 
 **Phase 1 (현재): 단일 인스턴스, Redis 불필요**
 ```
-[앱/웹] --SSE--> [realtime (Cloud Run min=max=1, CPU 상시)] --1연결--> [KIS 실시간]
+            ① POST /stream-token (세션 검증 → 단기 서명 토큰)
+[앱/웹] ──────────────────────────────────────────────→ [server]
+   │  ② SSE ?token=<서명토큰>
+   └──────────────────→ [realtime (min=max=1, CPU 상시)] --1연결--> [KIS 실시간]
+                          (토큰 서명·만료 검증, DB 불필요)
 ```
 한 프로세스가 KIS 1연결 + 클라 fan-out을 모두 처리(메모리 공유).
+
+## 인증 (완료)
+
+별도 도메인 SSE 서비스라 웹 `EventSource`는 헤더를 못 보내고 세션 쿠키도
+크로스도메인이라 안 붙는다. → **서명 스트림 토큰**을 쿼리로 전달하는 방식 채택.
+
+- `@moneyroad-app/stream-token`: HMAC 서명/검증 공유 패키지(node:crypto, deps 없음)
+- server `POST /stream-token`: better-auth 세션 검증(`auth.api.getSession`) 후
+  단기(120s) 서명 토큰 발급. 미인증 시 401
+- realtime `/stream/quotes?token=`: 서명·만료만 검증(DB·auth 의존 없이 린 유지),
+  실패 시 401
+- 공유 시크릿 `STREAM_TOKEN_SECRET`(양쪽 env, ≥32자)
+- ⚠️ 클라 재연결: 토큰 만료 시 새 토큰 발급 후 재연결 필요. 웹 `EventSource`는
+  자동 재연결이 URL을 재사용하므로, 클라에서 onerror 시 토큰 재발급+재생성 래핑 권장
 
 **Phase 2 (스케일): Ingestion 분리 + Redis 백플레인**
 ```
@@ -85,11 +103,13 @@
 | `--timeout=3600` | 60분 | SSE 최대 연결 시간 → 클라 자동 재연결 |
 | `--concurrency=250` | 높게 | SSE 연결은 대부분 idle |
 
-### 환경변수 (`apps/realtime/src/env.ts`)
+### 환경변수 (`@moneyroad-app/env/realtime`)
 - `FEED` = `mock` | `kis`
 - `PORT`(Cloud Run 자동), `HEARTBEAT_MS`, `MOCK_INTERVAL_MS`
+- `STREAM_TOKEN_SECRET` (server와 동일, ≥32자)
 - `KIS_ENV` = `prod` | `paper`, `KIS_APP_KEY`, `KIS_APP_SECRET`
 
 ### 엔드포인트
-- `GET /stream/quotes?symbols=005930,000660` → `event: quote` 스트림
-- `GET /healthz` → `{ status, clients }`
+- realtime `GET /stream/quotes?symbols=005930,000660&token=<서명토큰>` → `event: quote` 스트림 (토큰 없으면 401, Accept 미협상 시 406)
+- realtime `GET /healthz` → `{ status, clients }`
+- server `POST /stream-token` → `{ token, expiresIn }` (로그인 세션 필요, 미인증 401)

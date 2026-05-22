@@ -34,8 +34,13 @@ gcloud builds submit --config cloudbuild.yaml \
   --substitutions=_IMAGE=$IMAGE,_DOCKERFILE=apps/realtime/Dockerfile
 ```
 
-## 2. (FEED=kis 일 때) 시크릿
+## 2. 시크릿
+
 ```bash
+# 스트림 토큰 검증용 — server의 stream-token-secret과 반드시 동일한 값
+printf '%s' "<32자+ 시크릿>" | gcloud secrets create stream-token-secret --data-file=- --project=$PROJECT
+
+# (FEED=kis 일 때만)
 printf '%s' "<KIS_APP_KEY>"    | gcloud secrets create kis-app-key    --data-file=- --project=$PROJECT
 printf '%s' "<KIS_APP_SECRET>" | gcloud secrets create kis-app-secret --data-file=- --project=$PROJECT
 # 런타임 SA에 secretAccessor는 server 배포 때 이미 부여됨
@@ -52,18 +57,25 @@ gcloud run deploy $SERVICE \
   --min-instances=1 --max-instances=1 \
   --timeout=3600 --concurrency=250 \
   --cpu=1 --memory=512Mi \
-  --set-env-vars=FEED=mock
+  --set-env-vars=FEED=mock \
+  --set-secrets=STREAM_TOKEN_SECRET=stream-token-secret:latest
 
-# KIS 연동 시
+# KIS 연동 시 (위 --set-env-vars/--set-secrets에 추가)
 #   --set-env-vars=FEED=kis,KIS_ENV=prod \
-#   --set-secrets=KIS_APP_KEY=kis-app-key:latest,KIS_APP_SECRET=kis-app-secret:latest
+#   --set-secrets=...,KIS_APP_KEY=kis-app-key:latest,KIS_APP_SECRET=kis-app-secret:latest
 ```
+
+> ⚠️ `--allow-unauthenticated`은 Cloud Run 인프라 레벨 인증을 끄는 것일 뿐, 앱은
+> 스트림 토큰으로 사용자 인증을 강제한다(토큰 없으면 401).
 
 ## 4. 확인
 ```bash
 URL=$(gcloud run services describe $SERVICE --region=$REGION --format='value(status.url)')
-# SSE 협상을 위해 Accept 헤더 필수 (없으면 406). EventSource/react-native-sse는 자동 전송.
-curl -N -H "Accept: text/event-stream" "$URL/stream/quotes?symbols=005930,000660"
+# 1) 토큰 없이 → 401
+curl -s -o /dev/null -w '%{http_code}\n' -H "Accept: text/event-stream" "$URL/stream/quotes?symbols=005930"
+# 2) server에서 토큰 발급 후 → 스트림 (server /stream-token 은 로그인 세션 필요)
+#    TOKEN=$(curl -s -X POST <SERVER_URL>/stream-token -b "<세션 쿠키>" | jq -r .token)
+#    curl -N -H "Accept: text/event-stream" "$URL/stream/quotes?symbols=005930,000660&token=$TOKEN"
 ```
 
 ## 참고

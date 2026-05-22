@@ -4,17 +4,24 @@
     "userInterfaceStyle": "automatic",
     "orientation": "default",
     "web": {
-      "bundler": "metro"
+      "bundler": "metro",
+      "favicon": "./assets/images/favicon.png"
     },
     "name": "머니로드",
     "slug": "moneyroad-app",
+    "icon": "./assets/images/icon.png",
     "plugins": ["expo-font"],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
     },
     "android": {
-      "package": "kr.ai.moneyroad"
+      "package": "kr.ai.moneyroad",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/android-icon-foreground.png",
+        "monochromeImage": "./assets/images/android-icon-monochrome.png",
+        "backgroundColor": "#256EF4"
+      }
     },
     "ios": {
       "bundleIdentifier": "kr.ai.moneyroad"

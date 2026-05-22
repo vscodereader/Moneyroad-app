@@ -30,3 +30,7 @@ url = "https://mcp.inkeep.com/better-auth/mcp"
 [mcp_servers.expo-mcp]
 type = "http"
 url = "https://mcp.expo.dev/mcp"
+
+[mcp_servers.kis-code-assistant-mcp]
+command = "uv"
+args = ["--directory", "/Users/dev/Projects/open-source/open-trading-api/MCP/KIS Code Assistant MCP", "run", "server.py", "--stdio"]

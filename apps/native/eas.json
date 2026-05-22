@@ -7,16 +7,13 @@
     "development": {
       "developmentClient": true,
       "distribution": "internal",
-      "node": "22.13.0",
-      "env": {
-        "EXPO_PUBLIC_SERVER_URL": "https://api.moneyroad.ai.kr"
-      }
+      "node": "22.13.0"
     },
     "preview": {
       "distribution": "internal",
       "node": "22.13.0",
       "env": {
-        "EXPO_PUBLIC_SERVER_URL": "https://api.moneyroad.ai.kr"
+        "EXPO_PUBLIC_SERVER_URL": "https://api-staging.moneyroad.ai.kr"
       }
     },
     "production": {

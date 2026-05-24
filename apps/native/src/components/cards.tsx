@@ -161,6 +161,79 @@ export function StockRow({
   );
 }
 
+// ── Watchlist row (real watchlist; no market price yet) ───────
+export function WatchRow({
+  entry,
+  onPress,
+}: {
+  entry: { code: string; market: string; name: string };
+  onPress?: () => void;
+}) {
+  const { t } = useMrTheme();
+  return (
+    <Pressable
+      android_ripple={{ color: t.bgSubtle }}
+      onPress={onPress}
+      style={({ pressed }) => ({
+        alignItems: "center",
+        backgroundColor: pressed ? t.bgSubtle : t.bg,
+        borderTopColor: t.border,
+        borderTopWidth: 1,
+        flexDirection: "row",
+        gap: 12,
+        paddingHorizontal: 16,
+        paddingVertical: 14,
+      })}
+    >
+      <View
+        style={{
+          alignItems: "center",
+          backgroundColor: t.bgSubtle,
+          borderRadius: 10,
+          height: 36,
+          justifyContent: "center",
+          width: 36,
+        }}
+      >
+        <Text style={{ color: t.fgMuted, fontSize: 15, fontWeight: "800" }}>
+          {entry.name.charAt(0)}
+        </Text>
+      </View>
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text
+          numberOfLines={1}
+          style={{ color: t.fgStrong, fontSize: 15, fontWeight: "700" }}
+        >
+          {entry.name}
+        </Text>
+        <View
+          style={{
+            alignItems: "center",
+            flexDirection: "row",
+            gap: 6,
+            marginTop: 3,
+          }}
+        >
+          <Text style={{ color: t.fgSubtle, fontSize: 11 }}>{entry.code}</Text>
+          <View
+            style={{
+              backgroundColor: t.bgSubtle,
+              borderRadius: 4,
+              paddingHorizontal: 6,
+              paddingVertical: 1,
+            }}
+          >
+            <Text style={{ color: t.fgMuted, fontSize: 10, fontWeight: "700" }}>
+              {entry.market}
+            </Text>
+          </View>
+        </View>
+      </View>
+      <Icon.chevRight color={t.fgSubtle} size={16} />
+    </Pressable>
+  );
+}
+
 // ── Signal card (expandable) ──────────────────────────────────
 export function SignalCard({
   signal,

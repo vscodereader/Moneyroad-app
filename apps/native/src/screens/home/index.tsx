@@ -7,14 +7,16 @@ import {
   IndexStrip,
   NewsCard,
   SignalCard,
-  StockRow,
+  WatchRow,
 } from "@/components/cards";
 import { Icon } from "@/components/icons";
 import { IconButton, MrHeader, MrScreen, SectionHead } from "@/components/ui";
 import { useMrTheme } from "@/hooks/use-mr-theme";
-import { indices, news, stocks } from "@/utils/data";
+import { authClient } from "@/lib/auth-client";
+import { indices, news } from "@/utils/data";
 import { nav } from "@/utils/nav";
 import { orpc } from "@/utils/orpc";
+import type { MrTokens } from "@/utils/theme";
 
 function greeting(): string {
   const hour = new Date().getHours();
@@ -27,18 +29,74 @@ function greeting(): string {
   return "장 마감 후 정리해볼까요";
 }
 
+function EmptyHint({ label, t }: { label: string; t: MrTokens }) {
+  return (
+    <View
+      style={{
+        alignItems: "center",
+        backgroundColor: t.bgSubtle,
+        borderRadius: 12,
+        gap: 8,
+        marginHorizontal: 16,
+        paddingVertical: 28,
+      }}
+    >
+      <Icon.navWatch color={t.fgSubtle} size={26} />
+      <Text style={{ color: t.fgSubtle, fontSize: 13, textAlign: "center" }}>
+        {label}
+      </Text>
+    </View>
+  );
+}
+
+function WatchlistPreview({
+  items,
+  isLoading,
+  t,
+}: {
+  items: { code: string; market: string; name: string }[];
+  isLoading: boolean;
+  t: MrTokens;
+}) {
+  if (isLoading) {
+    return (
+      <View style={{ alignItems: "center", paddingVertical: 28 }}>
+        <ActivityIndicator color={t.primary} />
+      </View>
+    );
+  }
+  if (items.length === 0) {
+    return <EmptyHint label="관심 종목이 아직 없어요." t={t} />;
+  }
+  return (
+    <>
+      {items.map((entry) => (
+        <WatchRow
+          entry={entry}
+          key={entry.code}
+          onPress={() => nav.openStock(entry.code)}
+        />
+      ))}
+    </>
+  );
+}
+
 export default function HomeScreen() {
   const { t } = useMrTheme();
   const [openSigId, setOpenSigId] = useState<string | null>(null);
-  const watched = stocks.filter((s) => s.watched);
+  const { data: session } = authClient.useSession();
+  const isLoggedIn = !!session?.user;
   const topSignalsQuery = useQuery(
     orpc.signal.feed.queryOptions({ input: { window: "24h", limit: 3 } })
   );
   const topSignals = topSignalsQuery.data?.items ?? [];
   const topNews = news.slice(0, 3);
-  const watchedPreview = [...watched]
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 4);
+  // Real watchlist (codes/names/market); price/score await the market API.
+  const watchlistQuery = useQuery(
+    orpc.watchlist.list.queryOptions({ enabled: isLoggedIn })
+  );
+  const watched = watchlistQuery.data ?? [];
+  const watchedPreview = watched.slice(0, 4);
 
   return (
     <MrScreen>
@@ -156,18 +214,26 @@ export default function HomeScreen() {
         ))}
 
         <SectionHead
-          more={`전체보기 (${watched.length}) →`}
-          onMore={nav.openWatchlist}
+          more={
+            isLoggedIn && watched.length > 0
+              ? `전체보기 (${watched.length}) →`
+              : undefined
+          }
+          onMore={
+            isLoggedIn && watched.length > 0 ? nav.openWatchlist : undefined
+          }
           title="내 관심 종목"
         />
         <View style={{ paddingBottom: 8 }}>
-          {watchedPreview.map((s) => (
-            <StockRow
-              key={s.code}
-              onPress={() => nav.openStock(s.code)}
-              stock={s}
+          {isLoggedIn ? (
+            <WatchlistPreview
+              isLoading={watchlistQuery.isLoading}
+              items={watchedPreview}
+              t={t}
             />
-          ))}
+          ) : (
+            <EmptyHint label="로그인하고 관심 종목을 추가해 보세요." t={t} />
+          )}
         </View>
 
         <View style={{ height: 24 }} />

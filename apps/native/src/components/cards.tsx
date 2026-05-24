@@ -376,7 +376,7 @@ export function NewsCard({
   showAiChip?: boolean;
 }) {
   const { t } = useMrTheme();
-  const stock = findStock(news.code);
+  const stockName = findStock(news.code)?.name ?? news.stockName;
   return (
     <Pressable
       android_ripple={{ color: t.bgSubtle }}
@@ -414,9 +414,9 @@ export function NewsCard({
               {news.category}
             </Text>
           </View>
-          {stock ? (
+          {stockName ? (
             <Text style={{ fontSize: 11, fontWeight: "700", color: t.fgMuted }}>
-              {stock.name}
+              {stockName}
             </Text>
           ) : null}
         </View>

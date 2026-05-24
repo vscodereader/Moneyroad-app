@@ -51,6 +51,8 @@ export interface NewsItem {
   id: string;
   sentiment: "up" | "down";
   source: string;
+  /** Stock name resolved from the API (real codes not in the dummy `stocks`). */
+  stockName?: string | null;
   thumbHint: string;
   time: string;
   title: string;

@@ -1,5 +1,14 @@
+import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
-import { Modal, Pressable, ScrollView, Text, View } from "react-native";
+import {
+  ActivityIndicator,
+  Linking,
+  Modal,
+  Pressable,
+  ScrollView,
+  Text,
+  View,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { NewsCard } from "@/components/cards";
@@ -12,8 +21,9 @@ import {
   StockLogo,
 } from "@/components/ui";
 import { useMrTheme } from "@/hooks/use-mr-theme";
-import { findStock, type NewsItem, news, stocks } from "@/utils/data";
+import { findStock, type NewsItem } from "@/utils/data";
 import { changeColor, fmt } from "@/utils/format";
+import { orpc } from "@/utils/orpc";
 
 type NewsTab = "watch" | "all" | "industry" | "market" | "policy";
 
@@ -28,7 +38,14 @@ const TABS: { k: NewsTab; l: string }[] = [
 function NewsSheet({ item, onClose }: { item: NewsItem; onClose: () => void }) {
   const { t } = useMrTheme();
   const insets = useSafeAreaInsets();
-  const stock = findStock(item.code);
+  const detail = useQuery(
+    orpc.news.detail.queryOptions({ input: { id: item.id } })
+  );
+  const dummyStock = findStock(item.code);
+  const stockName = dummyStock?.name ?? item.stockName;
+  const url = detail.data?.url ?? null;
+  const preview = detail.data?.preview;
+
   return (
     <Modal animationType="slide" onRequestClose={onClose} transparent visible>
       <Pressable
@@ -135,7 +152,7 @@ function NewsSheet({ item, onClose }: { item: NewsItem; onClose: () => void }) {
             </Text>
           </View>
 
-          {stock ? (
+          {stockName ? (
             <View
               style={{
                 marginTop: 14,
@@ -148,21 +165,23 @@ function NewsSheet({ item, onClose }: { item: NewsItem; onClose: () => void }) {
                 gap: 12,
               }}
             >
-              <StockLogo size={40} stock={stock} />
+              {dummyStock ? <StockLogo size={40} stock={dummyStock} /> : null}
               <View style={{ flex: 1 }}>
                 <Text
                   style={{ fontSize: 14, fontWeight: "700", color: t.fgStrong }}
                 >
-                  {stock.name}
+                  {stockName}
                 </Text>
-                <Text style={{ fontSize: 12, color: t.fgMuted }}>
-                  {fmt.price(stock.price)}원 ·{" "}
-                  <Text style={{ color: changeColor(stock.change, t) }}>
-                    {fmt.pct(stock.changePct)}
+                {dummyStock ? (
+                  <Text style={{ fontSize: 12, color: t.fgMuted }}>
+                    {fmt.price(dummyStock.price)}원 ·{" "}
+                    <Text style={{ color: changeColor(dummyStock.change, t) }}>
+                      {fmt.pct(dummyStock.changePct)}
+                    </Text>
                   </Text>
-                </Text>
+                ) : null}
               </View>
-              <ScorePill score={stock.score} />
+              {dummyStock ? <ScorePill score={dummyStock.score} /> : null}
             </View>
           ) : null}
 
@@ -184,17 +203,23 @@ function NewsSheet({ item, onClose }: { item: NewsItem; onClose: () => void }) {
               marginTop: 6,
             }}
           >
-            {item.source}에 따르면, 관련 업계 관계자와 시장 전문가의 분석을
-            종합한 결과 단기 모멘텀과 중기 펀더멘털 양면에서 의미 있는 변화가
-            관측되고 있다. 머니로드는 원문을 가공하지 않고 출처 사이트로
-            연결한다.
+            {preview ??
+              (detail.isLoading
+                ? "원문을 불러오는 중…"
+                : "원문 미리보기를 제공하지 않는 기사입니다. 아래에서 출처로 연결하세요.")}
           </Text>
           <Pressable
+            disabled={!url}
+            onPress={() => {
+              if (url) {
+                Linking.openURL(url);
+              }
+            }}
             style={{
               marginTop: 14,
               height: 44,
               borderRadius: 10,
-              backgroundColor: t.primary,
+              backgroundColor: url ? t.primary : t.borderStrong,
               alignItems: "center",
               justifyContent: "center",
             }}
@@ -210,13 +235,11 @@ function NewsSheet({ item, onClose }: { item: NewsItem; onClose: () => void }) {
 }
 
 export default function NewsScreen() {
+  const { t } = useMrTheme();
   const [tab, setTab] = useState<NewsTab>("watch");
   const [openNews, setOpenNews] = useState<NewsItem | null>(null);
-  const watchedCodes = new Set(
-    stocks.filter((s) => s.watched).map((s) => s.code)
-  );
-  const list =
-    tab === "watch" ? news.filter((n) => watchedCodes.has(n.code)) : news;
+  const feed = useQuery(orpc.news.feed.queryOptions({ input: { tab } }));
+  const items = feed.data?.items ?? [];
 
   return (
     <MrScreen>
@@ -241,15 +264,23 @@ export default function NewsScreen() {
           ))}
         </ScrollView>
 
-        {/*<View style={{ paddingHorizontal: 16, paddingBottom: 14 }}>*/}
-        {/*  <AiBriefCard*/}
-        {/*    body="관심 종목 6건 중 4건이 긍정 이벤트. 두산에너빌리티 체코 원전 본계약과 SK하이닉스 HBM4 양산 일정 단축이 오늘의 핵심."*/}
-        {/*    onMore={() => setOpenNews(news[1])}*/}
-        {/*    time="오전 7:30 업데이트"*/}
-        {/*  />*/}
-        {/*</View>*/}
+        {feed.isLoading ? (
+          <View style={{ paddingVertical: 48, alignItems: "center" }}>
+            <ActivityIndicator color={t.primary} />
+          </View>
+        ) : null}
 
-        {list.map((n) => (
+        {!feed.isLoading && items.length === 0 ? (
+          <View style={{ paddingVertical: 48, alignItems: "center" }}>
+            <Text style={{ fontSize: 13, color: t.fgSubtle }}>
+              {tab === "watch"
+                ? "관심 종목 뉴스가 아직 없어요."
+                : "표시할 뉴스가 없어요."}
+            </Text>
+          </View>
+        ) : null}
+
+        {items.map((n) => (
           <NewsCard
             key={n.id}
             news={n}

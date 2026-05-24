@@ -1,7 +1,8 @@
-import { useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import {
   ActivityIndicator,
+  FlatList,
   Linking,
   Modal,
   Pressable,
@@ -233,64 +234,98 @@ function NewsSheet({ item, onClose }: { item: NewsItem; onClose: () => void }) {
   );
 }
 
+const PAGE_SIZE = 5;
+
+function NewsTabs({
+  tab,
+  onChange,
+}: {
+  tab: NewsTab;
+  onChange: (next: NewsTab) => void;
+}) {
+  return (
+    <ScrollView
+      contentContainerStyle={{
+        paddingHorizontal: 16,
+        gap: 6,
+        paddingVertical: 10,
+      }}
+      horizontal
+      showsHorizontalScrollIndicator={false}
+    >
+      {TABS.map((c) => (
+        <Chip
+          active={tab === c.k}
+          key={c.k}
+          label={c.l}
+          onPress={() => onChange(c.k)}
+        />
+      ))}
+    </ScrollView>
+  );
+}
+
 export default function NewsScreen() {
   const { t } = useMrTheme();
   const [tab, setTab] = useState<NewsTab>("watch");
   const [openNews, setOpenNews] = useState<NewsItem | null>(null);
-  const feed = useQuery(orpc.news.feed.queryOptions({ input: { tab } }));
-  const items = feed.data?.items ?? [];
+  const feed = useInfiniteQuery(
+    orpc.news.feed.infiniteOptions({
+      input: (cursor: string | undefined) => ({
+        tab,
+        cursor,
+        limit: PAGE_SIZE,
+      }),
+      initialPageParam: undefined as string | undefined,
+      getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
+    })
+  );
+  const items = feed.data?.pages.flatMap((p) => p.items) ?? [];
   // Live updates: refetch the feed when realtime pushes new news for this tab.
   useNewsStream(tab);
 
   return (
     <MrScreen>
       <MrHeader title="뉴스" />
-      <ScrollView showsVerticalScrollIndicator={false}>
-        <ScrollView
-          contentContainerStyle={{
-            paddingHorizontal: 16,
-            gap: 6,
-            paddingVertical: 10,
-          }}
-          horizontal
-          showsHorizontalScrollIndicator={false}
-        >
-          {TABS.map((c) => (
-            <Chip
-              active={tab === c.k}
-              key={c.k}
-              label={c.l}
-              onPress={() => setTab(c.k)}
-            />
-          ))}
-        </ScrollView>
-
-        {feed.isLoading ? (
-          <View style={{ paddingVertical: 48, alignItems: "center" }}>
-            <ActivityIndicator color={t.primary} />
-          </View>
-        ) : null}
-
-        {!feed.isLoading && items.length === 0 ? (
-          <View style={{ paddingVertical: 48, alignItems: "center" }}>
-            <Text style={{ fontSize: 13, color: t.fgSubtle }}>
-              {tab === "watch"
-                ? "관심 종목 뉴스가 아직 없어요."
-                : "표시할 뉴스가 없어요."}
-            </Text>
-          </View>
-        ) : null}
-
-        {items.map((n) => (
-          <NewsCard
-            key={n.id}
-            news={n}
-            onPress={() => setOpenNews(n)}
-            showAiChip
-          />
-        ))}
-        <View style={{ height: 16 }} />
-      </ScrollView>
+      <FlatList
+        data={items}
+        keyExtractor={(n) => n.id}
+        ListEmptyComponent={
+          feed.isLoading ? (
+            <View style={{ paddingVertical: 48, alignItems: "center" }}>
+              <ActivityIndicator color={t.primary} />
+            </View>
+          ) : (
+            <View style={{ paddingVertical: 48, alignItems: "center" }}>
+              <Text style={{ fontSize: 13, color: t.fgSubtle }}>
+                {tab === "watch"
+                  ? "관심 종목 뉴스가 아직 없어요."
+                  : "표시할 뉴스가 없어요."}
+              </Text>
+            </View>
+          )
+        }
+        ListFooterComponent={
+          feed.isFetchingNextPage ? (
+            <View style={{ paddingVertical: 16, alignItems: "center" }}>
+              <ActivityIndicator color={t.primary} />
+            </View>
+          ) : (
+            <View style={{ height: 16 }} />
+          )
+        }
+        ListHeaderComponent={<NewsTabs onChange={setTab} tab={tab} />}
+        onEndReached={() => {
+          if (feed.hasNextPage && !feed.isFetchingNextPage) {
+            feed.fetchNextPage();
+          }
+        }}
+        onEndReachedThreshold={0.5}
+        renderItem={({ item }) => (
+          <NewsCard news={item} onPress={() => setOpenNews(item)} showAiChip />
+        )}
+        showsVerticalScrollIndicator={false}
+      />
 
       {openNews ? (
         <NewsSheet item={openNews} onClose={() => setOpenNews(null)} />

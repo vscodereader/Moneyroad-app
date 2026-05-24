@@ -59,9 +59,8 @@ export function useNewsStream(tab: NewsTab): void {
       }
       invalidateTimer = setTimeout(() => {
         invalidateTimer = null;
-        queryClient.invalidateQueries({
-          queryKey: orpc.news.feed.queryKey({ input: { tab } }),
-        });
+        // Partial-match key covers the infinite feed query across all pages.
+        queryClient.invalidateQueries({ queryKey: orpc.news.feed.key() });
       }, INVALIDATE_DEBOUNCE_MS);
     };
 

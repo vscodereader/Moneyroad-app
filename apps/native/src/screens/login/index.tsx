@@ -245,16 +245,30 @@ export default function LoginScreen() {
           </Pressable>
 
           <Pressable
+            hitSlop={8}
             onPress={() => {
               setMode(isSignup ? "signin" : "signup");
               setError(null);
             }}
-            style={{ alignSelf: "center", paddingVertical: 4 }}
+            style={{
+              alignSelf: "center",
+              flexDirection: "row",
+              gap: 5,
+              paddingVertical: 10,
+            }}
           >
             <Text style={{ fontSize: 13, color: t.fgMuted }}>
-              {isSignup
-                ? "이미 계정이 있으신가요? 로그인"
-                : "계정이 없으신가요? 회원가입"}
+              {isSignup ? "이미 계정이 있으신가요?" : "계정이 없으신가요?"}
+            </Text>
+            <Text
+              style={{
+                fontSize: 13,
+                fontWeight: "800",
+                color: t.primary,
+                textDecorationLine: "underline",
+              }}
+            >
+              {isSignup ? "로그인" : "회원가입"}
             </Text>
           </Pressable>
 

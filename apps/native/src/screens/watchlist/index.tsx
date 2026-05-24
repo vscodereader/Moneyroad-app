@@ -1,114 +1,319 @@
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { Pressable, ScrollView, Text, View } from "react-native";
-
-import { IndexStrip, StockRow } from "@/components/cards";
-import { Icon } from "@/components/icons";
 import {
-  BackButton,
-  Chip,
-  IconButton,
-  MrHeader,
-  MrScreen,
-} from "@/components/ui";
+  ActivityIndicator,
+  Pressable,
+  ScrollView,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
+
+import { Icon } from "@/components/icons";
+import { BackButton, MrHeader, MrScreen } from "@/components/ui";
 import { useMrTheme } from "@/hooks/use-mr-theme";
-import { indices, stocks } from "@/utils/data";
 import { nav } from "@/utils/nav";
+import { orpc } from "@/utils/orpc";
+import type { MrTokens } from "@/utils/theme";
 
-type SortKey = "signal" | "change" | "name" | "added";
+interface StockEntry {
+  code: string;
+  market: string;
+  name: string;
+}
 
-const SORTS: { k: SortKey; l: string }[] = [
-  { k: "signal", l: "시그널 강한순" },
-  { k: "change", l: "등락률" },
-  { k: "name", l: "이름" },
-  { k: "added", l: "추가일" },
-];
+function Avatar({ name, t }: { name: string; t: MrTokens }) {
+  return (
+    <View
+      style={{
+        width: 36,
+        height: 36,
+        borderRadius: 10,
+        backgroundColor: t.bgSubtle,
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
+      <Text style={{ fontSize: 15, fontWeight: "800", color: t.fgMuted }}>
+        {name.charAt(0)}
+      </Text>
+    </View>
+  );
+}
+
+function MarketBadge({ market, t }: { market: string; t: MrTokens }) {
+  return (
+    <View
+      style={{
+        paddingHorizontal: 6,
+        paddingVertical: 1,
+        borderRadius: 4,
+        backgroundColor: t.bgSubtle,
+      }}
+    >
+      <Text style={{ fontSize: 10, fontWeight: "700", color: t.fgMuted }}>
+        {market}
+      </Text>
+    </View>
+  );
+}
+
+function EntryRow({
+  entry,
+  t,
+  onPress,
+  right,
+}: {
+  entry: StockEntry;
+  t: MrTokens;
+  onPress?: () => void;
+  right: React.ReactNode;
+}) {
+  return (
+    <Pressable
+      android_ripple={{ color: t.bgSubtle }}
+      disabled={!onPress}
+      onPress={onPress}
+      style={({ pressed }) => ({
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 12,
+        paddingVertical: 12,
+        paddingHorizontal: 16,
+        backgroundColor: pressed && onPress ? t.bgSubtle : t.bg,
+        borderBottomWidth: 1,
+        borderBottomColor: t.border,
+      })}
+    >
+      <Avatar name={entry.name} t={t} />
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text style={{ fontSize: 15, fontWeight: "700", color: t.fgStrong }}>
+          {entry.name}
+        </Text>
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 6,
+            marginTop: 3,
+          }}
+        >
+          <Text style={{ fontSize: 11, color: t.fgSubtle }}>{entry.code}</Text>
+          <MarketBadge market={entry.market} t={t} />
+        </View>
+      </View>
+      {right}
+    </Pressable>
+  );
+}
 
 export default function WatchlistScreen() {
   const { t } = useMrTheme();
-  const [sort, setSort] = useState<SortKey>("signal");
-  const watched = stocks.filter((s) => s.watched);
-  const sorted = [...watched].sort((a, b) => {
-    if (sort === "signal") {
-      return b.score - a.score;
-    }
-    if (sort === "change") {
-      return b.changePct - a.changePct;
-    }
-    if (sort === "name") {
-      return a.name.localeCompare(b.name, "ko");
-    }
-    return 0;
-  });
+  const queryClient = useQueryClient();
+  const [q, setQ] = useState("");
+  const query = q.trim();
+  const searching = query.length >= 1;
+
+  const list = useQuery(orpc.watchlist.list.queryOptions());
+  const search = useQuery(
+    orpc.stock.search.queryOptions({
+      input: { query },
+      enabled: searching,
+    })
+  );
+
+  const watched = new Set(list.data?.map((w) => w.code));
+  const listKey = orpc.watchlist.list.queryKey();
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: listKey });
+  const addMut = useMutation(
+    orpc.watchlist.add.mutationOptions({ onSuccess: invalidate })
+  );
+  const removeMut = useMutation(
+    orpc.watchlist.remove.mutationOptions({ onSuccess: invalidate })
+  );
+
+  const items = list.data ?? [];
 
   return (
     <MrScreen>
-      <MrHeader
-        left={<BackButton onPress={nav.back} />}
-        right={
-          <>
-            <IconButton onPress={nav.openSearch}>
-              <Icon.search color={t.fgStrong} size={22} />
-            </IconButton>
-            <IconButton dot onPress={nav.openAlerts}>
-              <Icon.bell color={t.fgStrong} size={22} />
-            </IconButton>
-          </>
-        }
-        title="관심 종목"
-      />
-      <ScrollView showsVerticalScrollIndicator={false}>
-        <IndexStrip indices={indices} />
-
-        <ScrollView
-          contentContainerStyle={{
-            paddingHorizontal: 16,
-            gap: 6,
-            paddingVertical: 10,
+      <MrHeader left={<BackButton onPress={nav.back} />} title="관심 종목" />
+      <View style={{ paddingHorizontal: 16, paddingVertical: 10 }}>
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 8,
+            height: 44,
+            paddingHorizontal: 12,
+            borderRadius: 10,
+            backgroundColor: t.bgSubtle,
           }}
-          horizontal
-          showsHorizontalScrollIndicator={false}
         >
-          {SORTS.map((c) => (
-            <Chip
-              active={sort === c.k}
-              key={c.k}
-              label={c.l}
-              onPress={() => setSort(c.k)}
-            />
-          ))}
-        </ScrollView>
-
-        <View>
-          {sorted.map((s) => (
-            <StockRow
-              key={s.code}
-              onPress={() => nav.openStock(s.code)}
-              stock={s}
-            />
-          ))}
+          <Icon.search color={t.fgSubtle} size={18} />
+          <TextInput
+            autoCapitalize="none"
+            onChangeText={setQ}
+            placeholder="종목명 또는 코드 검색"
+            placeholderTextColor={t.fgSubtle}
+            style={{ flex: 1, fontSize: 15, color: t.fgStrong }}
+            value={q}
+          />
+          {q ? (
+            <Pressable hitSlop={8} onPress={() => setQ("")}>
+              <Icon.close color={t.fgSubtle} size={16} />
+            </Pressable>
+          ) : null}
         </View>
+      </View>
 
-        <View style={{ padding: 16 }}>
-          <Pressable
-            onPress={nav.openSearch}
-            style={{
-              height: 48,
-              borderRadius: 12,
-              backgroundColor: t.bgSubtle,
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 6,
-            }}
-          >
-            <Icon.plus color={t.fgMuted} size={18} />
-            <Text style={{ fontSize: 14, fontWeight: "700", color: t.fgMuted }}>
-              종목 추가하기
-            </Text>
-          </Pressable>
-        </View>
-        <View style={{ height: 16 }} />
+      <ScrollView keyboardShouldPersistTaps="handled">
+        {searching ? (
+          <SearchResults
+            addMut={addMut}
+            isLoading={search.isLoading}
+            removeMut={removeMut}
+            results={search.data}
+            t={t}
+            watched={watched}
+          />
+        ) : (
+          <MyList
+            isLoading={list.isLoading}
+            items={items}
+            onRemove={(code) => removeMut.mutate({ stockCode: code })}
+            t={t}
+          />
+        )}
+        <View style={{ height: 24 }} />
       </ScrollView>
     </MrScreen>
+  );
+}
+
+function SearchResults({
+  results,
+  isLoading,
+  watched,
+  addMut,
+  removeMut,
+  t,
+}: {
+  results: StockEntry[] | undefined;
+  isLoading: boolean;
+  watched: Set<string>;
+  addMut: { mutate: (v: { stockCode: string }) => void };
+  removeMut: { mutate: (v: { stockCode: string }) => void };
+  t: MrTokens;
+}) {
+  if (isLoading) {
+    return (
+      <View style={{ paddingVertical: 40, alignItems: "center" }}>
+        <ActivityIndicator color={t.primary} />
+      </View>
+    );
+  }
+  if (!results || results.length === 0) {
+    return (
+      <View style={{ paddingVertical: 40, alignItems: "center" }}>
+        <Text style={{ fontSize: 13, color: t.fgSubtle }}>
+          검색 결과가 없어요.
+        </Text>
+      </View>
+    );
+  }
+  return (
+    <View>
+      {results.map((s) => {
+        const isWatched = watched.has(s.code);
+        return (
+          <EntryRow
+            entry={s}
+            key={s.code}
+            right={
+              <Pressable
+                hitSlop={8}
+                onPress={() =>
+                  isWatched
+                    ? removeMut.mutate({ stockCode: s.code })
+                    : addMut.mutate({ stockCode: s.code })
+                }
+                style={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: 999,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  backgroundColor: isWatched ? t.primary : t.bgSubtle,
+                }}
+              >
+                {isWatched ? (
+                  <Icon.check color={t.primaryOn} size={18} />
+                ) : (
+                  <Icon.plus color={t.fgStrong} size={18} />
+                )}
+              </Pressable>
+            }
+            t={t}
+          />
+        );
+      })}
+    </View>
+  );
+}
+
+function MyList({
+  items,
+  isLoading,
+  onRemove,
+  t,
+}: {
+  items: StockEntry[];
+  isLoading: boolean;
+  onRemove: (code: string) => void;
+  t: MrTokens;
+}) {
+  if (isLoading) {
+    return (
+      <View style={{ paddingVertical: 40, alignItems: "center" }}>
+        <ActivityIndicator color={t.primary} />
+      </View>
+    );
+  }
+  if (items.length === 0) {
+    return (
+      <View style={{ paddingVertical: 56, alignItems: "center", gap: 10 }}>
+        <Icon.navWatch color={t.fgSubtle} size={32} />
+        <Text style={{ fontSize: 13, color: t.fgSubtle, textAlign: "center" }}>
+          관심 종목이 없어요.{"\n"}위에서 종목을 검색해 추가하세요.
+        </Text>
+      </View>
+    );
+  }
+  return (
+    <View>
+      {items.map((s) => (
+        <EntryRow
+          entry={s}
+          key={s.code}
+          right={
+            <Pressable
+              hitSlop={8}
+              onPress={() => onRemove(s.code)}
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: 999,
+                alignItems: "center",
+                justifyContent: "center",
+                backgroundColor: t.bgSubtle,
+              }}
+            >
+              <Icon.close color={t.fgMuted} size={16} />
+            </Pressable>
+          }
+          t={t}
+        />
+      ))}
+    </View>
   );
 }

@@ -3,6 +3,7 @@ import { verifyStreamToken } from "@moneyroad-app/stream-token";
 import { log } from "evlog";
 import type { FastifyInstance } from "fastify";
 import { newsHub, streamNews } from "@/services/news";
+import { isNewsDbConfigured } from "@/services/news/db";
 import { getRecentNews } from "@/services/news/read";
 import type { NewsFilter } from "@/services/news/types";
 
@@ -36,7 +37,13 @@ export function registerNewsPlugin(app: FastifyInstance) {
   //   GET /api/news?limit=100&category=market&stockCode=005930
   app.get<{
     Querystring: { limit?: string; category?: string; stockCode?: string };
-  }>("/api/news", async (request) => {
+  }>("/api/news", async (request, reply) => {
+    if (!isNewsDbConfigured()) {
+      reply
+        .code(503)
+        .send({ error: "news not enabled", code: "NEWS_DISABLED" });
+      return;
+    }
     const limit = request.query.limit
       ? Number.parseInt(request.query.limit, 10)
       : undefined;
@@ -62,6 +69,13 @@ export function registerNewsPlugin(app: FastifyInstance) {
       reply
         .code(401)
         .send({ error: "Unauthorized", code: "INVALID_STREAM_TOKEN" });
+      return;
+    }
+
+    if (!isNewsDbConfigured()) {
+      reply
+        .code(503)
+        .send({ error: "news not enabled", code: "NEWS_DISABLED" });
       return;
     }
 

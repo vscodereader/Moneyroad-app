@@ -147,9 +147,13 @@ realtime은 `min=max=1 + no-cpu-throttling`로 **항상 켜져 있는** 유일�
   (replace 아님 — news/watchlist FK 보존)
 - 파싱 스펙은 KIS 공식 파이썬 예제(`kis_kospi/kosdaq_code_mst.py`) 기준
   (`spec.ts`의 `KOSPI_FIELDS`/`KOSDAQ_FIELDS`, 79개 컬럼 매핑)
-- 실행: `pnpm --filter realtime load:stock-master` (DATABASE_URL만 필요)
+- 수동 실행: `pnpm --filter realtime load:stock-master` (DATABASE_URL만 필요)
+- **자동 갱신 (`plugins/scheduler.ts`)**: `@fastify/schedule` + `toad-scheduler`
+  CronJob으로 매일 `STOCK_MASTER_CRON`(기본 `0 6 * * *`, `STOCK_MASTER_TZ`
+  기본 `Asia/Seoul`)에 `loadStockMaster()` 실행. DATABASE_URL 없으면 no-op
+- **부트스트랩**: 기동 시 stock_master가 비어 있으면 1회 자동 적재(신규 배포 대응)
 - 검증됨: KOSPI 2533 + KOSDAQ 1824종목, 삼성전자/SK하이닉스/현대차/에코프로 등
-  종목명·표준코드·상장일 정확. (필요 시 일 1회 스케줄링 권장 — 신규상장/기준가 갱신)
+  종목명·표준코드·상장일 정확
 
 ### ⚠️ 남은 다운스트림 의존성
 - **앱 푸시 토큰 등록 미구현** — `user_push_token`에 토큰이 없으면 푸시는
@@ -186,6 +190,7 @@ realtime은 `min=max=1 + no-cpu-throttling`로 **항상 켜져 있는** 유일�
 - (뉴스) `DATABASE_URL`, `NAVER_CLIENT_ID`, `NAVER_CLIENT_SECRET` — 셋 다 있어야 수집 구동
 - (뉴스) `NEWS_FETCH_INTERVAL_MS`(기본 60000), `NOTIFICATION_COOLDOWN_5M_MAX`(기본 5)
 - (뉴스 AI, 선택) `GOOGLE_GENERATIVE_AI_API_KEY`, `NEWS_AI_MODEL`(기본 `gemini-2.5-flash`)
+- (종목마스터 갱신) `STOCK_MASTER_CRON`(기본 `0 6 * * *`), `STOCK_MASTER_TZ`(기본 `Asia/Seoul`)
 
 ### 엔드포인트
 - realtime `GET /stream/quotes?symbols=005930,000660&token=<서명토큰>` → `event: quote` 스트림 (토큰 없으면 401, Accept 미협상 시 406)

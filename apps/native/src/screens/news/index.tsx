@@ -326,15 +326,30 @@ export default function NewsScreen() {
             </View>
           )
         }
-        ListFooterComponent={
-          feed.isFetchingNextPage ? (
-            <View style={{ paddingVertical: 16, alignItems: "center" }}>
-              <ActivityIndicator color={t.primary} />
-            </View>
-          ) : (
-            <View style={{ height: 16 }} />
-          )
-        }
+        ListFooterComponent={(() => {
+          if (feed.isFetchingNextPage) {
+            return (
+              <View style={{ paddingVertical: 16, alignItems: "center" }}>
+                <ActivityIndicator color={t.primary} />
+              </View>
+            );
+          }
+          if (feed.hasNextPage && items.length > 0) {
+            return (
+              <Pressable
+                onPress={() => feed.fetchNextPage()}
+                style={{ paddingVertical: 16, alignItems: "center" }}
+              >
+                <Text
+                  style={{ fontSize: 13, fontWeight: "700", color: t.primary }}
+                >
+                  더 보기
+                </Text>
+              </Pressable>
+            );
+          }
+          return <View style={{ height: 16 }} />;
+        })()}
         ListHeaderComponent={<NewsTabs onChange={setTab} tab={tab} />}
         onContentSizeChange={(_w, h) => {
           contentHeight.current = h;

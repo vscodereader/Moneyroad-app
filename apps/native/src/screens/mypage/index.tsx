@@ -1,3 +1,4 @@
+import { useQuery } from "@tanstack/react-query";
 import { Alert, Image, Pressable, ScrollView, Text, View } from "react-native";
 import { Gradient } from "@/components/charts";
 import { Icon, type IconProps } from "@/components/icons";
@@ -5,9 +6,9 @@ import { MrHeader, MrScreen } from "@/components/ui";
 import { useMrTheme } from "@/hooks/use-mr-theme";
 import { authClient } from "@/lib/auth-client";
 import { getRegisteredPushToken } from "@/lib/push";
-import { notifications, signals, stocks } from "@/utils/data";
+import { notifications, signals } from "@/utils/data";
 import { nav } from "@/utils/nav";
-import { client } from "@/utils/orpc";
+import { client, orpc } from "@/utils/orpc";
 import type { MrTokens } from "@/utils/theme";
 
 interface RowProps {
@@ -117,7 +118,8 @@ export default function MyPageScreen() {
   const avatarUrl = user?.image ?? null;
   const initial = displayName.charAt(0).toUpperCase();
 
-  const watchedCount = stocks.filter((s) => s.watched).length;
+  const watchlist = useQuery(orpc.watchlist.list.queryOptions());
+  const watchedCount = watchlist.data?.length ?? 0;
   const unreadCount = notifications.filter((n) => n.unread).length;
   const statItems = [
     { l: "관심 종목", v: watchedCount, u: "개" },

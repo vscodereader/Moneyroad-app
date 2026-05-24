@@ -5,7 +5,7 @@ import { z } from "zod";
 export const env = createEnv({
   server: {
     // Cloud Run injects PORT (8080). Defaults to 3000 for local dev.
-    PORT: z.coerce.number().default(3000),
+    PORT: z.coerce.number().default(3001),
     FEED: z.enum(["mock", "kis"]).default("mock"),
     // Shared with the API server; used to verify stream tokens (no DB needed).
     STREAM_TOKEN_SECRET: z.string().min(32),

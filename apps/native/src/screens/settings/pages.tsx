@@ -1363,7 +1363,7 @@ export function Support() {
         <SettingsRow
           label="이메일 문의"
           right={<Icon.chevRight color={t.fgSubtle} size={16} />}
-          sub="support@moneyroad.kr"
+          sub="support@moneyroad.ai.kr"
         />
         <SettingsRow
           label="이용약관"

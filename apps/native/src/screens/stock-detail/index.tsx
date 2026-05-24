@@ -1,3 +1,4 @@
+import { useQuery } from "@tanstack/react-query";
 import { useLocalSearchParams } from "expo-router";
 import { useState } from "react";
 import { Dimensions, Pressable, ScrollView, Text, View } from "react-native";
@@ -16,9 +17,10 @@ import {
   SectionHead,
 } from "@/components/ui";
 import { useMrTheme } from "@/hooks/use-mr-theme";
-import { findStock, news, signals, stocks, threads } from "@/utils/data";
+import { findStock, news, stocks, threads } from "@/utils/data";
 import { changeColor, fmt } from "@/utils/format";
 import { nav } from "@/utils/nav";
+import { orpc } from "@/utils/orpc";
 import { type MrTokens, SIGNAL_TYPE_KEYS, signalMeta } from "@/utils/theme";
 
 const RANGES = ["1D", "1W", "1M", "3M", "1Y"];
@@ -67,7 +69,12 @@ export default function StockDetailScreen() {
   const [openSignal, setOpenSignal] = useState<string | null>(null);
 
   const up = stock.change > 0;
-  const relSignals = signals.filter((s) => s.code === stock.code).slice(0, 2);
+  const relSignalsQuery = useQuery(
+    orpc.signal.feed.queryOptions({
+      input: { code: stock.code, window: "24h", limit: 2 },
+    })
+  );
+  const relSignals = relSignalsQuery.data?.items ?? [];
   const relNews = news.filter((n) => n.code === stock.code).slice(0, 2);
   const relThreads = threads.filter((th) => th.code === stock.code).slice(0, 2);
 

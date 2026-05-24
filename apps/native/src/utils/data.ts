@@ -1,7 +1,7 @@
 // MoneyRoad — mock data (ported from the design prototype's data.js)
 // All Korean stocks (KOSPI/KOSDAQ). Prices/signals are fictional but plausible.
 
-import type { SignalTypeKey } from "@/utils/theme";
+import type { SignalAction, SignalTypeKey } from "@/utils/theme";
 
 export interface Stock {
   change: number;
@@ -34,14 +34,16 @@ export interface MarketIndex {
 }
 
 export interface Signal {
+  action: SignalAction;
   body: string;
   code: string;
   id: string;
   name: string;
+  // How the signal was derived (engine sets "tech" for now; others future).
+  source: SignalTypeKey;
   strength: number;
   time: string;
   title: string;
-  type: SignalTypeKey;
 }
 
 export interface NewsItem {
@@ -282,89 +284,6 @@ export const stocks: Stock[] = stockSeeds.map((s) => ({
 export const indices: MarketIndex[] = [
   { name: "KOSPI", value: 2742.18, change: 18.43, changePct: 0.68 },
   { name: "KOSDAQ", value: 869.04, change: -4.21, changePct: -0.48 },
-];
-
-export const signals: Signal[] = [
-  {
-    id: "s1",
-    code: "034020",
-    name: "두산에너빌리티",
-    type: "event",
-    strength: 5,
-    title: "신규 수주 공시 — 체코 원전 본계약",
-    body: "체코 정부와 신규 원전 2기 본계약 체결을 공시. 시장 컨센서스 대비 +18% 규모, EPC 매출 가시화.",
-    time: "방금 전",
-  },
-  {
-    id: "s2",
-    code: "000660",
-    name: "SK하이닉스",
-    type: "tech",
-    strength: 4,
-    title: "골든크로스 발생 — 단기 / 중기 이평선 교차",
-    body: "20일선이 60일선을 상향 돌파. 거래량은 20일 평균 대비 +142% 동반.",
-    time: "12분 전",
-  },
-  {
-    id: "s3",
-    code: "005930",
-    name: "삼성전자",
-    type: "ai",
-    strength: 4,
-    title: "AI 모델 매수 신호 — 신뢰도 76%",
-    body: "내부 LSTM 모델이 단기 +3.4% 추세 예측. 외국인 순매수 7거래일 연속.",
-    time: "1시간 전",
-  },
-  {
-    id: "s4",
-    code: "068270",
-    name: "셀트리온",
-    type: "community",
-    strength: 3,
-    title: "커뮤니티 언급량 급증 — +312% (24h)",
-    body: "FDA 임상 결과 관련 토론량 평소 대비 4배. 긍정 비중 71%.",
-    time: "2시간 전",
-  },
-  {
-    id: "s5",
-    code: "373220",
-    name: "LG에너지솔루션",
-    type: "event",
-    strength: 4,
-    title: "미국 IRA 추가 보조금 발표",
-    body: "북미 합작공장 보조금 +1.2B USD 추가 확정 보도. 마진 개선 기대.",
-    time: "3시간 전",
-  },
-  {
-    id: "s6",
-    code: "035420",
-    name: "NAVER",
-    type: "ai",
-    strength: 2,
-    title: "AI 모델 약세 신호 — 신뢰도 58%",
-    body: "광고 매출 둔화 시그널. 단기 -2.1% 추세 예측.",
-    time: "4시간 전",
-  },
-  {
-    id: "s7",
-    code: "005380",
-    name: "현대차",
-    type: "tech",
-    strength: 3,
-    title: "RSI 과매도 진입 (28.4)",
-    body: "단기 반등 가능 구간. 거래량 평이.",
-    time: "5시간 전",
-  },
-  {
-    id: "s8",
-    code: "035720",
-    name: "카카오",
-    type: "community",
-    strength: 2,
-    title: "커뮤니티 부정 언급 비중 상승",
-    body: "최근 24h 부정 언급 비중 62%. 규제 이슈 관련.",
-    time: "6시간 전",
-  },
 ];
 
 export const news: NewsItem[] = [

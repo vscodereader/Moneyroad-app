@@ -3,6 +3,7 @@ import type { RouterClient } from "@orpc/server";
 import { protectedProcedure, publicProcedure } from "../index";
 import { newsRouter } from "./news";
 import { notificationRouter } from "./notification";
+import { signalRouter } from "./signal";
 import { stockRouter } from "./stock";
 import { todoRouter } from "./todo";
 import { watchlistRouter } from "./watchlist";
@@ -16,6 +17,7 @@ export const appRouter = {
   todo: todoRouter,
   news: newsRouter,
   notification: notificationRouter,
+  signal: signalRouter,
   stock: stockRouter,
   watchlist: watchlistRouter,
 };

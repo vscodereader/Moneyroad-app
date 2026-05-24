@@ -1,3 +1,4 @@
+import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { ScrollView, Text, View } from "react-native";
 
@@ -11,8 +12,9 @@ import {
 import { Icon } from "@/components/icons";
 import { IconButton, MrHeader, MrScreen, SectionHead } from "@/components/ui";
 import { useMrTheme } from "@/hooks/use-mr-theme";
-import { indices, news, signals, stocks } from "@/utils/data";
+import { indices, news, stocks } from "@/utils/data";
 import { nav } from "@/utils/nav";
+import { orpc } from "@/utils/orpc";
 
 function greeting(): string {
   const hour = new Date().getHours();
@@ -29,7 +31,10 @@ export default function HomeScreen() {
   const { t } = useMrTheme();
   const [openSigId, setOpenSigId] = useState<string | null>(null);
   const watched = stocks.filter((s) => s.watched);
-  const topSignals = signals.slice(0, 3);
+  const topSignalsQuery = useQuery(
+    orpc.signal.feed.queryOptions({ input: { window: "24h", limit: 3 } })
+  );
+  const topSignals = topSignalsQuery.data?.items ?? [];
   const topNews = news.slice(0, 3);
   const watchedPreview = [...watched]
     .sort((a, b) => b.score - a.score)

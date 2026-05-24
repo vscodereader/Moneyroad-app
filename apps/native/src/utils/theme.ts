@@ -165,3 +165,26 @@ export function signalMeta(t: MrTokens): Record<SignalTypeKey, SignalTypeMeta> {
     },
   };
 }
+
+// Primary signal classification: the suggested action. (Korean market colors:
+// 매수=red/up, 매도=blue/down, 관망=neutral.)
+export type SignalAction = "buy" | "sell" | "hold";
+
+export const SIGNAL_ACTION_KEYS: SignalAction[] = ["buy", "sell", "hold"];
+
+export interface SignalActionMeta {
+  bg: string;
+  color: string;
+  key: SignalAction;
+  label: string;
+}
+
+export function signalActionMeta(
+  t: MrTokens
+): Record<SignalAction, SignalActionMeta> {
+  return {
+    buy: { key: "buy", label: "매수", color: t.upStrong, bg: t.upBg },
+    sell: { key: "sell", label: "매도", color: t.downStrong, bg: t.downBg },
+    hold: { key: "hold", label: "관망", color: t.neutral, bg: t.neutralBg },
+  };
+}

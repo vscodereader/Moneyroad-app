@@ -1,38 +1,61 @@
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
-import { ScrollView, Text, View } from "react-native";
+import {
+  ActivityIndicator,
+  FlatList,
+  ScrollView,
+  Text,
+  View,
+} from "react-native";
 
 import { SignalCard } from "@/components/cards";
 import { Icon } from "@/components/icons";
 import { Chip, IconButton, MrHeader, MrScreen } from "@/components/ui";
 import { useMrTheme } from "@/hooks/use-mr-theme";
-import { signals } from "@/utils/data";
-import { SIGNAL_TYPE_KEYS, type SignalTypeKey } from "@/utils/theme";
+import type { Signal } from "@/utils/data";
+import { orpc } from "@/utils/orpc";
+import { SIGNAL_ACTION_KEYS, type SignalAction } from "@/utils/theme";
 
-type FilterKey = "all" | SignalTypeKey;
+type FilterKey = "all" | SignalAction;
 
 const FILTER_LABELS: Record<FilterKey, string> = {
   all: "전체",
-  tech: "기술적",
-  ai: "AI 모델",
-  event: "이벤트",
-  community: "커뮤니티",
+  buy: "매수",
+  sell: "매도",
+  hold: "관망",
 };
+
+const FILTER_KEYS: FilterKey[] = ["all", ...SIGNAL_ACTION_KEYS];
+const PAGE_SIZE = 20;
 
 export default function SignalsScreen() {
   const { t } = useMrTheme();
   const [filter, setFilter] = useState<FilterKey>("all");
   const [openId, setOpenId] = useState<string | null>(null);
 
-  const list =
-    filter === "all" ? signals : signals.filter((s) => s.type === filter);
-  const counts: Record<FilterKey, number> = {
-    all: signals.length,
-    tech: signals.filter((s) => s.type === "tech").length,
-    ai: signals.filter((s) => s.type === "ai").length,
-    event: signals.filter((s) => s.type === "event").length,
-    community: signals.filter((s) => s.type === "community").length,
+  const counts = useQuery(
+    orpc.signal.counts.queryOptions({ input: { window: "24h" } })
+  );
+  const feed = useInfiniteQuery(
+    orpc.signal.feed.infiniteOptions({
+      input: (cursor: string | undefined) => ({
+        action: filter === "all" ? undefined : filter,
+        window: "24h" as const,
+        cursor,
+        limit: PAGE_SIZE,
+      }),
+      initialPageParam: undefined as string | undefined,
+      getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
+    })
+  );
+  const items = (feed.data?.pages.flatMap((p) => p.items) ?? []) as Signal[];
+  const countOf = (k: FilterKey) => counts.data?.[k] ?? 0;
+
+  const loadMore = () => {
+    if (feed.hasNextPage && !feed.isFetchingNextPage) {
+      feed.fetchNextPage();
+    }
   };
-  const filterKeys: FilterKey[] = ["all", ...SIGNAL_TYPE_KEYS];
 
   return (
     <MrScreen>
@@ -44,76 +67,114 @@ export default function SignalsScreen() {
         }
         title="시그널"
       />
-      <ScrollView showsVerticalScrollIndicator={false}>
-        <View
-          style={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 4 }}
-        >
-          <Text
-            style={{
-              fontSize: 11,
-              fontWeight: "700",
-              color: t.fgMuted,
-              letterSpacing: 0.3,
-            }}
-          >
-            최근 24시간
-          </Text>
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "baseline",
-              gap: 6,
-              marginTop: 2,
-            }}
-          >
-            <Text
+      <FlatList
+        data={items}
+        keyExtractor={(s) => s.id}
+        ListEmptyComponent={
+          feed.isLoading ? (
+            <View style={{ alignItems: "center", paddingVertical: 48 }}>
+              <ActivityIndicator color={t.primary} />
+            </View>
+          ) : (
+            <View
+              style={{ alignItems: "center", gap: 10, paddingVertical: 56 }}
+            >
+              <Icon.navSignal color={t.fgSubtle} size={32} />
+              <Text
+                style={{ color: t.fgSubtle, fontSize: 13, textAlign: "center" }}
+              >
+                {filter === "all"
+                  ? "최근 24시간 시그널이 아직 없어요."
+                  : `${FILTER_LABELS[filter]} 시그널이 아직 없어요.`}
+              </Text>
+            </View>
+          )
+        }
+        ListFooterComponent={
+          feed.isFetchingNextPage ? (
+            <View style={{ alignItems: "center", paddingVertical: 16 }}>
+              <ActivityIndicator color={t.primary} size="small" />
+            </View>
+          ) : (
+            <View style={{ height: 16 }} />
+          )
+        }
+        ListHeaderComponent={
+          <View>
+            <View
               style={{
-                fontSize: 26,
-                fontWeight: "800",
-                color: t.fgStrong,
-                letterSpacing: -0.5,
+                paddingBottom: 4,
+                paddingHorizontal: 16,
+                paddingTop: 12,
               }}
             >
-              {signals.length}
-            </Text>
-            <Text style={{ fontSize: 13, fontWeight: "700", color: t.fgMuted }}>
-              건의 시그널
-            </Text>
+              <Text
+                style={{
+                  color: t.fgMuted,
+                  fontSize: 11,
+                  fontWeight: "700",
+                  letterSpacing: 0.3,
+                }}
+              >
+                최근 24시간
+              </Text>
+              <View
+                style={{
+                  alignItems: "baseline",
+                  flexDirection: "row",
+                  gap: 6,
+                  marginTop: 2,
+                }}
+              >
+                <Text
+                  style={{
+                    color: t.fgStrong,
+                    fontSize: 26,
+                    fontWeight: "800",
+                    letterSpacing: -0.5,
+                  }}
+                >
+                  {countOf("all")}
+                </Text>
+                <Text
+                  style={{ color: t.fgMuted, fontSize: 13, fontWeight: "700" }}
+                >
+                  건의 시그널
+                </Text>
+              </View>
+            </View>
+            <ScrollView
+              contentContainerStyle={{
+                gap: 6,
+                paddingHorizontal: 16,
+                paddingVertical: 10,
+              }}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+            >
+              {FILTER_KEYS.map((k) => (
+                <Chip
+                  active={filter === k}
+                  count={countOf(k)}
+                  key={k}
+                  label={FILTER_LABELS[k]}
+                  onPress={() => setFilter(k)}
+                />
+              ))}
+            </ScrollView>
           </View>
-        </View>
-
-        <ScrollView
-          contentContainerStyle={{
-            paddingHorizontal: 16,
-            gap: 6,
-            paddingVertical: 10,
-          }}
-          horizontal
-          showsHorizontalScrollIndicator={false}
-        >
-          {filterKeys.map((k) => (
-            <Chip
-              active={filter === k}
-              count={counts[k]}
-              key={k}
-              label={FILTER_LABELS[k]}
-              onPress={() => setFilter(k)}
-            />
-          ))}
-        </ScrollView>
-
-        <View style={{ paddingBottom: 8 }}>
-          {list.map((sig) => (
-            <SignalCard
-              expanded={openId === sig.id}
-              key={sig.id}
-              onToggle={() => setOpenId(openId === sig.id ? null : sig.id)}
-              signal={sig}
-            />
-          ))}
-        </View>
-        <View style={{ height: 16 }} />
-      </ScrollView>
+        }
+        onEndReached={loadMore}
+        onEndReachedThreshold={0.5}
+        renderItem={({ item }) => (
+          <SignalCard
+            expanded={openId === item.id}
+            onToggle={() => setOpenId(openId === item.id ? null : item.id)}
+            signal={item}
+          />
+        )}
+        showsVerticalScrollIndicator={false}
+      />
     </MrScreen>
   );
 }

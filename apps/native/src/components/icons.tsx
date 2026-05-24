@@ -311,3 +311,9 @@ export const SIGNAL_TYPE_ICON = {
   event: Icon.sigEvent,
   community: Icon.sigComm,
 };
+
+export const SIGNAL_ACTION_ICON = {
+  buy: Icon.arrowUp,
+  sell: Icon.arrowDown,
+  hold: Icon.navWatch,
+};

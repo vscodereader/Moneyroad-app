@@ -2,7 +2,7 @@
 
 import { Pressable, Text, View } from "react-native";
 import { Gradient, Sparkline } from "@/components/charts";
-import { Icon, SIGNAL_TYPE_ICON } from "@/components/icons";
+import { Icon, SIGNAL_ACTION_ICON } from "@/components/icons";
 import { ScorePill, StockLogo, StrengthBar } from "@/components/ui";
 import { useMrTheme } from "@/hooks/use-mr-theme";
 import type {
@@ -14,7 +14,7 @@ import type {
 } from "@/utils/data";
 import { findStock } from "@/utils/data";
 import { changeColor, fmt } from "@/utils/format";
-import { type MrTokens, signalMeta } from "@/utils/theme";
+import { type MrTokens, signalActionMeta } from "@/utils/theme";
 
 // ── Index strip (KOSPI / KOSDAQ) ──────────────────────────────
 export function IndexStrip({ indices }: { indices: MarketIndex[] }) {
@@ -174,8 +174,8 @@ export function SignalCard({
   hideStock?: boolean;
 }) {
   const { t } = useMrTheme();
-  const meta = signalMeta(t)[signal.type];
-  const TypeIcon = SIGNAL_TYPE_ICON[signal.type];
+  const meta = signalActionMeta(t)[signal.action];
+  const TypeIcon = SIGNAL_ACTION_ICON[signal.action];
   const stock = findStock(signal.code);
 
   return (
@@ -224,7 +224,7 @@ export function SignalCard({
             >
               {meta.label}
             </Text>
-            {!hideStock && stock ? (
+            {hideStock ? null : (
               <>
                 <Text style={{ fontSize: 11, color: t.borderStrong }}>·</Text>
                 <Text
@@ -236,10 +236,10 @@ export function SignalCard({
                     flexShrink: 1,
                   }}
                 >
-                  {stock.name}
+                  {signal.name}
                 </Text>
               </>
-            ) : null}
+            )}
             <Text
               style={{ fontSize: 11, color: t.fgSubtle, marginLeft: "auto" }}
             >

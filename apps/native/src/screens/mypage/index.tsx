@@ -6,7 +6,6 @@ import { MrHeader, MrScreen } from "@/components/ui";
 import { useMrTheme } from "@/hooks/use-mr-theme";
 import { authClient } from "@/lib/auth-client";
 import { getRegisteredPushToken } from "@/lib/push";
-import { signals } from "@/utils/data";
 import { nav } from "@/utils/nav";
 import { client, orpc } from "@/utils/orpc";
 import type { MrTokens } from "@/utils/theme";
@@ -122,9 +121,11 @@ export default function MyPageScreen() {
   const watchedCount = watchlist.data?.length ?? 0;
   const unread = useQuery(orpc.notification.unreadCount.queryOptions());
   const unreadCount = unread.data ?? 0;
+  const activeSignals = useQuery(orpc.signal.activeCount.queryOptions());
+  const activeSignalCount = activeSignals.data ?? 0;
   const statItems = [
     { l: "관심 종목", v: watchedCount, u: "개" },
-    { l: "활성 시그널", v: signals.length, u: "건" },
+    { l: "활성 시그널", v: activeSignalCount, u: "건" },
     { l: "안 읽은 알림", v: unreadCount, u: "건" },
   ];
 

@@ -14,7 +14,7 @@ const THUMB_MAX = 8;
 const tabSchema = z.enum(["watch", "all", "industry", "market", "policy"]);
 
 // Screen-facing item shape (mirrors apps/native NewsItem).
-interface FeedItem {
+export interface FeedItem {
   ai: string;
   category: string;
   code: string;

@@ -4,13 +4,26 @@ import {
   userNotificationSetting,
   userPushToken,
 } from "@moneyroad-app/db/schema";
-import { and, count, eq } from "drizzle-orm";
+import { and, count, desc, eq, lt } from "drizzle-orm";
 import z from "zod";
 
 import { protectedProcedure } from "../index";
 
+const HISTORY_DEFAULT_LIMIT = 20;
+const HISTORY_MAX_LIMIT = 50;
+
+// Screen-facing inbox item (mirrors apps/native alerts screen).
+export interface HistoryItem {
+  body: string;
+  createdAt: string;
+  id: string;
+  read: boolean;
+  title: string;
+  type: (typeof notificationHistory.$inferSelect)["type"];
+}
+
 // Normalized boolean shape returned to clients (no userId/updatedAt).
-interface NotificationSettings {
+export interface NotificationSettings {
   breakingNews: boolean;
   buySignal: boolean;
   holdSignal: boolean;
@@ -80,6 +93,93 @@ export const notificationRouter = {
         )
       );
     return row?.n ?? 0;
+  }),
+
+  // Current user's delivered notifications, newest first (keyset paginated).
+  history: protectedProcedure
+    .input(
+      z.object({
+        // Keyset cursor: createdAt (ISO) of the last item from the prev page.
+        cursor: z.string().optional(),
+        limit: z
+          .number()
+          .int()
+          .min(1)
+          .max(HISTORY_MAX_LIMIT)
+          .default(HISTORY_DEFAULT_LIMIT),
+      })
+    )
+    .handler(async ({ context, input }) => {
+      const userId = context.session.user.id;
+      const filters = [
+        eq(notificationHistory.userId, userId),
+        eq(notificationHistory.deliveryStatus, "sent"),
+      ];
+      if (input.cursor) {
+        const cursorDate = new Date(input.cursor);
+        if (!Number.isNaN(cursorDate.getTime())) {
+          filters.push(lt(notificationHistory.createdAt, cursorDate));
+        }
+      }
+      const rows = await db
+        .select({
+          id: notificationHistory.id,
+          type: notificationHistory.type,
+          title: notificationHistory.title,
+          body: notificationHistory.body,
+          read: notificationHistory.read,
+          createdAt: notificationHistory.createdAt,
+        })
+        .from(notificationHistory)
+        .where(and(...filters))
+        .orderBy(desc(notificationHistory.createdAt))
+        .limit(input.limit + 1);
+
+      const hasMore = rows.length > input.limit;
+      const page = hasMore ? rows.slice(0, input.limit) : rows;
+      const items: HistoryItem[] = page.map((r) => ({
+        id: r.id,
+        type: r.type,
+        title: r.title,
+        body: r.body,
+        read: r.read,
+        createdAt: r.createdAt.toISOString(),
+      }));
+      const last = page.at(-1);
+      const nextCursor = hasMore && last ? last.createdAt.toISOString() : null;
+      return { items, nextCursor };
+    }),
+
+  // Marks a single notification read (no-op if it isn't the user's).
+  markRead: protectedProcedure
+    .input(z.object({ id: z.string().min(1) }))
+    .handler(async ({ context, input }) => {
+      const userId = context.session.user.id;
+      await db
+        .update(notificationHistory)
+        .set({ read: true })
+        .where(
+          and(
+            eq(notificationHistory.id, input.id),
+            eq(notificationHistory.userId, userId)
+          )
+        );
+      return { ok: true };
+    }),
+
+  // Marks all of the current user's unread notifications read.
+  markAllRead: protectedProcedure.handler(async ({ context }) => {
+    const userId = context.session.user.id;
+    await db
+      .update(notificationHistory)
+      .set({ read: true })
+      .where(
+        and(
+          eq(notificationHistory.userId, userId),
+          eq(notificationHistory.read, false)
+        )
+      );
+    return { ok: true };
   }),
 
   // Upsert a partial change for the current user; returns the full settings.

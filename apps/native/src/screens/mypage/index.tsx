@@ -1,8 +1,9 @@
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { Alert, Image, Pressable, ScrollView, Text, View } from "react-native";
 import { Gradient } from "@/components/charts";
 import { Icon, type IconProps } from "@/components/icons";
 import { MrHeader, MrScreen } from "@/components/ui";
 import { useMrTheme } from "@/hooks/use-mr-theme";
+import { authClient } from "@/lib/auth-client";
 import { notifications, signals, stocks } from "@/utils/data";
 import { nav } from "@/utils/nav";
 import type { MrTokens } from "@/utils/theme";
@@ -107,6 +108,13 @@ function GroupLabel({ label, t }: { label: string; t: MrTokens }) {
 
 export default function MyPageScreen() {
   const { t } = useMrTheme();
+  const { data: session } = authClient.useSession();
+  const user = session?.user;
+  const displayName = user?.name?.trim() || "사용자";
+  const email = user?.email ?? "";
+  const avatarUrl = user?.image ?? null;
+  const initial = displayName.charAt(0).toUpperCase();
+
   const watchedCount = stocks.filter((s) => s.watched).length;
   const unreadCount = notifications.filter((n) => n.unread).length;
   const statItems = [
@@ -114,6 +122,21 @@ export default function MyPageScreen() {
     { l: "활성 시그널", v: signals.length, u: "건" },
     { l: "안 읽은 알림", v: unreadCount, u: "건" },
   ];
+
+  const handleLogout = () => {
+    Alert.alert("로그아웃", "로그아웃 하시겠어요?", [
+      { text: "취소", style: "cancel" },
+      {
+        text: "로그아웃",
+        style: "destructive",
+        // On sign-out the session clears and the mypage route gate redirects
+        // to the login screen.
+        onPress: () => {
+          authClient.signOut();
+        },
+      },
+    ]);
+  };
 
   return (
     <MrScreen>
@@ -130,29 +153,38 @@ export default function MyPageScreen() {
             paddingBottom: 18,
           }}
         >
-          <Gradient
-            borderRadius={999}
-            colors={[t.primary, t.sigAi]}
-            style={{
-              width: 56,
-              height: 56,
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <Text style={{ fontSize: 20, fontWeight: "800", color: "#fff" }}>
-              김
-            </Text>
-          </Gradient>
+          {avatarUrl ? (
+            <Image
+              source={{ uri: avatarUrl }}
+              style={{ width: 56, height: 56, borderRadius: 999 }}
+            />
+          ) : (
+            <Gradient
+              borderRadius={999}
+              colors={[t.primary, t.sigAi]}
+              style={{
+                width: 56,
+                height: 56,
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Text style={{ fontSize: 20, fontWeight: "800", color: "#fff" }}>
+                {initial}
+              </Text>
+            </Gradient>
+          )}
           <View style={{ flex: 1 }}>
             <Text
               style={{ fontSize: 16, fontWeight: "800", color: t.fgStrong }}
             >
-              김투자
+              {displayName}
             </Text>
-            <Text style={{ fontSize: 12, color: t.fgMuted, marginTop: 2 }}>
-              moneyroad@example.com
-            </Text>
+            {email ? (
+              <Text style={{ fontSize: 12, color: t.fgMuted, marginTop: 2 }}>
+                {email}
+              </Text>
+            ) : null}
           </View>
           <Pressable
             style={{
@@ -293,7 +325,13 @@ export default function MyPageScreen() {
           }}
         >
           <Text style={{ fontSize: 11, color: t.fgSubtle }}>버전 1.4.2</Text>
-          <Text style={{ fontSize: 11, color: t.fgSubtle }}>로그아웃</Text>
+          <Pressable hitSlop={8} onPress={handleLogout}>
+            <Text
+              style={{ fontSize: 12, fontWeight: "700", color: t.downStrong }}
+            >
+              로그아웃
+            </Text>
+          </Pressable>
         </View>
         <Text
           style={{

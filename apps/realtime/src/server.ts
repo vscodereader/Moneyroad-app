@@ -3,6 +3,7 @@ import { env } from "@moneyroad-app/env/realtime";
 import { initLogger } from "evlog";
 import { evlog } from "evlog/fastify";
 import Fastify from "fastify";
+import { registerNewsPlugin } from "./plugins/news";
 import { registerQuotesPlugin } from "./plugins/quotes";
 
 initLogger({
@@ -18,6 +19,7 @@ export function buildServer() {
   app.register(evlog);
   app.register(fastifySse, { heartbeatInterval: env.HEARTBEAT_MS });
   app.register(registerQuotesPlugin);
+  app.register(registerNewsPlugin);
 
   app.get("/", () => "OK");
 

@@ -15,6 +15,21 @@ export const env = createEnv({
     KIS_ENV: z.enum(["prod", "paper"]).default("paper"),
     KIS_APP_KEY: z.string().optional(),
     KIS_APP_SECRET: z.string().optional(),
+
+    // News collection (optional). The collector runs only when DATABASE_URL and
+    // the Naver credentials are present; otherwise the realtime service stays a
+    // pure quotes feed. Stock matching and breaking-news push need DATABASE_URL.
+    DATABASE_URL: z.string().optional(),
+    NAVER_CLIENT_ID: z.string().optional(),
+    NAVER_CLIENT_SECRET: z.string().optional(),
+    // Naver news search query polling interval.
+    NEWS_FETCH_INTERVAL_MS: z.coerce.number().default(60_000),
+    // AI summary/classification (optional). Skipped when the key is absent.
+    GOOGLE_GENERATIVE_AI_API_KEY: z.string().optional(),
+    NEWS_AI_MODEL: z.string().default("gemini-2.5-flash"),
+    // Max successful push of the same (user, type) per 5 min before throttling.
+    NOTIFICATION_COOLDOWN_5M_MAX: z.coerce.number().default(5),
+
     NODE_ENV: z
       .enum(["development", "production", "test"])
       .default("development"),

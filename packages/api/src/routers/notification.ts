@@ -1,9 +1,10 @@
 import { db } from "@moneyroad-app/db";
 import {
+  notificationHistory,
   userNotificationSetting,
   userPushToken,
 } from "@moneyroad-app/db/schema";
-import { and, eq } from "drizzle-orm";
+import { and, count, eq } from "drizzle-orm";
 import z from "zod";
 
 import { protectedProcedure } from "../index";
@@ -64,6 +65,22 @@ export const notificationRouter = {
       return row ? normalize(row) : DEFAULTS;
     }
   ),
+
+  // Count of the current user's delivered-but-unread notifications.
+  unreadCount: protectedProcedure.handler(async ({ context }) => {
+    const userId = context.session.user.id;
+    const [row] = await db
+      .select({ n: count() })
+      .from(notificationHistory)
+      .where(
+        and(
+          eq(notificationHistory.userId, userId),
+          eq(notificationHistory.read, false),
+          eq(notificationHistory.deliveryStatus, "sent")
+        )
+      );
+    return row?.n ?? 0;
+  }),
 
   // Upsert a partial change for the current user; returns the full settings.
   updateSettings: protectedProcedure

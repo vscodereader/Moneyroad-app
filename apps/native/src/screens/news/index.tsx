@@ -325,6 +325,7 @@ export default function NewsScreen() {
           <NewsCard news={item} onPress={() => setOpenNews(item)} showAiChip />
         )}
         showsVerticalScrollIndicator={false}
+        style={{ flex: 1 }}
       />
 
       {openNews ? (

@@ -16,9 +16,12 @@
       Zod input, better-auth 세션 컨텍스트 (`packages/api/src/index.ts`)
 - [x] DB 토대: Drizzle + node-postgres, `schema/index.ts` re-export 패턴
 - [x] 실시간 시세 인프라: `apps/realtime` SSE(허브·인증 토큰·KIS WS 어댑터)
-- [ ] 도메인 라우터: **`healthCheck`/`todo`만 존재** → 전부 신규
+- [x] 도메인 라우터: `news` / `notification` / `signal` / `stock` / `watchlist`
+      (+ `healthCheck`/`todo`). 남은 도메인: `market`(시세), `discuss`(토론)
+- [x] 인증: 이메일 + 소셜(구글/애플/네이버/카카오) 로그인, 로그인 화면, mypage 게이트
 - [ ] KIS **REST** 클라이언트(서버측): 현재 `apps/realtime`엔 WS 어댑터만 있음
-- [ ] 모든 화면이 mock import 중
+      → 시세(market) + 시그널 엔진 양쪽에서 필요
+- [ ] 화면 mock 잔존: 시세(지수·현재가·차트), 토론, 종목 카드(price/score), 차트
 
 ---
 
@@ -95,31 +98,40 @@ oRPC 라우터 (입력검증·인증)
 - [ ] `market.chart({ code, period, count })` (KIS `inquire_daily_itemchartprice`)
 - 검증: 장중 실제 시세 일치, 캐시 동작. `publicProcedure` 가능.
 
-### Phase 2 — 사용자 데이터 (🔵 DB, 🔑 Auth)
+### Phase 2 — 사용자 데이터 (🔵 DB, 🔑 Auth) — 대부분 완료
 관심종목·알림·프로필. Phase 1 시세와 결합해 홈④·마이 완성.
-- [ ] `watchlist.list` / `add` / `remove` / `preview({ limit })`
-      (목록은 DB, 시세·spark는 Phase 1 결합, score는 Phase 4 전까지 placeholder)
-- [ ] `notifications.list` / `unreadCount` / `markRead`
-- [ ] `user.me` / `user.stats`
-- [ ] `settings.get` / `settings.update`
+- [x] `watchlist.list` / `add` / `remove` (검색 추가·관심종목 화면 연결)
+      — 시세·spark는 미연동(Phase 1 대기), score는 Phase 5 전까지 placeholder
+- [x] `notification.unreadCount` / `history` / `markRead` / `markAllRead`
+      (알림함 화면 실데이터 + mypage 배지·스탯)
+- [x] `notification.getSettings` / `updateSettings` (알림설정 DB 저장, hold 포함)
+- [x] `notification.registerPushToken` / `unregisterPushToken` (단말 토큰 등록)
+- [x] mypage 프로필(세션) + 로그아웃 + 스탯(관심종목·활성시그널·안읽은알림) 실데이터
+- [ ] `watchlist`에 시세·spark 결합 (Phase 1 필요)
+- [ ] `user.me` / `user.stats` (현재 세션·개별 쿼리로 대체 중)
 
-### Phase 3 — 콘텐츠: 뉴스 (🟣 AI + 외부 + 🔵 DB)
-- [ ] 뉴스 수집 파이프라인(외부 소스 → 종목/카테고리/감성 태깅 → DB)
-- [ ] AI 요약 생성(LLM, 사전배치 vs 온디맨드 결정)
-- [ ] `news.feed({ tab, cursor })` / `news.detail({ id })`
+### Phase 3 — 콘텐츠: 뉴스 (🟣 AI + 외부 + 🔵 DB) — 완료
+- [x] 뉴스 수집 파이프라인 (realtime 네이버 수집 + 종목 매칭 + AI 요약/분류)
+      — [realtime/plan.md](../../realtime/plan.md#뉴스-수집-신규)
+- [x] AI 요약 생성 (`@ai-sdk/google`, 키 없으면 휴리스틱 폴백)
+- [x] `news.feed({ tab, cursor, limit })` / `news.detail({ id })` (화면 연결 + SSE 라이브 갱신)
+- [ ] 웹(Next.js) 뉴스 화면 연동 (앱만 완료)
 
 ### Phase 4 — 콘텐츠: 토론 (🔵 DB, 🔑 Auth)
 - [ ] `discuss.threads` / `toggleLike` / `createThread`
 - [ ] `discuss.thread` / `messages` / `sendMessage`
 - [ ] (⚡) `discuss.stream` 실시간 채팅 — realtime SSE 재사용 검토
 
-### Phase 5 — 시그널 엔진 (⚙️)
-가장 복잡, 차트·뉴스·토론 데이터에 의존.
-- [ ] `tech`: Phase 1 일봉으로 골든크로스·RSI·거래량 계산
-- [ ] `community`: Phase 4 토론량·감성 집계
-- [ ] `event`: 공시/뉴스 파이프라인
-- [ ] `ai`: 자체 예측 모델
-- [ ] `signals.feed({ type, window, cursor })` / `signals.counts`
+### Phase 5 — 시그널 (⚙️) — 기반 완료, 엔진 남음
+**모델 전환**: 소스 기반 → **액션 기반(매수/매도/관망)**. 소스(`tech` 등)는 부가 필드.
+- [x] DB `signal` 테이블(action/source/strength/title/body/indicators) + 0003
+- [x] `signal.feed({ action?, code?, window, cursor?, limit })` / `signal.counts` /
+      `signal.activeCount`(protected, 내 관심종목 24h)
+- [x] 화면 연결: 시그널 화면(필터+무한스크롤)·home·mypage 스탯·stock-detail
+- [ ] **⚙️ 시그널 엔진(생성기)**: KIS 일봉 → 골든크로스/RSI/거래량 → 액션/strength 산출
+      → `signal` 적재. realtime에 구현. 유니버스=관심종목 합집합.
+      **체크리스트: [realtime/plan.md](../../realtime/plan.md#시그널-엔진-신규)**
+- [ ] `community`(토론 집계)·`event`(공시)·`ai`(예측) 소스 — 향후
 - [ ] `score` / `signalBreakdown` 산출 → 홈④·종목상세 backfill
 
 ### Phase 6 — 실시간 전환 (⚡ RT)
@@ -139,6 +151,23 @@ oRPC 라우터 (입력검증·인증)
 | 마이 | 2 |
 
 > 홈은 여러 Phase에 걸쳐 섹션별로 점진 전환(지수→관심종목→뉴스→시그널).
+
+---
+
+## 남은 작업 백로그 (다음 라운드 후보)
+
+진행 중 수시로 선택하는 항목. 우선순위는 협의로 조정.
+
+| 작업 | 효과 / 비고 | 참고 |
+|---|---|---|
+| ⚙️ **시그널 엔진** | `signal` 테이블 채움 → 시그널 화면·home·mypage 활성화 | [realtime/plan.md](../../realtime/plan.md#시그널-엔진-신규) |
+| 🟢 **시세(market) 라우터 + KIS REST** | 홈 지수·관심종목 시세·종목상세 차트 실데이터화 | plan Phase 1, "공통 인프라" |
+| 관심종목 시세·spark 결합 | `watchlist.list`에 현재가/스파크 추가 | Phase 1 의존 |
+| 로그인 라우트 게이트 정리 | watchlist/settings 등 로그아웃 상태 접근 차단(현재 빈 화면) | mypage 게이트 패턴 재사용 |
+| 실기기 푸시 발송 검증 | dev build + 실기기에서 속보/시그널 푸시 e2e | [realtime/plan.md](../../realtime/plan.md#다음-단계--푸시-알림-보류) |
+| 웹 뉴스 화면 연동 | `apps/web` 뉴스 페이지(앱만 완료) | Phase 3 |
+| 토론(discuss) 도메인 | 스레드/좋아요/채팅(+SSE) | Phase 4 |
+| realtime 시세 SSE 클라 연동 + 배포 | 관심종목 실시간 시세, Cloud Run 배포 | [realtime/plan.md](../../realtime/plan.md) |
 
 ---
 

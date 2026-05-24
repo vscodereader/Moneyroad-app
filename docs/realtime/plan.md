@@ -193,6 +193,46 @@ realtime은 `min=max=1 + no-cpu-throttling`로 **항상 켜져 있는** 유일�
 
 ---
 
+## 시그널 엔진 (신규) — 계획
+
+기술적 시그널을 산출해 `signal` 테이블에 적재하는 엔진. realtime에 둔다(항상
+켜져 있어 크론에 적합 — 뉴스 수집기·종목마스터 로더와 동일 이유). 화면/oRPC
+**기반은 이미 구현**됐고(커밋 `2d057ef`, [signals.md](../native/api/signals.md))
+**엔진(생성기)만 남았다** → 현재 `signal` 테이블은 비어 있어 화면은 빈 상태.
+
+### 결정된 설계 (사용자 확인)
+- **모델**: 액션 기반(매수/매도/관망). 소스는 `tech`만 생성(나머지 향후).
+- **유니버스**: 모든 유저 `user_watchlist` 종목 **합집합**만 스캔.
+- **활성 시그널**: 로그인 유저 관심종목의 최근 24h 시그널 수(`signal.activeCount` 구현됨).
+
+### 파이프라인 (예정 — `services/signal/`)
+1. 유니버스 수집: `selectDistinct(stockCode) from user_watchlist`
+2. **KIS REST 클라이언트** (신설): `/oauth2/tokenP` 액세스 토큰 발급/갱신
+   (WS approval_key와 별개), 일봉 `inquire_daily_itemchartprice` 호출 래퍼,
+   레이트리밋·에러 정규화
+3. 종목별 일봉 → 지표 계산: 골든크로스(MA), RSI, 거래량 급증
+4. 지표 → **매수/매도/관망** 분류 + `strength`(1~5) + `title`/`body` 생성,
+   근거를 `indicators`(jsonb)에 저장
+5. `signal` 테이블 upsert (중복/쿨다운 정책 적용)
+6. (선택) 신규 시그널 → `notification_history` + Expo 푸시(뉴스 속보 경로 재사용)
+
+### 작업 체크리스트
+- [ ] **KIS REST 클라이언트** (`services/kis-rest.ts`): 토큰 캐시/갱신 + 일봉 조회.
+      (native API plan.md의 "공통 인프라"와 공유 가능 — 위치 결정 필요)
+- [ ] 지표 계산 순수 함수(MA/RSI/volume) + 단위 테스트(합성 일봉)
+- [ ] 분류기: 지표 → action/strength/title/body, 임계값 상수화
+- [ ] `services/signal/collector.ts`: 유니버스 순회 + 동시성 제한 + upsert
+- [ ] `plugins/scheduler.ts`에 시그널 크론 추가 (주기/장중 한정 결정)
+- [ ] (선택) 시그널 푸시 연동(알림설정 ON·`buy_signal`/`sell_signal` 타입)
+- [ ] env 추가: 시그널 크론/주기, 지표 임계값(필요 시)
+
+### 미정 / 결정 필요
+- [ ] 실행 주기(장중 N분 vs 장마감 후 1회)와 중복 시그널 쿨다운.
+- [ ] 시그널 푸시 연동 여부.
+- [ ] RSI 경계·거래량 배수 등 임계값, `strength` 산출 공식.
+
+---
+
 ## 참고
 
 ### Cloud Run 필수 설정 (시세 서비스)

@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
-import { ScrollView, Text, View } from "react-native";
+import { ActivityIndicator, ScrollView, Text, View } from "react-native";
 
 import {
   // AiBriefCard,
@@ -122,6 +122,29 @@ export default function HomeScreen() {
             signal={sig}
           />
         ))}
+        {topSignals.length === 0 ? (
+          <View
+            style={{
+              alignItems: "center",
+              backgroundColor: t.bgSubtle,
+              borderRadius: 12,
+              gap: 8,
+              marginHorizontal: 16,
+              paddingVertical: 28,
+            }}
+          >
+            {topSignalsQuery.isLoading ? (
+              <ActivityIndicator color={t.primary} />
+            ) : (
+              <>
+                <Icon.navSignal color={t.fgSubtle} size={26} />
+                <Text style={{ color: t.fgSubtle, fontSize: 13 }}>
+                  오늘의 시그널이 아직 없어요.
+                </Text>
+              </>
+            )}
+          </View>
+        ) : null}
 
         <SectionHead
           more="전체보기 →"

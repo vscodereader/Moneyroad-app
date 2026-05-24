@@ -8,8 +8,15 @@ Phase 1은 **단일 인스턴스**(min=max=1)에서 KIS 1연결 + 클라이언�
 Memorystore(Redis) 백플레인을 추가한다.
 
 ## 엔드포인트
-- `GET /` , `GET /healthz` — 헬스체크
+- `GET /` , `GET /healthz`, `GET /healthz/news` — 헬스체크
 - `GET /stream/quotes?symbols=005930,000660` — SSE 스트림 (`event: quote`)
+- `GET /stream/news?symbols=&categories=` — SSE 스트림 (`event: news`)
+- `GET /api/news?limit=&category=&stockCode=` — 저장 뉴스 조회(REST)
+
+> 뉴스 수집기는 **DATABASE_URL + NAVER 키가 있을 때만** 구동된다. 없으면 순수
+> 시세 피드로만 동작한다. 종목 매칭·속보 푸시는 `stock_master` 적재와 앱
+> 푸시토큰 등록이 선행돼야 실제로 동작한다(스키마/코드는 준비됨). 자세한 내용은
+> `docs/realtime/plan.md`의 "뉴스 수집" 참고.
 
 ## ⚠️ Cloud Run 필수 설정
 | 설정 | 값 | 이유 |
@@ -63,6 +70,14 @@ gcloud run deploy $SERVICE \
 # KIS 연동 시 (위 --set-env-vars/--set-secrets에 추가)
 #   --set-env-vars=FEED=kis,KIS_ENV=prod \
 #   --set-secrets=...,KIS_APP_KEY=kis-app-key:latest,KIS_APP_SECRET=kis-app-secret:latest
+
+# 뉴스 수집 활성화 시 (위 플래그에 추가)
+#   --add-cloudsql-instances=<PROJECT:REGION:INSTANCE> \   # Cloud SQL 사용 시
+#   --set-secrets=...,DATABASE_URL=database-url:latest,\
+#                     NAVER_CLIENT_ID=naver-client-id:latest,\
+#                     NAVER_CLIENT_SECRET=naver-client-secret:latest,\
+#                     GOOGLE_GENERATIVE_AI_API_KEY=google-ai-key:latest   # AI 요약 시(선택)
+#   --set-env-vars=...,NEWS_FETCH_INTERVAL_MS=60000
 ```
 
 > ⚠️ `--allow-unauthenticated`은 Cloud Run 인프라 레벨 인증을 끄는 것일 뿐, 앱은

@@ -104,6 +104,70 @@ KIS 공식 예제(`ccnl_krx`, `auth_ws_token`, `kis_auth`) 스펙으로 구현.
 
 ---
 
+## 뉴스 수집 (신규) — `apps/realtime/src/services/news/`
+
+레거시 `apps/server`의 네이버 뉴스 수집기를 개선해 realtime으로 이관했다.
+realtime은 `min=max=1 + no-cpu-throttling`로 **항상 켜져 있는** 유일한 서비스라
+주기 스케줄러(폴링)에 적합하다(API 서버는 scale-to-zero라 타이머 불가).
+
+수집기는 **DATABASE_URL + 네이버 키가 있을 때만** 구동되며, 없으면 realtime은
+기존처럼 순수 시세(quotes) 피드로만 동작한다(`isCollectorEnabled()` 가드).
+
+### 파이프라인 (`collector.ts`)
+1. 활성 `news_subscription` query 수집 (없으면 기본 `"주식"`)
+2. 네이버 검색 API로 목록 fetch (`naver.ts`, `sort=date`)
+3. **중복 선필터** — 배치의 `originallink`를 DB와 대조해 **신규만** 남김
+   (개선①: 레거시는 매 기사 무조건 크롤 → 신규만 크롤로 부하 대폭 감소)
+4. 신규 항목만 동시성 제한(5)으로 처리:
+   - 본문 크롤 + 언론사 추출 (`crawlNaverArticle`)
+   - **종목 자동 매칭** (`stock-matcher.ts`, 개선②) — `stock_master` 종목명을
+     메모리 인덱스(최장 일치 우선)로 로드해 제목/본문에서 `stockCode` 추출
+   - **AI 요약/분류** (`ai.ts`, 개선③) — `@ai-sdk/google` `generateObject`로
+     `summary`(신규 컬럼) + `category` 생성. 키 없으면 query 휴리스틱으로 폴백
+5. `onConflictDoNothing(originallink)`로 insert → 적재분만 returning
+6. 적재분을 NewsHub로 broadcast(SSE) + `notifyBreakingNews`(속보 푸시) 트리거
+
+### 엔드포인트 (`plugins/news.ts`)
+- `GET /api/news?limit=&category=&stockCode=` — 저장 뉴스 조회(REST, 인증 불필요)
+- `GET /stream/news?symbols=&categories=&token=` — 신규 뉴스 SSE(`event: news`).
+  토큰 인증은 `/stream/quotes`와 동일(서명 스트림 토큰). symbols·categories를
+  모두 비우면 전체 신규 뉴스를 받음
+- `GET /healthz/news` — `{ status, clients }`
+
+### 속보 푸시 (`push.ts` + `expo-push.ts`)
+- `news` 워치리스트 구독자 중 `breakingNews` 설정 ON 사용자에게 Expo 푸시
+- 키워드 휴리스틱(속보/급등/급락 등)으로 속보 판정, `stockCode` 있는 뉴스만 타겟
+- 피로도 쿨다운(5분 내 동일 user·type 상한) + `notification_history` 추적
+
+### 종목마스터 로더 (`services/stock-master/`)
+종목 매칭·속보 푸시가 동작하려면 `stock_master` 적재가 선행돼야 한다. KIS 공식
+종목마스터(.mst)를 받아 적재하는 로더를 구현했다.
+- KIS 공식 다운로드(`kospi_code.mst.zip`/`kosdaq_code.mst.zip`, KIS 키 불필요)
+  → unzip(`adm-zip`) → CP949 디코딩(`iconv-lite`) → 고정폭 파싱 → **upsert**
+  (replace 아님 — news/watchlist FK 보존)
+- 파싱 스펙은 KIS 공식 파이썬 예제(`kis_kospi/kosdaq_code_mst.py`) 기준
+  (`spec.ts`의 `KOSPI_FIELDS`/`KOSDAQ_FIELDS`, 79개 컬럼 매핑)
+- 실행: `pnpm --filter realtime load:stock-master` (DATABASE_URL만 필요)
+- 검증됨: KOSPI 2533 + KOSDAQ 1824종목, 삼성전자/SK하이닉스/현대차/에코프로 등
+  종목명·표준코드·상장일 정확. (필요 시 일 1회 스케줄링 권장 — 신규상장/기준가 갱신)
+
+### ⚠️ 남은 다운스트림 의존성
+- **앱 푸시 토큰 등록 미구현** — `user_push_token`에 토큰이 없으면 푸시는
+  `no_recipients`로 기록됨. native의 expo-notifications 등록이 선행돼야 실발송
+- realtime 배포에 **DATABASE_URL** + (네이버/AI/푸시) 시크릿 추가 필요 (아래 배포 참고)
+- 마이그레이션 적용(`pnpm db:migrate`) 후 `load:stock-master` 1회 실행 필요
+
+### 추가된 스키마/패키지
+- DB: `news`(+`summary`), `news_subscription`, `stock_master`, `user_watchlist`,
+  `user_notification_setting`, `user_push_token`, `notification_history`
+  (마이그레이션 `0001_*.sql` 생성됨)
+- `@moneyroad-app/db/client` 분리 — env/server 검증 없이 `createDb(url)` 사용
+  (realtime이 `env/realtime.DATABASE_URL`로 자체 연결)
+- realtime deps: `drizzle-orm`, `pg`, `expo-server-sdk`, `ai`, `@ai-sdk/google`,
+  `adm-zip`, `iconv-lite` (종목마스터 로더)
+
+---
+
 ## 참고
 
 ### Cloud Run 필수 설정 (시세 서비스)
@@ -119,8 +183,13 @@ KIS 공식 예제(`ccnl_krx`, `auth_ws_token`, `kis_auth`) 스펙으로 구현.
 - `PORT`(Cloud Run 자동), `HEARTBEAT_MS`, `MOCK_INTERVAL_MS`
 - `STREAM_TOKEN_SECRET` (server와 동일, ≥32자)
 - `KIS_ENV` = `prod` | `paper`, `KIS_APP_KEY`, `KIS_APP_SECRET`
+- (뉴스) `DATABASE_URL`, `NAVER_CLIENT_ID`, `NAVER_CLIENT_SECRET` — 셋 다 있어야 수집 구동
+- (뉴스) `NEWS_FETCH_INTERVAL_MS`(기본 60000), `NOTIFICATION_COOLDOWN_5M_MAX`(기본 5)
+- (뉴스 AI, 선택) `GOOGLE_GENERATIVE_AI_API_KEY`, `NEWS_AI_MODEL`(기본 `gemini-2.5-flash`)
 
 ### 엔드포인트
 - realtime `GET /stream/quotes?symbols=005930,000660&token=<서명토큰>` → `event: quote` 스트림 (토큰 없으면 401, Accept 미협상 시 406)
-- realtime `GET /healthz` → `{ status, clients }`
+- realtime `GET /stream/news?symbols=&categories=&token=<서명토큰>` → `event: news` 스트림 (필터 비우면 전체 신규)
+- realtime `GET /api/news?limit=&category=&stockCode=` → `{ items }` (저장 뉴스 조회, 인증 불필요)
+- realtime `GET /healthz` → `{ status, clients }`, `GET /healthz/news` → `{ status, clients }`
 - server `POST /stream-token` → `{ token, expiresIn }` (로그인 세션 필요, 미인증 401)

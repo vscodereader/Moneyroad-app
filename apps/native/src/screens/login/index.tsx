@@ -11,6 +11,7 @@ import {
   View,
 } from "react-native";
 
+import { Icon, type IconProps } from "@/components/icons";
 import { BackButton, MrHeader, MrScreen } from "@/components/ui";
 import { useMrTheme } from "@/hooks/use-mr-theme";
 import { authClient } from "@/lib/auth-client";
@@ -28,18 +29,21 @@ const SOCIALS: {
   bg: string;
   fg: string;
   border?: string;
+  icon: (p: IconProps) => React.JSX.Element;
 }[] = [
   {
     provider: "kakao",
     label: "카카오로 계속하기",
     bg: "#FEE500",
     fg: "#191600",
+    icon: Icon.logoKakao,
   },
   {
     provider: "naver",
     label: "네이버로 계속하기",
     bg: "#03C75A",
     fg: "#FFFFFF",
+    icon: Icon.logoNaver,
   },
   {
     provider: "google",
@@ -47,12 +51,14 @@ const SOCIALS: {
     bg: "#FFFFFF",
     fg: "#1F1F1F",
     border: "#DADCE0",
+    icon: Icon.logoGoogle,
   },
   {
     provider: "apple",
     label: "Apple로 계속하기",
     bg: "#000000",
     fg: "#FFFFFF",
+    icon: Icon.logoApple,
   },
 ];
 
@@ -259,32 +265,40 @@ export default function LoginScreen() {
           </View>
 
           <View style={{ gap: 10 }}>
-            {SOCIALS.map((s) => (
-              <Pressable
-                disabled={socialLoading !== null}
-                key={s.provider}
-                onPress={() => submitSocial(s.provider)}
-                style={{
-                  height: 50,
-                  borderRadius: 12,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  backgroundColor: s.bg,
-                  borderWidth: s.border ? 1 : 0,
-                  borderColor: s.border,
-                }}
-              >
-                {socialLoading === s.provider ? (
-                  <ActivityIndicator color={s.fg} />
-                ) : (
-                  <Text
-                    style={{ fontSize: 15, fontWeight: "700", color: s.fg }}
-                  >
-                    {s.label}
-                  </Text>
-                )}
-              </Pressable>
-            ))}
+            {SOCIALS.map((s) => {
+              const Logo = s.icon;
+              return (
+                <Pressable
+                  disabled={socialLoading !== null}
+                  key={s.provider}
+                  onPress={() => submitSocial(s.provider)}
+                  style={{
+                    height: 50,
+                    borderRadius: 12,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 8,
+                    backgroundColor: s.bg,
+                    borderWidth: s.border ? 1 : 0,
+                    borderColor: s.border,
+                  }}
+                >
+                  {socialLoading === s.provider ? (
+                    <ActivityIndicator color={s.fg} />
+                  ) : (
+                    <>
+                      <Logo color={s.fg} size={18} />
+                      <Text
+                        style={{ fontSize: 15, fontWeight: "700", color: s.fg }}
+                      >
+                        {s.label}
+                      </Text>
+                    </>
+                  )}
+                </Pressable>
+              );
+            })}
           </View>
         </ScrollView>
       </KeyboardAvoidingView>

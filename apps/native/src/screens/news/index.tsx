@@ -363,7 +363,7 @@ export default function NewsScreen() {
             position: "absolute",
             left: 0,
             right: 0,
-            bottom: tabBarHeight + 12,
+            bottom: tabBarHeight - 50,
             alignItems: "center",
           }}
         >

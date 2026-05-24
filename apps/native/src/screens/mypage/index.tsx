@@ -4,8 +4,10 @@ import { Icon, type IconProps } from "@/components/icons";
 import { MrHeader, MrScreen } from "@/components/ui";
 import { useMrTheme } from "@/hooks/use-mr-theme";
 import { authClient } from "@/lib/auth-client";
+import { getRegisteredPushToken } from "@/lib/push";
 import { notifications, signals, stocks } from "@/utils/data";
 import { nav } from "@/utils/nav";
+import { client } from "@/utils/orpc";
 import type { MrTokens } from "@/utils/theme";
 
 interface RowProps {
@@ -130,8 +132,14 @@ export default function MyPageScreen() {
         text: "로그아웃",
         style: "destructive",
         // On sign-out the session clears and the mypage route gate redirects
-        // to the login screen.
+        // to the login screen. Unregister this device's push token first.
         onPress: () => {
+          const token = getRegisteredPushToken();
+          if (token) {
+            client.notification.unregisterPushToken({ token }).catch(() => {
+              // best-effort
+            });
+          }
           authClient.signOut();
         },
       },

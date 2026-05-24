@@ -1,6 +1,9 @@
 import { db } from "@moneyroad-app/db";
-import { userNotificationSetting } from "@moneyroad-app/db/schema";
-import { eq } from "drizzle-orm";
+import {
+  userNotificationSetting,
+  userPushToken,
+} from "@moneyroad-app/db/schema";
+import { and, eq } from "drizzle-orm";
 import z from "zod";
 
 import { protectedProcedure } from "../index";
@@ -76,5 +79,36 @@ export const notificationRouter = {
         })
         .returning();
       return row ? normalize(row) : { ...DEFAULTS, ...input };
+    }),
+
+  // Registers an Expo push token for the current user (idempotent).
+  registerPushToken: protectedProcedure
+    .input(z.object({ token: z.string().min(1) }))
+    .handler(async ({ context, input }) => {
+      const userId = context.session.user.id;
+      await db
+        .insert(userPushToken)
+        .values({ userId, token: input.token })
+        .onConflictDoUpdate({
+          target: [userPushToken.userId, userPushToken.token],
+          set: { updatedAt: new Date() },
+        });
+      return { ok: true };
+    }),
+
+  // Removes a push token (e.g. on logout) for the current user.
+  unregisterPushToken: protectedProcedure
+    .input(z.object({ token: z.string().min(1) }))
+    .handler(async ({ context, input }) => {
+      const userId = context.session.user.id;
+      await db
+        .delete(userPushToken)
+        .where(
+          and(
+            eq(userPushToken.userId, userId),
+            eq(userPushToken.token, input.token)
+          )
+        );
+      return { ok: true };
     }),
 };

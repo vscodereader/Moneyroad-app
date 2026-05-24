@@ -10,7 +10,7 @@
     "name": "머니로드",
     "slug": "moneyroad-app",
     "icon": "./assets/images/icon.png",
-    "plugins": ["expo-font"],
+    "plugins": ["expo-font", "expo-notifications"],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true

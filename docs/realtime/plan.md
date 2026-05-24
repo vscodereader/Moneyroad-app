@@ -134,10 +134,11 @@ realtime은 `min=max=1 + no-cpu-throttling`로 **항상 켜져 있는** 유일�
   모두 비우면 전체 신규 뉴스를 받음
 - `GET /healthz/news` — `{ status, clients }`
 
-### 속보 푸시 (`push.ts` + `expo-push.ts`)
+### 속보 푸시 (`push.ts` + `expo-push.ts`) — 서버측 구현 완료
 - `news` 워치리스트 구독자 중 `breakingNews` 설정 ON 사용자에게 Expo 푸시
 - 키워드 휴리스틱(속보/급등/급락 등)으로 속보 판정, `stockCode` 있는 뉴스만 타겟
 - 피로도 쿨다운(5분 내 동일 user·type 상한) + `notification_history` 추적
+- ⚠️ **단말 등록/실발송은 미완** — 아래 "다음 단계 — 푸시 알림" 참고
 
 ### 종목마스터 로더 (`services/stock-master/`)
 종목 매칭·속보 푸시가 동작하려면 `stock_master` 적재가 선행돼야 한다. KIS 공식
@@ -155,11 +156,31 @@ realtime은 `min=max=1 + no-cpu-throttling`로 **항상 켜져 있는** 유일�
 - 검증됨: KOSPI 2533 + KOSDAQ 1824종목, 삼성전자/SK하이닉스/현대차/에코프로 등
   종목명·표준코드·상장일 정확
 
-### ⚠️ 남은 다운스트림 의존성
-- **앱 푸시 토큰 등록 미구현** — `user_push_token`에 토큰이 없으면 푸시는
-  `no_recipients`로 기록됨. native의 expo-notifications 등록이 선행돼야 실발송
-- realtime 배포에 **DATABASE_URL** + (네이버/AI/푸시) 시크릿 추가 필요 (아래 배포 참고)
+### 다음 단계 — 푸시 알림 (보류)
+서버측 발송 로직(`expo-push.ts`/`push.ts`)·쿨다운·`notification_history` 추적은
+구현 완료. 실제 단말까지 보내려면 아래가 남았다.
+
+- [ ] **native 푸시 토큰 등록** (현재 `expo-notifications` 미설치)
+  - `expo-notifications` 설치 + 알림 권한 요청
+  - `getExpoPushTokenAsync()`로 토큰 발급 → 서버 라우트로 전송해 `user_push_token`에 저장
+    (저장 라우트는 server 또는 realtime 어디에 둘지 결정 필요)
+- [ ] **워치리스트(type='news') + 알림설정 UI** — 구독자/ON 사용자가 있어야 타겟 발생
+- [ ] 실발송 검증
+
+**테스트 제약 (조사 완료, SDK 55 기준)**
+- 원격 푸시는 **시뮬레이터·Expo Go에서 불가** → **development build + 실기기** 필요
+  (iOS 시뮬레이터는 Expo push token 발급 불가, Expo Go는 SDK 53부터 원격 푸시 제거)
+- Android 에뮬레이터(Google Play 포함) + dev build + FCM 설정은 가능
+- 로컬 알림은 시뮬레이터에서도 되지만 서버 발송 경로를 안 거쳐 검증 의미 없음
+- 서버 발송 경로만 빠르게 검증하려면: 실기기/Expo 도구로 받은 **실제 토큰 1개**를
+  `user_push_token`에 수동 INSERT → `notifyBreakingNews` 트리거 →
+  `notification_history.delivery_status`/`ticket_id`로 발송·티켓 추적 확인
+
+### ⚠️ 기타 남은 의존성
+- realtime 배포에 **DATABASE_URL** + (네이버/AI) 시크릿 추가 필요 (아래 배포 참고)
 - 마이그레이션 적용(`pnpm db:migrate`) 후 `load:stock-master` 1회 실행 필요
+  (또는 부트스트랩이 빈 테이블 시 자동 적재)
+- AI 요약 사용 시 **실제 `GOOGLE_GENERATIVE_AI_API_KEY`** 필요 (현재 빈 값 → 휴리스틱 폴백)
 
 ### 추가된 스키마/패키지
 - DB: `news`(+`summary`), `news_subscription`, `stock_master`, `user_watchlist`,

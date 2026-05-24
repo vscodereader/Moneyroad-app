@@ -1,5 +1,5 @@
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -284,6 +284,27 @@ export default function NewsScreen() {
   // Live updates: refetch the feed when realtime pushes new news for this tab.
   useNewsStream(tab);
 
+  const loadMore = () => {
+    if (feed.hasNextPage && !feed.isFetchingNextPage) {
+      feed.fetchNextPage();
+    }
+  };
+
+  // Keep loading pages until the list is taller than the viewport; otherwise a
+  // short first page (5 items) leaves nothing to scroll and onEndReached never
+  // fires. After the screen fills, onEndReached takes over for further scroll.
+  const listHeight = useRef(0);
+  const contentHeight = useRef(0);
+  const fillViewport = () => {
+    if (
+      listHeight.current > 0 &&
+      contentHeight.current > 0 &&
+      contentHeight.current <= listHeight.current
+    ) {
+      loadMore();
+    }
+  };
+
   return (
     <MrScreen>
       <MrHeader title="뉴스" />
@@ -315,12 +336,16 @@ export default function NewsScreen() {
           )
         }
         ListHeaderComponent={<NewsTabs onChange={setTab} tab={tab} />}
-        onEndReached={() => {
-          if (feed.hasNextPage && !feed.isFetchingNextPage) {
-            feed.fetchNextPage();
-          }
+        onContentSizeChange={(_w, h) => {
+          contentHeight.current = h;
+          fillViewport();
         }}
+        onEndReached={loadMore}
         onEndReachedThreshold={0.5}
+        onLayout={(e) => {
+          listHeight.current = e.nativeEvent.layout.height;
+          fillViewport();
+        }}
         renderItem={({ item }) => (
           <NewsCard news={item} onPress={() => setOpenNews(item)} showAiChip />
         )}

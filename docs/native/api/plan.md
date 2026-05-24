@@ -163,7 +163,7 @@ oRPC 라우터 (입력검증·인증)
 | ⚙️ **시그널 엔진** | `signal` 테이블 채움 → 시그널 화면·home·mypage 활성화 | [realtime/plan.md](../../realtime/plan.md#시그널-엔진-신규) |
 | 🟢 **시세(market) 라우터 + KIS REST** | 홈 지수·관심종목 시세·종목상세 차트 실데이터화 | plan Phase 1, "공통 인프라" |
 | 관심종목 시세·spark 결합 | `watchlist.list`에 현재가/스파크 추가 | Phase 1 의존 |
-| 로그인 라우트 게이트 정리 | watchlist/settings 등 로그아웃 상태 접근 차단(현재 빈 화면) | mypage 게이트 패턴 재사용 |
+| ~~로그인 라우트 게이트 정리~~ ✅ | `AuthGate` 컴포넌트로 watchlist/alerts/settings/mypage 보호 | `components/auth-gate.tsx` |
 | 실기기 푸시 발송 검증 | dev build + 실기기에서 속보/시그널 푸시 e2e | [realtime/plan.md](../../realtime/plan.md#다음-단계--푸시-알림-보류) |
 | 웹 뉴스 화면 연동 | `apps/web` 뉴스 페이지(앱만 완료) | Phase 3 |
 | 토론(discuss) 도메인 | 스레드/좋아요/채팅(+SSE) | Phase 4 |

@@ -1,5 +1,10 @@
+import { AuthGate } from "@/components/auth-gate";
 import SettingsPageScreen from "@/screens/settings";
 
 export default function SettingsPageRoute() {
-  return <SettingsPageScreen />;
+  return (
+    <AuthGate>
+      <SettingsPageScreen />
+    </AuthGate>
+  );
 }

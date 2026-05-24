@@ -21,11 +21,10 @@ import {
   StockLogo,
 } from "@/components/ui";
 import { useMrTheme } from "@/hooks/use-mr-theme";
+import { type NewsTab, useNewsStream } from "@/hooks/use-news-stream";
 import { findStock, type NewsItem } from "@/utils/data";
 import { changeColor, fmt } from "@/utils/format";
 import { orpc } from "@/utils/orpc";
-
-type NewsTab = "watch" | "all" | "industry" | "market" | "policy";
 
 const TABS: { k: NewsTab; l: string }[] = [
   { k: "watch", l: "관심 종목" },
@@ -240,6 +239,8 @@ export default function NewsScreen() {
   const [openNews, setOpenNews] = useState<NewsItem | null>(null);
   const feed = useQuery(orpc.news.feed.queryOptions({ input: { tab } }));
   const items = feed.data?.items ?? [];
+  // Live updates: refetch the feed when realtime pushes new news for this tab.
+  useNewsStream(tab);
 
   return (
     <MrScreen>

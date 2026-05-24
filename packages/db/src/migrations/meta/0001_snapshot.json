@@ -1,0 +1,1571 @@
+{
+  "id": "18624702-57c7-453e-9b36-e2d39ac79b6e",
+  "prevId": "c38dda8f-ea00-45df-bb82-59b5c41008bf",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.account": {
+      "name": "account",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "account_id": {
+          "name": "account_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "provider_id": {
+          "name": "provider_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "access_token": {
+          "name": "access_token",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "refresh_token": {
+          "name": "refresh_token",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "id_token": {
+          "name": "id_token",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "access_token_expires_at": {
+          "name": "access_token_expires_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "refresh_token_expires_at": {
+          "name": "refresh_token_expires_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "scope": {
+          "name": "scope",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "password": {
+          "name": "password",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "account_userId_idx": {
+          "name": "account_userId_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "account_user_id_user_id_fk": {
+          "name": "account_user_id_user_id_fk",
+          "tableFrom": "account",
+          "tableTo": "user",
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.session": {
+      "name": "session",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "token": {
+          "name": "token",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "ip_address": {
+          "name": "ip_address",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "user_agent": {
+          "name": "user_agent",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "session_userId_idx": {
+          "name": "session_userId_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "session_user_id_user_id_fk": {
+          "name": "session_user_id_user_id_fk",
+          "tableFrom": "session",
+          "tableTo": "user",
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "session_token_unique": {
+          "name": "session_token_unique",
+          "nullsNotDistinct": false,
+          "columns": ["token"]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.user": {
+      "name": "user",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "email": {
+          "name": "email",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "email_verified": {
+          "name": "email_verified",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "image": {
+          "name": "image",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "user_email_unique": {
+          "name": "user_email_unique",
+          "nullsNotDistinct": false,
+          "columns": ["email"]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.verification": {
+      "name": "verification",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "identifier": {
+          "name": "identifier",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "value": {
+          "name": "value",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "verification_identifier_idx": {
+          "name": "verification_identifier_idx",
+          "columns": [
+            {
+              "expression": "identifier",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.news": {
+      "name": "news",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "originallink": {
+          "name": "originallink",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "link": {
+          "name": "link",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
+        },
+        "summary": {
+          "name": "summary",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "pub_date": {
+          "name": "pub_date",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "query": {
+          "name": "query",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "source": {
+          "name": "source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "category": {
+          "name": "category",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "tags": {
+          "name": "tags",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "content": {
+          "name": "content",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "stock_code": {
+          "name": "stock_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "source_type": {
+          "name": "source_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'auto'"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "news_pub_date_idx": {
+          "name": "news_pub_date_idx",
+          "columns": [
+            {
+              "expression": "pub_date",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "news_query_idx": {
+          "name": "news_query_idx",
+          "columns": [
+            {
+              "expression": "query",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "news_stock_code_idx": {
+          "name": "news_stock_code_idx",
+          "columns": [
+            {
+              "expression": "stock_code",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "news_source_type_idx": {
+          "name": "news_source_type_idx",
+          "columns": [
+            {
+              "expression": "source_type",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "news_stock_code_stock_master_mksc_shrn_iscd_fk": {
+          "name": "news_stock_code_stock_master_mksc_shrn_iscd_fk",
+          "tableFrom": "news",
+          "tableTo": "stock_master",
+          "columnsFrom": ["stock_code"],
+          "columnsTo": ["mksc_shrn_iscd"],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "news_originallink_unique": {
+          "name": "news_originallink_unique",
+          "nullsNotDistinct": false,
+          "columns": ["originallink"]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.news_subscription": {
+      "name": "news_subscription",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "query": {
+          "name": "query",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "active": {
+          "name": "active",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "news_subscription_user_id_user_id_fk": {
+          "name": "news_subscription_user_id_user_id_fk",
+          "tableFrom": "news_subscription",
+          "tableTo": "user",
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.notification_history": {
+      "name": "notification_history",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "type": {
+          "name": "type",
+          "type": "notification_type",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "body": {
+          "name": "body",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "data": {
+          "name": "data",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "read": {
+          "name": "read",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "delivery_status": {
+          "name": "delivery_status",
+          "type": "delivery_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'pending'"
+        },
+        "ticket_id": {
+          "name": "ticket_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "failed_reason": {
+          "name": "failed_reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "recipient_count": {
+          "name": "recipient_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "notification_history_user_idx": {
+          "name": "notification_history_user_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "notification_history_user_type_created_idx": {
+          "name": "notification_history_user_type_created_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "type",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "notification_history_ticket_idx": {
+          "name": "notification_history_ticket_idx",
+          "columns": [
+            {
+              "expression": "ticket_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "notification_history_user_id_user_id_fk": {
+          "name": "notification_history_user_id_user_id_fk",
+          "tableFrom": "notification_history",
+          "tableTo": "user",
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.stock_master": {
+      "name": "stock_master",
+      "schema": "",
+      "columns": {
+        "mksc_shrn_iscd": {
+          "name": "mksc_shrn_iscd",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "market_type": {
+          "name": "market_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "nxt": {
+          "name": "nxt",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "stnd_iscd": {
+          "name": "stnd_iscd",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "hts_kor_isnm": {
+          "name": "hts_kor_isnm",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "scrt_grp_cls_code": {
+          "name": "scrt_grp_cls_code",
+          "type": "char(2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "avls_scal_cls_code": {
+          "name": "avls_scal_cls_code",
+          "type": "char(1)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "bstp_larg_div_code": {
+          "name": "bstp_larg_div_code",
+          "type": "char(4)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "bstp_medm_div_code": {
+          "name": "bstp_medm_div_code",
+          "type": "char(4)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "bstp_smal_div_code": {
+          "name": "bstp_smal_div_code",
+          "type": "char(4)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "mnin_cls_code_yn": {
+          "name": "mnin_cls_code_yn",
+          "type": "char(1)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "sprn_strr_nmix_issu_yn": {
+          "name": "sprn_strr_nmix_issu_yn",
+          "type": "char(1)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "kospi200_apnt_cls_code": {
+          "name": "kospi200_apnt_cls_code",
+          "type": "char(1)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "kospi100_issu_yn": {
+          "name": "kospi100_issu_yn",
+          "type": "char(1)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "kospi50_issu_yn": {
+          "name": "kospi50_issu_yn",
+          "type": "char(1)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "elw_pblc_yn": {
+          "name": "elw_pblc_yn",
+          "type": "char(1)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "sri_nmix_yn": {
+          "name": "sri_nmix_yn",
+          "type": "char(1)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "kospi_issu_yn": {
+          "name": "kospi_issu_yn",
+          "type": "char(1)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "vntr_issu_yn": {
+          "name": "vntr_issu_yn",
+          "type": "char(1)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "invt_alrm_yn": {
+          "name": "invt_alrm_yn",
+          "type": "char(1)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "ksq150_nmix_yn": {
+          "name": "ksq150_nmix_yn",
+          "type": "char(1)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "low_current_yn": {
+          "name": "low_current_yn",
+          "type": "char(1)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "krx_issu_yn": {
+          "name": "krx_issu_yn",
+          "type": "char(1)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "etp_prod_cls_code": {
+          "name": "etp_prod_cls_code",
+          "type": "char(1)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "krx100_issu_yn": {
+          "name": "krx100_issu_yn",
+          "type": "char(1)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "krx_car_yn": {
+          "name": "krx_car_yn",
+          "type": "char(1)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "krx_smcn_yn": {
+          "name": "krx_smcn_yn",
+          "type": "char(1)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "krx_bio_yn": {
+          "name": "krx_bio_yn",
+          "type": "char(1)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "krx_bank_yn": {
+          "name": "krx_bank_yn",
+          "type": "char(1)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "etpr_undt_objt_co_yn": {
+          "name": "etpr_undt_objt_co_yn",
+          "type": "char(1)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "krx_enrg_chms_yn": {
+          "name": "krx_enrg_chms_yn",
+          "type": "char(1)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "krx_stel_yn": {
+          "name": "krx_stel_yn",
+          "type": "char(1)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "short_over_cls_code": {
+          "name": "short_over_cls_code",
+          "type": "char(1)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "krx_medi_cmnc_yn": {
+          "name": "krx_medi_cmnc_yn",
+          "type": "char(1)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "krx_cnst_yn": {
+          "name": "krx_cnst_yn",
+          "type": "char(1)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "krx_scrt_yn": {
+          "name": "krx_scrt_yn",
+          "type": "char(1)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "krx_ship_yn": {
+          "name": "krx_ship_yn",
+          "type": "char(1)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "krx_insu_yn": {
+          "name": "krx_insu_yn",
+          "type": "char(1)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "krx_trnp_yn": {
+          "name": "krx_trnp_yn",
+          "type": "char(1)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "stck_sdpr": {
+          "name": "stck_sdpr",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "frml_mrkt_deal_qty_unit": {
+          "name": "frml_mrkt_deal_qty_unit",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "ovtm_mrkt_deal_qty_unit": {
+          "name": "ovtm_mrkt_deal_qty_unit",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "trht_yn": {
+          "name": "trht_yn",
+          "type": "char(1)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "sltr_yn": {
+          "name": "sltr_yn",
+          "type": "char(1)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "mang_issu_yn": {
+          "name": "mang_issu_yn",
+          "type": "char(1)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "mrkt_alrm_cls_code": {
+          "name": "mrkt_alrm_cls_code",
+          "type": "char(2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "mrkt_alrm_risk_adnt_yn": {
+          "name": "mrkt_alrm_risk_adnt_yn",
+          "type": "char(1)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "insn_pbnt_yn": {
+          "name": "insn_pbnt_yn",
+          "type": "char(1)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "byps_lstn_yn": {
+          "name": "byps_lstn_yn",
+          "type": "char(1)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "flng_cls_code": {
+          "name": "flng_cls_code",
+          "type": "char(2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "fcam_mod_cls_code": {
+          "name": "fcam_mod_cls_code",
+          "type": "char(2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "icic_cls_code": {
+          "name": "icic_cls_code",
+          "type": "char(2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "marg_rate": {
+          "name": "marg_rate",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "crdt_able": {
+          "name": "crdt_able",
+          "type": "char(1)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "crdt_days": {
+          "name": "crdt_days",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "prdy_vol": {
+          "name": "prdy_vol",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "stck_fcam": {
+          "name": "stck_fcam",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "stck_lstn_date": {
+          "name": "stck_lstn_date",
+          "type": "char(8)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "lstn_stcn": {
+          "name": "lstn_stcn",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "cpfn": {
+          "name": "cpfn",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "stac_month": {
+          "name": "stac_month",
+          "type": "char(2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "po_prc": {
+          "name": "po_prc",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "prst_cls_code": {
+          "name": "prst_cls_code",
+          "type": "char(1)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "ssts_hot_yn": {
+          "name": "ssts_hot_yn",
+          "type": "char(1)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "stange_runup_yn": {
+          "name": "stange_runup_yn",
+          "type": "char(1)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "krx300_issu_yn": {
+          "name": "krx300_issu_yn",
+          "type": "char(1)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "sale_account": {
+          "name": "sale_account",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "bsop_prfi": {
+          "name": "bsop_prfi",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "op_prfi": {
+          "name": "op_prfi",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "thtr_ntin": {
+          "name": "thtr_ntin",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "roe": {
+          "name": "roe",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "base_date": {
+          "name": "base_date",
+          "type": "char(8)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "prdy_avls_scal": {
+          "name": "prdy_avls_scal",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "grp_code": {
+          "name": "grp_code",
+          "type": "char(3)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "co_crdt_limt_over_yn": {
+          "name": "co_crdt_limt_over_yn",
+          "type": "char(1)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "secu_lend_able_yn": {
+          "name": "secu_lend_able_yn",
+          "type": "char(1)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "stln_able_yn": {
+          "name": "stln_able_yn",
+          "type": "char(1)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "stock_master_market_type_idx": {
+          "name": "stock_master_market_type_idx",
+          "columns": [
+            {
+              "expression": "market_type",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "stock_master_stnd_iscd_idx": {
+          "name": "stock_master_stnd_iscd_idx",
+          "columns": [
+            {
+              "expression": "stnd_iscd",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "stock_master_hts_kor_isnm_idx": {
+          "name": "stock_master_hts_kor_isnm_idx",
+          "columns": [
+            {
+              "expression": "hts_kor_isnm",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "stock_master_stnd_iscd_unique": {
+          "name": "stock_master_stnd_iscd_unique",
+          "nullsNotDistinct": false,
+          "columns": ["stnd_iscd"]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.todo": {
+      "name": "todo",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "text": {
+          "name": "text",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "completed": {
+          "name": "completed",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.user_notification_setting": {
+      "name": "user_notification_setting",
+      "schema": "",
+      "columns": {
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "buy_signal": {
+          "name": "buy_signal",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "sell_signal": {
+          "name": "sell_signal",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "price_alert": {
+          "name": "price_alert",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "breaking_news": {
+          "name": "breaking_news",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "market_summary": {
+          "name": "market_summary",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "user_notification_setting_user_id_user_id_fk": {
+          "name": "user_notification_setting_user_id_user_id_fk",
+          "tableFrom": "user_notification_setting",
+          "tableTo": "user",
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.user_push_token": {
+      "name": "user_push_token",
+      "schema": "",
+      "columns": {
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "token": {
+          "name": "token",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "user_push_token_user_id_user_id_fk": {
+          "name": "user_push_token_user_id_user_id_fk",
+          "tableFrom": "user_push_token",
+          "tableTo": "user",
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "user_push_token_user_id_token_pk": {
+          "name": "user_push_token_user_id_token_pk",
+          "columns": ["user_id", "token"]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.user_watchlist": {
+      "name": "user_watchlist",
+      "schema": "",
+      "columns": {
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "stock_code": {
+          "name": "stock_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "type": {
+          "name": "type",
+          "type": "watchlist_type",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "user_watchlist_user_type_idx": {
+          "name": "user_watchlist_user_type_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "type",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "user_watchlist_user_id_user_id_fk": {
+          "name": "user_watchlist_user_id_user_id_fk",
+          "tableFrom": "user_watchlist",
+          "tableTo": "user",
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "user_watchlist_stock_code_stock_master_mksc_shrn_iscd_fk": {
+          "name": "user_watchlist_stock_code_stock_master_mksc_shrn_iscd_fk",
+          "tableFrom": "user_watchlist",
+          "tableTo": "stock_master",
+          "columnsFrom": ["stock_code"],
+          "columnsTo": ["mksc_shrn_iscd"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "user_watchlist_user_id_stock_code_type_pk": {
+          "name": "user_watchlist_user_id_stock_code_type_pk",
+          "columns": ["user_id", "stock_code", "type"]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {
+    "public.delivery_status": {
+      "name": "delivery_status",
+      "schema": "public",
+      "values": ["pending", "sent", "failed", "bounced", "no_recipients"]
+    },
+    "public.notification_type": {
+      "name": "notification_type",
+      "schema": "public",
+      "values": [
+        "buy_signal",
+        "sell_signal",
+        "price_alert",
+        "breaking_news",
+        "market_summary"
+      ]
+    },
+    "public.watchlist_type": {
+      "name": "watchlist_type",
+      "schema": "public",
+      "values": ["signal", "news"]
+    }
+  },
+  "schemas": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}

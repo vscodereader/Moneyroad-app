@@ -1,10 +1,7 @@
 import { env } from "@moneyroad-app/env/server";
-import { drizzle } from "drizzle-orm/node-postgres";
 
-import * as schema from "./schema";
+import { createDb } from "./client";
 
-export function createDb() {
-  return drizzle(env.DATABASE_URL, { schema });
-}
+export { createDb, type Db } from "./client";
 
-export const db = createDb();
+export const db = createDb(env.DATABASE_URL);

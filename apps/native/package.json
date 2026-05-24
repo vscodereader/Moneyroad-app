@@ -31,6 +31,7 @@
     "@moneyroad-app/env": "workspace:*",
     "@orpc/client": "catalog:",
     "@orpc/tanstack-query": "catalog:",
+    "@react-navigation/bottom-tabs": "^7.16.1",
     "@react-navigation/drawer": "^7.9.4",
     "@react-navigation/elements": "^2.9.14",
     "@stardazed/streams-text-encoding": "^1.0.2",

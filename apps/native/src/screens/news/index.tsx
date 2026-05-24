@@ -1,5 +1,6 @@
+import { BottomTabBarHeightContext } from "@react-navigation/bottom-tabs";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
-import { useRef, useState } from "react";
+import { useContext, useRef, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -284,6 +285,11 @@ export default function NewsScreen() {
   // Live updates: refetch the feed when realtime pushes new news for this tab.
   useNewsStream(tab);
 
+  const insets = useSafeAreaInsets();
+  // Measured tab bar height (content scrolls under it); fall back to an estimate.
+  const tabBarHeight =
+    useContext(BottomTabBarHeightContext) ?? insets.bottom + 60;
+
   const loadMore = () => {
     if (feed.hasNextPage && !feed.isFetchingNextPage) {
       feed.fetchNextPage();
@@ -326,30 +332,12 @@ export default function NewsScreen() {
             </View>
           )
         }
-        ListFooterComponent={(() => {
-          if (feed.isFetchingNextPage) {
-            return (
-              <View style={{ paddingVertical: 16, alignItems: "center" }}>
-                <ActivityIndicator color={t.primary} />
-              </View>
-            );
-          }
-          if (feed.hasNextPage && items.length > 0) {
-            return (
-              <Pressable
-                onPress={() => feed.fetchNextPage()}
-                style={{ paddingVertical: 16, alignItems: "center" }}
-              >
-                <Text
-                  style={{ fontSize: 13, fontWeight: "700", color: t.primary }}
-                >
-                  더 보기
-                </Text>
-              </Pressable>
-            );
-          }
-          return <View style={{ height: 16 }} />;
-        })()}
+        ListFooterComponent={
+          // Spacer so the last card clears the tab bar (+ floating button).
+          <View
+            style={{ height: tabBarHeight + (feed.hasNextPage ? 56 : 16) }}
+          />
+        }
         ListHeaderComponent={<NewsTabs onChange={setTab} tab={tab} />}
         onContentSizeChange={(_w, h) => {
           contentHeight.current = h;
@@ -367,6 +355,50 @@ export default function NewsScreen() {
         showsVerticalScrollIndicator={false}
         style={{ flex: 1 }}
       />
+
+      {feed.hasNextPage && items.length > 0 ? (
+        <View
+          pointerEvents="box-none"
+          style={{
+            position: "absolute",
+            left: 0,
+            right: 0,
+            bottom: tabBarHeight + 12,
+            alignItems: "center",
+          }}
+        >
+          <Pressable
+            onPress={loadMore}
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 6,
+              height: 40,
+              paddingHorizontal: 18,
+              borderRadius: 999,
+              backgroundColor: t.primary,
+              shadowColor: "#000",
+              shadowOpacity: 0.18,
+              shadowRadius: 8,
+              shadowOffset: { width: 0, height: 3 },
+              elevation: 5,
+            }}
+          >
+            {feed.isFetchingNextPage ? (
+              <ActivityIndicator color="#fff" size="small" />
+            ) : (
+              <>
+                <Text
+                  style={{ fontSize: 13, fontWeight: "800", color: "#fff" }}
+                >
+                  더 보기
+                </Text>
+                <Icon.arrowDown color="#fff" size={14} />
+              </>
+            )}
+          </Pressable>
+        </View>
+      ) : null}
 
       {openNews ? (
         <NewsSheet item={openNews} onClose={() => setOpenNews(null)} />

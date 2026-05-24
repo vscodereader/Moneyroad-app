@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Pressable, Text, View } from "react-native";
 
 import { Gradient } from "@/components/charts";
-import { Icon } from "@/components/icons";
+import { Icon, SIGNAL_TYPE_ICON } from "@/components/icons";
 import { SegmentedControl, StockLogo, Switch } from "@/components/ui";
 import { useMrTheme } from "@/hooks/use-mr-theme";
 import {
@@ -23,60 +23,148 @@ import {
 } from "@/utils/theme";
 
 // ── 1. 시그널 알림 설정 ───────────────────────────────────────
-// 매수/매도/관망 3유형으로 단순화. 이전(tech/ai/event/community 유형 + 강도 임계값
-// + 방해 금지) 구현은 pages.tsx.temp 참고 (향후 작업).
-const SIGNAL_ALERT_TYPES = [
-  { k: "buy", label: "매수 시그널", sub: "매수 추천 신호가 발생하면 알림" },
-  { k: "sell", label: "매도 시그널", sub: "매도 추천 신호가 발생하면 알림" },
-  { k: "hold", label: "관망 시그널", sub: "관망(중립) 신호가 발생하면 알림" },
-] as const;
-
 export function SignalAlertSettings() {
   const { t } = useMrTheme();
-  const dotColor = { buy: t.upStrong, sell: t.downStrong, hold: t.fgMuted };
-  const [enabled, setEnabled] = useState<Record<string, boolean>>({
-    buy: true,
-    sell: true,
-    hold: false,
+  const meta = signalMeta(t);
+  const [enabled, setEnabled] = useState<Record<SignalTypeKey, boolean>>({
+    tech: true,
+    ai: true,
+    event: true,
+    community: false,
   });
+  const [strength, setStrength] = useState(3);
+  const [quietHours, setQuietHours] = useState(true);
+
+  const subFor: Record<SignalTypeKey, string> = {
+    tech: "이평선 교차, RSI, 거래량 등",
+    ai: "내부 학습 모델의 매수·매도 신호",
+    event: "공시·실적·정책 등 이벤트",
+    community: "토론·언급량 급변",
+  };
 
   return (
     <SettingsScreen title="시그널 알림 설정">
       <SettingsGroup
         label="알림 받을 시그널 유형"
-        sublabel="선택한 유형의 시그널이 발생하면 푸시 알림을 받습니다."
+        sublabel="선택한 유형의 시그널이 발생하면 즉시 푸시 알림을 받습니다."
       >
-        {SIGNAL_ALERT_TYPES.map((it) => (
-          <SettingsRow
-            key={it.k}
-            label={
-              <View
-                style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
-              >
+        {SIGNAL_TYPE_KEYS.map((k) => {
+          const m = meta[k];
+          const TypeIcon = SIGNAL_TYPE_ICON[k];
+          return (
+            <SettingsRow
+              key={k}
+              label={
                 <View
-                  style={{
-                    width: 8,
-                    height: 8,
-                    borderRadius: 999,
-                    backgroundColor: dotColor[it.k],
-                  }}
-                />
-                <Text
-                  style={{ fontSize: 14, fontWeight: "600", color: t.fgStrong }}
+                  style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
                 >
-                  {it.label}
+                  <View
+                    style={{
+                      width: 28,
+                      height: 28,
+                      borderRadius: 8,
+                      backgroundColor: m.bg,
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <TypeIcon color={m.color} size={16} />
+                  </View>
+                  <Text
+                    style={{
+                      fontSize: 14,
+                      fontWeight: "600",
+                      color: t.fgStrong,
+                    }}
+                  >
+                    {m.label}
+                  </Text>
+                </View>
+              }
+              right={
+                <Switch
+                  on={enabled[k]}
+                  onChange={(v) => setEnabled({ ...enabled, [k]: v })}
+                />
+              }
+              sub={subFor[k]}
+            />
+          );
+        })}
+      </SettingsGroup>
+
+      <SettingsGroup
+        label="강도 임계값"
+        sublabel="설정한 강도 이상의 시그널만 알림으로 받습니다."
+      >
+        <View
+          style={{
+            paddingVertical: 14,
+            paddingHorizontal: 16,
+            backgroundColor: t.bg,
+            borderBottomWidth: 1,
+            borderBottomColor: t.border,
+          }}
+        >
+          <View
+            style={{
+              flexDirection: "row",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginBottom: 12,
+            }}
+          >
+            <Text
+              style={{ fontSize: 14, fontWeight: "600", color: t.fgStrong }}
+            >
+              최소 강도
+            </Text>
+            <Text style={{ fontSize: 13, fontWeight: "800", color: t.primary }}>
+              {strength} / 5 이상
+            </Text>
+          </View>
+          <View style={{ flexDirection: "row", gap: 6 }}>
+            {[1, 2, 3, 4, 5].map((i) => (
+              <Pressable
+                key={i}
+                onPress={() => setStrength(i)}
+                style={{
+                  flex: 1,
+                  height: 36,
+                  borderRadius: 8,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  backgroundColor: i <= strength ? t.primary : t.bgMuted,
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: 13,
+                    fontWeight: "700",
+                    color: i <= strength ? "#fff" : t.fgMuted,
+                  }}
+                >
+                  {i}
                 </Text>
-              </View>
-            }
-            right={
-              <Switch
-                on={enabled[it.k]}
-                onChange={(v) => setEnabled({ ...enabled, [it.k]: v })}
-              />
-            }
-            sub={it.sub}
-          />
-        ))}
+              </Pressable>
+            ))}
+          </View>
+        </View>
+      </SettingsGroup>
+
+      <SettingsGroup
+        label="방해 금지 시간"
+        sublabel="설정 시간 동안에는 알림이 오지 않습니다."
+      >
+        <SettingsRow
+          label="방해 금지 모드"
+          right={<Switch on={quietHours} onChange={setQuietHours} />}
+          sub={quietHours ? "오후 10:00 — 오전 7:00" : "꺼짐"}
+        />
+        <SettingsRow
+          label="시간 변경"
+          right={<Icon.chevRight color={t.fgSubtle} size={16} />}
+        />
       </SettingsGroup>
       <View style={{ height: 16 }} />
     </SettingsScreen>
@@ -84,25 +172,97 @@ export function SignalAlertSettings() {
 }
 
 // ── 2. 뉴스·공시 알림 설정 ────────────────────────────────────
-// 관심 종목 알림만으로 단순화. 이전(카테고리/출처/AI요약) 구현은 pages.tsx.temp 참고.
 export function NewsAlertSettings() {
-  const [on, setOn] = useState(true);
+  const [enabled, setEnabled] = useState<Record<string, boolean>>({
+    disclosure: true,
+    earnings: true,
+    industry: false,
+    policy: true,
+    market: false,
+  });
+  const [sources, setSources] = useState<Record<string, boolean>>({
+    official: true,
+    major: true,
+    community: false,
+  });
+
+  const categories = [
+    { k: "disclosure", l: "공시", s: "전자공시 직접 연결, 발표 즉시" },
+    { k: "earnings", l: "실적", s: "분기·연간 실적 발표 전후" },
+    { k: "industry", l: "산업 동향", s: "관심 종목이 속한 산업 뉴스" },
+    { k: "policy", l: "정책·규제", s: "정부 정책, 공정위 등" },
+    { k: "market", l: "시장 일반", s: "장 시작·마감, 지수 변동" },
+  ];
 
   return (
     <SettingsScreen title="뉴스·공시 알림 설정">
+      <SettingsGroup label="알림 카테고리">
+        {categories.map((it) => (
+          <SettingsRow
+            key={it.k}
+            label={it.l}
+            right={
+              <Switch
+                on={enabled[it.k]}
+                onChange={(v) => setEnabled({ ...enabled, [it.k]: v })}
+              />
+            }
+            sub={it.s}
+          />
+        ))}
+      </SettingsGroup>
+
       <SettingsGroup
-        label="관심 종목 알림"
-        sublabel="관심 종목으로 등록한 종목의 뉴스·공시가 올라오면 알림을 받습니다."
+        label="뉴스 출처"
+        sublabel="알림에 포함할 출처를 선택합니다."
       >
         <SettingsRow
-          label="관심 종목 뉴스·공시 알림"
-          right={<Switch on={on} onChange={setOn} />}
-          sub={on ? "관심 종목에 한해 알림" : "꺼짐"}
+          label="공식 매체"
+          right={
+            <Switch
+              on={sources.official}
+              onChange={(v) => setSources({ ...sources, official: v })}
+            />
+          }
+          sub="한경, 매경, 연합뉴스 등"
+        />
+        <SettingsRow
+          label="주요 증권사 리포트"
+          right={
+            <Switch
+              on={sources.major}
+              onChange={(v) => setSources({ ...sources, major: v })}
+            />
+          }
+          sub="삼성증권, 한투 등"
+        />
+        <SettingsRow
+          label="커뮤니티 발 속보"
+          right={
+            <Switch
+              on={sources.community}
+              onChange={(v) => setSources({ ...sources, community: v })}
+            />
+          }
+          sub="검증 안 된 정보 포함"
+        />
+      </SettingsGroup>
+
+      <SettingsGroup label="AI 요약">
+        <SettingsRow
+          label="요약 자동 생성"
+          right={<NewsSummaryToggle />}
+          sub="알림에 AI 한 줄 요약을 포함"
         />
       </SettingsGroup>
       <View style={{ height: 16 }} />
     </SettingsScreen>
   );
+}
+
+function NewsSummaryToggle() {
+  const [on, setOn] = useState(true);
+  return <Switch on={on} onChange={setOn} />;
 }
 
 // ── 3. 가격 알림 ──────────────────────────────────────────────

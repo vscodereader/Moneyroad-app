@@ -30,6 +30,10 @@ export const env = createEnv({
     // Max successful push of the same (user, type) per 5 min before throttling.
     NOTIFICATION_COOLDOWN_5M_MAX: z.coerce.number().default(5),
 
+    // Daily stock_master refresh schedule (cron). Default 06:00 Asia/Seoul.
+    STOCK_MASTER_CRON: z.string().default("0 6 * * *"),
+    STOCK_MASTER_TZ: z.string().default("Asia/Seoul"),
+
     NODE_ENV: z
       .enum(["development", "production", "test"])
       .default("development"),

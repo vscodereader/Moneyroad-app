@@ -15,6 +15,7 @@ export default function MoneyRoadLayout() {
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="onboarding" />
         <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="login" />
         <Stack.Screen name="watchlist" />
         <Stack.Screen name="search" />
         <Stack.Screen name="alerts" />

@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
 import EventSource from "react-native-sse";
 
+import { authClient } from "@/lib/auth-client";
 import { fetchStreamToken } from "@/lib/stream-token";
 import { orpc } from "@/utils/orpc";
 
@@ -35,10 +36,14 @@ function streamCategories(tab: NewsTab): string | undefined {
  */
 export function useNewsStream(tab: NewsTab): void {
   const queryClient = useQueryClient();
+  // The realtime stream token requires a session; only connect when signed in.
+  // Anonymous users still get the (public) oRPC feed, just without live updates.
+  const { data: session } = authClient.useSession();
+  const userId = session?.user?.id;
 
   useEffect(() => {
     const baseUrl = env.EXPO_PUBLIC_REALTIME_URL;
-    if (!baseUrl) {
+    if (!(baseUrl && userId)) {
       return;
     }
 
@@ -116,5 +121,5 @@ export function useNewsStream(tab: NewsTab): void {
       source?.removeAllEventListeners();
       source?.close();
     };
-  }, [tab, queryClient]);
+  }, [tab, userId, queryClient]);
 }

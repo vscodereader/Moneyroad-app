@@ -7,6 +7,7 @@ import { Gradient } from "@/components/charts";
 import { Icon } from "@/components/icons";
 import { SegmentedControl, StockLogo, Switch } from "@/components/ui";
 import { useMrTheme } from "@/hooks/use-mr-theme";
+import { useNotificationSettings } from "@/hooks/use-notification-settings";
 import {
   SettingsGroup,
   SettingsRow,
@@ -26,19 +27,34 @@ import {
 // 매수/매도/관망 3유형으로 단순화. 이전(tech/ai/event/community 유형 + 강도 임계값
 // + 방해 금지) 구현은 pages.tsx.temp 참고 (향후 작업).
 const SIGNAL_ALERT_TYPES = [
-  { k: "buy", label: "매수 시그널", sub: "매수 추천 신호가 발생하면 알림" },
-  { k: "sell", label: "매도 시그널", sub: "매도 추천 신호가 발생하면 알림" },
-  { k: "hold", label: "관망 시그널", sub: "관망(중립) 신호가 발생하면 알림" },
+  {
+    k: "buySignal",
+    label: "매수 시그널",
+    sub: "매수 추천 신호가 발생하면 알림",
+    dot: "up",
+  },
+  {
+    k: "sellSignal",
+    label: "매도 시그널",
+    sub: "매도 추천 신호가 발생하면 알림",
+    dot: "down",
+  },
+  {
+    k: "holdSignal",
+    label: "관망 시그널",
+    sub: "관망(중립) 신호가 발생하면 알림",
+    dot: "muted",
+  },
 ] as const;
 
 export function SignalAlertSettings() {
   const { t } = useMrTheme();
-  const dotColor = { buy: t.upStrong, sell: t.downStrong, hold: t.fgMuted };
-  const [enabled, setEnabled] = useState<Record<string, boolean>>({
-    buy: true,
-    sell: true,
-    hold: false,
-  });
+  const { get, toggle } = useNotificationSettings();
+  const dotColor: Record<string, string> = {
+    up: t.upStrong,
+    down: t.downStrong,
+    muted: t.fgMuted,
+  };
 
   return (
     <SettingsScreen title="시그널 알림 설정">
@@ -58,7 +74,7 @@ export function SignalAlertSettings() {
                     width: 8,
                     height: 8,
                     borderRadius: 999,
-                    backgroundColor: dotColor[it.k],
+                    backgroundColor: dotColor[it.dot],
                   }}
                 />
                 <Text
@@ -68,12 +84,7 @@ export function SignalAlertSettings() {
                 </Text>
               </View>
             }
-            right={
-              <Switch
-                on={enabled[it.k]}
-                onChange={(v) => setEnabled({ ...enabled, [it.k]: v })}
-              />
-            }
+            right={<Switch on={get(it.k)} onChange={(v) => toggle(it.k, v)} />}
             sub={it.sub}
           />
         ))}
@@ -86,7 +97,8 @@ export function SignalAlertSettings() {
 // ── 2. 뉴스·공시 알림 설정 ────────────────────────────────────
 // 관심 종목 알림만으로 단순화. 이전(카테고리/출처/AI요약) 구현은 pages.tsx.temp 참고.
 export function NewsAlertSettings() {
-  const [on, setOn] = useState(true);
+  const { get, toggle } = useNotificationSettings();
+  const on = get("breakingNews");
 
   return (
     <SettingsScreen title="뉴스·공시 알림 설정">
@@ -96,7 +108,7 @@ export function NewsAlertSettings() {
       >
         <SettingsRow
           label="관심 종목 뉴스·공시 알림"
-          right={<Switch on={on} onChange={setOn} />}
+          right={<Switch on={on} onChange={(v) => toggle("breakingNews", v)} />}
           sub={on ? "관심 종목에 한해 알림" : "꺼짐"}
         />
       </SettingsGroup>

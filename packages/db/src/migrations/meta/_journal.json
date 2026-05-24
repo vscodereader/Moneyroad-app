@@ -15,6 +15,13 @@
       "when": 1779599416021,
       "tag": "0001_wet_starfox",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1779633789903,
+      "tag": "0002_unknown_strong_guy",
+      "breakpoints": true
     }
   ]
 }

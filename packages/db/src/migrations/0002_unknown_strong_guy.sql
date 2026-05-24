@@ -1,0 +1,1 @@
+ALTER TABLE "user_notification_setting" ADD COLUMN "hold_signal" boolean DEFAULT false NOT NULL;

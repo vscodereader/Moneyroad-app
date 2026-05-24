@@ -86,6 +86,7 @@ export default function HomeScreen() {
   const [openSigId, setOpenSigId] = useState<string | null>(null);
   const { data: session } = authClient.useSession();
   const isLoggedIn = !!session?.user;
+  const displayName = session?.user?.name?.trim() || "투자자";
   const topSignalsQuery = useQuery(
     orpc.signal.feed.queryOptions({ input: { window: "24h", limit: 3 } })
   );
@@ -142,9 +143,11 @@ export default function HomeScreen() {
         <View
           style={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 12 }}
         >
-          <Text style={{ fontSize: 12, fontWeight: "600", color: t.fgMuted }}>
-            김투자 님,
-          </Text>
+          {isLoggedIn ? (
+            <Text style={{ fontSize: 12, fontWeight: "600", color: t.fgMuted }}>
+              {displayName} 님,
+            </Text>
+          ) : null}
           <Text
             style={{
               fontSize: 18,

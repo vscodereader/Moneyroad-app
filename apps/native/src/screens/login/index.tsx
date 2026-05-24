@@ -167,7 +167,10 @@ export default function LoginScreen() {
 
   return (
     <MrScreen>
-      <MrHeader left={<BackButton onPress={nav.back} />} title="로그인" />
+      <MrHeader
+        left={<BackButton onPress={nav.back} />}
+        title={isSignup ? "회원가입" : "로그인"}
+      />
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : undefined}
         style={{ flex: 1 }}
@@ -184,7 +187,7 @@ export default function LoginScreen() {
               marginTop: 4,
             }}
           >
-            {isSignup ? "회원가입" : "이메일로 로그인"}
+            {isSignup ? "이메일로 가입하기" : "이메일로 로그인"}
           </Text>
 
           {isSignup ? (

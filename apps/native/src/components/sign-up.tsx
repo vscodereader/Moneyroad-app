@@ -158,7 +158,7 @@ export function SignUp() {
                         onSubmitEditing={() => {
                           passwordInputRef.current?.focus();
                         }}
-                        placeholder="email@example.com"
+                        placeholder="email@moneyroad.ai.kr"
                         ref={emailInputRef}
                         returnKeyType="next"
                         textContentType="emailAddress"

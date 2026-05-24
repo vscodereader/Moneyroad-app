@@ -129,7 +129,7 @@ function SignIn() {
                         onSubmitEditing={() => {
                           passwordInputRef.current?.focus();
                         }}
-                        placeholder="email@example.com"
+                        placeholder="email@moneyroad.ai.kr"
                         returnKeyType="next"
                         textContentType="emailAddress"
                         value={field.state.value}

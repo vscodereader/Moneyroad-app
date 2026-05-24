@@ -192,7 +192,7 @@ export default function LoginScreen() {
               autoCapitalize="none"
               label="이름"
               onChangeText={setName}
-              placeholder="홍길동"
+              placeholder="머니로드"
               t={t}
               value={name}
             />
@@ -204,7 +204,7 @@ export default function LoginScreen() {
             inputMode="email"
             label="이메일"
             onChangeText={setEmail}
-            placeholder="you@example.com"
+            placeholder="you@moneyroad.ai.kr"
             t={t}
             value={email}
           />

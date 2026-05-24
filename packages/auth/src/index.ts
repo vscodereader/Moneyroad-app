@@ -4,30 +4,9 @@ import * as schema from "@moneyroad-app/db/schema/auth";
 import { env } from "@moneyroad-app/env/server";
 import { type BetterAuthOptions, betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { genericOAuth } from "better-auth/plugins/generic-oauth";
 
-// Naver/Kakao return non-OIDC profile shapes, so we map them explicitly.
-interface NaverProfile {
-  response?: {
-    id?: string;
-    email?: string;
-    name?: string;
-    nickname?: string;
-    profile_image?: string;
-  };
-}
-
-interface KakaoProfile {
-  id?: number;
-  kakao_account?: {
-    email?: string;
-    profile?: { nickname?: string; profile_image_url?: string };
-  };
-}
-
-type GenericOAuthOptions = Parameters<typeof genericOAuth>[0];
-
-// Built-in providers (Google, Apple). Each activates only when its keys are set.
+// Built-in social providers. Each activates only when its keys are set, so the
+// server runs with email-only login until credentials are provided.
 function buildSocialProviders(): BetterAuthOptions["socialProviders"] {
   const providers: NonNullable<BetterAuthOptions["socialProviders"]> = {};
   if (env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET) {
@@ -45,63 +24,23 @@ function buildSocialProviders(): BetterAuthOptions["socialProviders"] {
       }),
     };
   }
-  return providers;
-}
-
-// Custom OAuth providers (Naver, Kakao) via the genericOAuth plugin.
-function buildGenericOAuthConfig(): GenericOAuthOptions["config"] {
-  const config: GenericOAuthOptions["config"] = [];
   if (env.NAVER_CLIENT_ID && env.NAVER_CLIENT_SECRET) {
-    config.push({
-      providerId: "naver",
+    providers.naver = {
       clientId: env.NAVER_CLIENT_ID,
       clientSecret: env.NAVER_CLIENT_SECRET,
-      authorizationUrl: "https://nid.naver.com/oauth2.0/authorize",
-      tokenUrl: "https://nid.naver.com/oauth2.0/token",
-      userInfoUrl: "https://openapi.naver.com/v1/nid/me",
-      scopes: ["email", "name", "profile_image"],
-      mapProfileToUser: (profile) => {
-        const r = (profile as NaverProfile).response;
-        return {
-          id: r?.id ?? "",
-          email: r?.email ?? "",
-          name: r?.name ?? r?.nickname ?? "",
-          image: r?.profile_image,
-        };
-      },
-    });
+    };
   }
   if (env.KAKAO_CLIENT_ID && env.KAKAO_CLIENT_SECRET) {
-    config.push({
-      providerId: "kakao",
+    providers.kakao = {
       clientId: env.KAKAO_CLIENT_ID,
       clientSecret: env.KAKAO_CLIENT_SECRET,
-      authorizationUrl: "https://kauth.kakao.com/oauth/authorize",
-      tokenUrl: "https://kauth.kakao.com/oauth/token",
-      userInfoUrl: "https://kapi.kakao.com/v2/user/me",
-      scopes: ["account_email", "profile_nickname", "profile_image"],
-      mapProfileToUser: (profile) => {
-        const account = (profile as KakaoProfile).kakao_account;
-        return {
-          id: String((profile as KakaoProfile).id ?? ""),
-          email: account?.email ?? "",
-          name: account?.profile?.nickname ?? "",
-          image: account?.profile?.profile_image_url,
-        };
-      },
-    });
+    };
   }
-  return config;
+  return providers;
 }
 
 export function createAuth() {
   const db = createDb(env.DATABASE_URL);
-
-  const oauthConfig = buildGenericOAuthConfig();
-  const plugins: NonNullable<BetterAuthOptions["plugins"]> = [expo()];
-  if (oauthConfig.length > 0) {
-    plugins.push(genericOAuth({ config: oauthConfig }));
-  }
 
   return betterAuth({
     database: drizzleAdapter(db, {
@@ -136,7 +75,7 @@ export function createAuth() {
         httpOnly: true,
       },
     },
-    plugins,
+    plugins: [expo()],
   });
 }
 

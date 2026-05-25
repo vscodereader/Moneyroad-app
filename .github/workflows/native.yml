@@ -45,11 +45,20 @@ jobs:
   build:
     name: build ${{ inputs.platform }} (${{ inputs.profile }})
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: apps/native
     steps:
       - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+
+      # eas-cli가 업로드 전 app.json의 config 플러그인(expo-font 등)을 로컬에서
+      # 평가하므로 워크스페이스 의존성을 먼저 설치해야 한다.
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
 
       - name: Set up EAS
         uses: expo/expo-github-action@v8
@@ -58,6 +67,7 @@ jobs:
           token: ${{ secrets.EXPO_TOKEN }}
 
       - name: EAS build (+ optional submit)
+        working-directory: apps/native
         run: |
           FLAGS="--platform ${{ inputs.platform }} --profile ${{ inputs.profile }} --non-interactive"
           if [ "${{ inputs.submit }}" = "true" ]; then

@@ -1,0 +1,67 @@
+# native(Expo) 빌드 + Google Play/App Store 제출
+# - 수동 실행 전용(workflow_dispatch). 모바일은 빌드마다 EAS 비용 + 스토어 버전이
+#   생기므로 push 자동 트리거는 두지 않는다.
+# - 실제 빌드는 EAS 서버에서 수행된다. 러너는 eas-cli만 돌린다.
+# - submit=true면 빌드 완료 후 eas.json의 "internal" 제출 프로필로 자동 제출한다
+#   (Android: track=internal 내부 테스트).
+#
+# 사전 준비(최초 1회): docs/deploy/native-google-play.md
+#   - GitHub Secret: EXPO_TOKEN
+#   - Google Play 서비스계정 키를 EAS에 등록
+#   - Play Console에 앱 생성 + 첫 AAB 1회 수동 업로드
+name: native build & submit
+
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: "빌드 플랫폼"
+        type: choice
+        required: true
+        default: android
+        options:
+          - android
+          - ios
+          - all
+      profile:
+        description: "EAS 빌드 프로필"
+        type: choice
+        required: true
+        default: production
+        options:
+          - production
+          - staging
+          - preview
+      submit:
+        description: "빌드 후 스토어 제출(internal 트랙)"
+        type: boolean
+        required: true
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: build ${{ inputs.platform }} (${{ inputs.profile }})
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/native
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: EAS build (+ optional submit)
+        run: |
+          FLAGS="--platform ${{ inputs.platform }} --profile ${{ inputs.profile }} --non-interactive"
+          if [ "${{ inputs.submit }}" = "true" ]; then
+            FLAGS="$FLAGS --auto-submit-with-profile internal"
+          fi
+          echo "eas build $FLAGS"
+          eas build $FLAGS

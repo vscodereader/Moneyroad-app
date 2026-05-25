@@ -1,0 +1,79 @@
+# CD 오케스트레이터
+# - main push: 변경된 앱만 자동 배포(apps/server, apps/realtime, 공통 packages 감지)
+# - 수동 실행(workflow_dispatch): server / realtime / both 중 선택해 배포
+# 실제 빌드·배포 로직은 deploy.yml(재사용 워크플로)에 있다.
+name: CD
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      app:
+        description: "배포할 앱"
+        type: choice
+        required: true
+        default: both
+        options:
+          - server
+          - realtime
+          - both
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  # 같은 앱을 동시에 배포하지 않도록 직렬화(앱별 분리는 deploy 잡 레벨에서).
+  group: cd-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # push 이벤트에서 어떤 앱이 바뀌었는지 판별. 공통 packages/lockfile 변경은 둘 다로 본다.
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      server: ${{ steps.filter.outputs.server }}
+      realtime: ${{ steps.filter.outputs.realtime }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            server:
+              - 'apps/server/**'
+              - 'packages/**'
+              - 'pnpm-lock.yaml'
+              - 'pnpm-workspace.yaml'
+              - 'cloudbuild.yaml'
+              - '.dockerignore'
+              - '.gcloudignore'
+            realtime:
+              - 'apps/realtime/**'
+              - 'packages/**'
+              - 'pnpm-lock.yaml'
+              - 'pnpm-workspace.yaml'
+              - 'cloudbuild.yaml'
+              - '.dockerignore'
+              - '.gcloudignore'
+
+  server:
+    needs: changes
+    if: >-
+      (github.event_name == 'push' && needs.changes.outputs.server == 'true') ||
+      (github.event_name == 'workflow_dispatch' && (inputs.app == 'server' || inputs.app == 'both'))
+    uses: ./.github/workflows/deploy.yml
+    with:
+      app: server
+    secrets: inherit
+
+  realtime:
+    needs: changes
+    if: >-
+      (github.event_name == 'push' && needs.changes.outputs.realtime == 'true') ||
+      (github.event_name == 'workflow_dispatch' && (inputs.app == 'realtime' || inputs.app == 'both'))
+    uses: ./.github/workflows/deploy.yml
+    with:
+      app: realtime
+    secrets: inherit

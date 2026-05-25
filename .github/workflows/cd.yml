@@ -36,8 +36,8 @@ jobs:
       server: ${{ steps.filter.outputs.server }}
       realtime: ${{ steps.filter.outputs.realtime }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: dorny/paths-filter@v3
+      - uses: actions/checkout@v6
+      - uses: dorny/paths-filter@v4
         id: filter
         with:
           filters: |

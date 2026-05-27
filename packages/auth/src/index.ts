@@ -4,6 +4,7 @@ import * as schema from "@moneyroad-app/db/schema/auth";
 import { env } from "@moneyroad-app/env/server";
 import { type BetterAuthOptions, betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
+import { admin } from "better-auth/plugins/admin";
 
 // Built-in social providers. Each activates only when its keys are set, so the
 // server runs with email-only login until credentials are provided.
@@ -75,7 +76,7 @@ export function createAuth() {
         httpOnly: true,
       },
     },
-    plugins: [expo()],
+    plugins: [expo(), admin()],
   });
 }
 

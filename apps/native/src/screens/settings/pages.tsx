@@ -675,7 +675,7 @@ export function MyPosts() {
             return (
               <Pressable
                 key={p.id}
-                onPress={() => nav.openThread(p.id)}
+                onPress={() => nav.openDiscussionRoom(p.id)}
                 style={{
                   paddingVertical: 14,
                   paddingHorizontal: 16,
@@ -768,7 +768,7 @@ export function MyPosts() {
             return (
               <Pressable
                 key={r.id}
-                onPress={() => nav.openThread(r.threadId)}
+                onPress={() => nav.openDiscussionRoom(r.threadId)}
                 style={{
                   paddingVertical: 14,
                   paddingHorizontal: 16,

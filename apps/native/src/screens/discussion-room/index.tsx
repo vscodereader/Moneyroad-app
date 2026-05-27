@@ -8,9 +8,9 @@ import { IconButton, MrScreen, StockLogo } from "@/components/ui";
 import { useMrTheme } from "@/hooks/use-mr-theme";
 import {
   type ChatMessage,
+  discussionRoomMessages,
+  discussionRooms,
   findStock,
-  threadChats,
-  threads,
 } from "@/utils/data";
 import { changeColor, fmt } from "@/utils/format";
 import { nav } from "@/utils/nav";
@@ -180,13 +180,13 @@ function MessageBubble({
   );
 }
 
-export default function ThreadRoomScreen() {
+export default function DiscussionRoomScreen() {
   const { t } = useMrTheme();
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const thread = threads.find((th) => th.id === id) ?? threads[0];
-  const stock = findStock(thread.code);
-  const seeded = threadChats[thread.id] ?? [];
+  const room = discussionRooms.find((r) => r.id === id) ?? discussionRooms[0];
+  const stock = findStock(room.code);
+  const seeded = discussionRoomMessages[room.id] ?? [];
   const [draft, setDraft] = useState("");
   const [extra, setExtra] = useState<ChatMessage[]>([]);
   const scrollRef = useRef<ScrollView>(null);
@@ -277,7 +277,7 @@ export default function ThreadRoomScreen() {
                 }}
               />
               <Text style={{ fontSize: 11, color: t.fgMuted }}>
-                참여자 {thread.members}명
+                참여자 {room.members}명
               </Text>
             </View>
           </View>
@@ -319,26 +319,24 @@ export default function ThreadRoomScreen() {
             >
               토론 주제
             </Text>
-            {thread.sentiment === "neutral" ? null : (
+            {room.sentiment === "neutral" ? null : (
               <View
                 style={{
                   marginLeft: "auto",
                   paddingHorizontal: 6,
                   paddingVertical: 1,
                   borderRadius: 999,
-                  backgroundColor:
-                    thread.sentiment === "up" ? t.upBg : t.downBg,
+                  backgroundColor: room.sentiment === "up" ? t.upBg : t.downBg,
                 }}
               >
                 <Text
                   style={{
                     fontSize: 10,
                     fontWeight: "800",
-                    color:
-                      thread.sentiment === "up" ? t.upStrong : t.downStrong,
+                    color: room.sentiment === "up" ? t.upStrong : t.downStrong,
                   }}
                 >
-                  {thread.sentiment === "up" ? "긍정" : "부정"}
+                  {room.sentiment === "up" ? "긍정" : "부정"}
                 </Text>
               </View>
             )}
@@ -352,10 +350,10 @@ export default function ThreadRoomScreen() {
               lineHeight: 18,
             }}
           >
-            {thread.title}
+            {room.title}
           </Text>
           <Text style={{ fontSize: 11, color: t.fgMuted, marginTop: 3 }}>
-            {thread.author} · {thread.time}
+            {room.author} · {room.time}
           </Text>
         </View>
       </View>

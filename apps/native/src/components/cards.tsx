@@ -6,11 +6,11 @@ import { Icon, SIGNAL_ACTION_ICON } from "@/components/icons";
 import { ScorePill, StockLogo, StrengthBar } from "@/components/ui";
 import { useMrTheme } from "@/hooks/use-mr-theme";
 import type {
+  DiscussionRoom,
   MarketIndex,
   NewsItem,
   Signal,
   Stock,
-  Thread,
 } from "@/utils/data";
 import { findStock } from "@/utils/data";
 import { changeColor, fmt } from "@/utils/format";
@@ -604,21 +604,21 @@ export function AiBriefCard({
   );
 }
 
-// ── Discussion thread row ─────────────────────────────────────
-export function ThreadRow({
-  thread,
+// ── Discussion room row ─────────────────────────────────────
+export function DiscussionRoomRow({
+  room,
   liked,
   onToggleLike,
   onPress,
 }: {
-  thread: Thread;
+  room: DiscussionRoom;
   liked: boolean;
   onToggleLike: () => void;
   onPress: () => void;
 }) {
   const { t } = useMrTheme();
-  const stock = findStock(thread.code);
-  const likeCount = thread.likes + (liked ? 1 : 0);
+  const stock = findStock(room.code);
+  const likeCount = room.likes + (liked ? 1 : 0);
   return (
     <Pressable
       android_ripple={{ color: t.bgSubtle }}
@@ -649,11 +649,11 @@ export function ThreadRow({
               color: stock?.logoTxt ?? "#fff",
             }}
           >
-            {thread.author.slice(0, 1)}
+            {room.author.slice(0, 1)}
           </Text>
         </View>
         <Text style={{ fontSize: 11, color: t.fgStrong, fontWeight: "700" }}>
-          {thread.author}
+          {room.author}
         </Text>
         {stock ? (
           <View
@@ -677,7 +677,7 @@ export function ThreadRow({
             fontWeight: "600",
           }}
         >
-          {thread.time}
+          {room.time}
         </Text>
       </View>
       <Text
@@ -689,13 +689,13 @@ export function ThreadRow({
           lineHeight: 21,
         }}
       >
-        {thread.title}
+        {room.title}
       </Text>
       <Text
         numberOfLines={2}
         style={{ fontSize: 13, color: t.fgMuted, marginTop: 4, lineHeight: 20 }}
       >
-        {thread.body}
+        {room.body}
       </Text>
       <View
         style={{
@@ -728,33 +728,33 @@ export function ThreadRow({
         <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
           <Icon.reply color={t.fgMuted} size={15} />
           <Text style={{ fontSize: 12, fontWeight: "700", color: t.fgMuted }}>
-            {thread.replies}
+            {room.replies}
           </Text>
         </View>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
           <Icon.sigComm color={t.fgMuted} size={13} />
           <Text style={{ fontSize: 12, fontWeight: "700", color: t.fgMuted }}>
-            {thread.members}
+            {room.members}
           </Text>
         </View>
-        {thread.sentiment === "neutral" ? null : (
+        {room.sentiment === "neutral" ? null : (
           <View
             style={{
               marginLeft: "auto",
               paddingHorizontal: 8,
               paddingVertical: 2,
               borderRadius: 999,
-              backgroundColor: thread.sentiment === "up" ? t.upBg : t.downBg,
+              backgroundColor: room.sentiment === "up" ? t.upBg : t.downBg,
             }}
           >
             <Text
               style={{
                 fontSize: 11,
                 fontWeight: "700",
-                color: thread.sentiment === "up" ? t.upStrong : t.downStrong,
+                color: room.sentiment === "up" ? t.upStrong : t.downStrong,
               }}
             >
-              {thread.sentiment === "up" ? "긍정" : "부정"}
+              {room.sentiment === "up" ? "긍정" : "부정"}
             </Text>
           </View>
         )}

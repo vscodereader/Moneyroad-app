@@ -1,11 +1,11 @@
 import { useState } from "react";
 import { Pressable, ScrollView, View } from "react-native";
 
-import { ThreadRow } from "@/components/cards";
+import { DiscussionRoomRow } from "@/components/cards";
 import { Icon } from "@/components/icons";
 import { Chip, IconButton, MrHeader, MrScreen } from "@/components/ui";
 import { useMrTheme } from "@/hooks/use-mr-theme";
-import { stocks, threads } from "@/utils/data";
+import { discussionRooms, stocks } from "@/utils/data";
 import { nav } from "@/utils/nav";
 
 type DiscussTab = "hot" | "watch" | "recent";
@@ -24,11 +24,11 @@ export default function DiscussScreen() {
   const watchedCodes = new Set(
     stocks.filter((s) => s.watched).map((s) => s.code)
   );
-  let list = threads;
+  let list = discussionRooms;
   if (tab === "watch") {
-    list = threads.filter((th) => watchedCodes.has(th.code));
+    list = discussionRooms.filter((r) => watchedCodes.has(r.code));
   } else if (tab === "hot") {
-    list = [...threads].sort((a, b) => b.likes - a.likes);
+    list = [...discussionRooms].sort((a, b) => b.likes - a.likes);
   }
 
   const toggleLike = (id: string) => {
@@ -71,13 +71,13 @@ export default function DiscussScreen() {
           ))}
         </ScrollView>
 
-        {list.map((th) => (
-          <ThreadRow
-            key={th.id}
-            liked={liked.has(th.id)}
-            onPress={() => nav.openThread(th.id)}
-            onToggleLike={() => toggleLike(th.id)}
-            thread={th}
+        {list.map((r) => (
+          <DiscussionRoomRow
+            key={r.id}
+            liked={liked.has(r.id)}
+            onPress={() => nav.openDiscussionRoom(r.id)}
+            onToggleLike={() => toggleLike(r.id)}
+            room={r}
           />
         ))}
         <View style={{ height: 16 }} />

@@ -17,7 +17,7 @@ import {
   SectionHead,
 } from "@/components/ui";
 import { useMrTheme } from "@/hooks/use-mr-theme";
-import { findStock, news, stocks, threads } from "@/utils/data";
+import { discussionRooms, findStock, news, stocks } from "@/utils/data";
 import { changeColor, fmt } from "@/utils/format";
 import { nav } from "@/utils/nav";
 import { orpc } from "@/utils/orpc";
@@ -76,7 +76,9 @@ export default function StockDetailScreen() {
   );
   const relSignals = relSignalsQuery.data?.items ?? [];
   const relNews = news.filter((n) => n.code === stock.code).slice(0, 2);
-  const relThreads = threads.filter((th) => th.code === stock.code).slice(0, 2);
+  const relRooms = discussionRooms
+    .filter((r) => r.code === stock.code)
+    .slice(0, 2);
 
   const summaryBg = summaryBgFor(stock.score, t);
   const verdictColor = verdictColorFor(stock.score, t);
@@ -360,10 +362,10 @@ export default function StockDetailScreen() {
           onMore={() => nav.goTab("discuss")}
           title="관련 토론"
         />
-        {relThreads.map((th) => (
+        {relRooms.map((r) => (
           <Pressable
-            key={th.id}
-            onPress={() => nav.openThread(th.id)}
+            key={r.id}
+            onPress={() => nav.openDiscussionRoom(r.id)}
             style={({ pressed }) => ({
               paddingVertical: 14,
               paddingHorizontal: 16,
@@ -388,19 +390,19 @@ export default function StockDetailScreen() {
                 <Text
                   style={{ fontSize: 12, fontWeight: "700", color: t.fgMuted }}
                 >
-                  {th.author.slice(0, 1)}
+                  {r.author.slice(0, 1)}
                 </Text>
               </View>
               <Text
                 style={{ fontSize: 11, color: t.fgStrong, fontWeight: "700" }}
               >
-                {th.author}
+                {r.author}
               </Text>
               <Text style={{ fontSize: 11, color: t.fgMuted }}>·</Text>
               <Text
                 style={{ fontSize: 11, color: t.fgMuted, fontWeight: "600" }}
               >
-                {th.time}
+                {r.time}
               </Text>
             </View>
             <Text
@@ -412,7 +414,7 @@ export default function StockDetailScreen() {
                 lineHeight: 20,
               }}
             >
-              {th.title}
+              {r.title}
             </Text>
             <Text
               numberOfLines={2}
@@ -423,7 +425,7 @@ export default function StockDetailScreen() {
                 lineHeight: 20,
               }}
             >
-              {th.body}
+              {r.body}
             </Text>
             <View style={{ flexDirection: "row", gap: 14, marginTop: 8 }}>
               <View
@@ -433,7 +435,7 @@ export default function StockDetailScreen() {
                 <Text
                   style={{ fontSize: 12, fontWeight: "600", color: t.fgMuted }}
                 >
-                  {th.likes}
+                  {r.likes}
                 </Text>
               </View>
               <View
@@ -443,7 +445,7 @@ export default function StockDetailScreen() {
                 <Text
                   style={{ fontSize: 12, fontWeight: "600", color: t.fgMuted }}
                 >
-                  {th.replies}
+                  {r.replies}
                 </Text>
               </View>
             </View>

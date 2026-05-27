@@ -1,6 +1,7 @@
 import type { RouterClient } from "@orpc/server";
 
 import { protectedProcedure, publicProcedure } from "../index";
+import { discussionRouter } from "./discussion";
 import { newsRouter } from "./news";
 import { notificationRouter } from "./notification";
 import { signalRouter } from "./signal";
@@ -20,6 +21,7 @@ export const appRouter = {
   signal: signalRouter,
   stock: stockRouter,
   watchlist: watchlistRouter,
+  discussion: discussionRouter,
 };
 export type AppRouter = typeof appRouter;
 export type AppRouterClient = RouterClient<typeof appRouter>;

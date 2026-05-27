@@ -1,12 +1,21 @@
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { Pressable, ScrollView, View } from "react-native";
+import {
+  ActivityIndicator,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  Text,
+  View,
+} from "react-native";
 
-import { ThreadRow } from "@/components/cards";
+import { DiscussionRoomRow } from "@/components/cards";
 import { Icon } from "@/components/icons";
-import { Chip, IconButton, MrHeader, MrScreen } from "@/components/ui";
+import { Chip, MrHeader, MrScreen } from "@/components/ui";
 import { useMrTheme } from "@/hooks/use-mr-theme";
-import { stocks, threads } from "@/utils/data";
+import { authClient } from "@/lib/auth-client";
 import { nav } from "@/utils/nav";
+import { orpc } from "@/utils/orpc";
 
 type DiscussTab = "hot" | "watch" | "recent";
 
@@ -16,42 +25,84 @@ const TABS: { k: DiscussTab; l: string }[] = [
   { k: "recent", l: "최신" },
 ];
 
+function EmptyState({ title, body }: { title: string; body: string }) {
+  const { t } = useMrTheme();
+  return (
+    <View
+      style={{
+        paddingVertical: 64,
+        paddingHorizontal: 24,
+        alignItems: "center",
+      }}
+    >
+      <Text
+        style={{
+          fontSize: 14,
+          fontWeight: "700",
+          color: t.fgStrong,
+          marginBottom: 6,
+        }}
+      >
+        {title}
+      </Text>
+      <Text
+        style={{
+          fontSize: 12,
+          color: t.fgMuted,
+          textAlign: "center",
+          lineHeight: 18,
+        }}
+      >
+        {body}
+      </Text>
+    </View>
+  );
+}
+
 export default function DiscussScreen() {
   const { t } = useMrTheme();
   const [tab, setTab] = useState<DiscussTab>("hot");
-  const [liked, setLiked] = useState<Set<string>>(new Set());
+  const { data: session } = authClient.useSession();
+  const isAdmin = session?.user.role === "admin";
+  const isAuthed = Boolean(session?.user);
+  const queryClient = useQueryClient();
 
-  const watchedCodes = new Set(
-    stocks.filter((s) => s.watched).map((s) => s.code)
+  const roomsOptions = orpc.discussion.rooms.queryOptions({ input: { tab } });
+  const roomsQuery = useQuery(roomsOptions);
+
+  const toggleLike = useMutation(
+    orpc.discussion.toggleLike.mutationOptions({
+      onSuccess: () => {
+        // ADR-0001 #3: no optimistic append — invalidate so server-issued
+        // state stays the source of truth (ws migration friendly).
+        queryClient.invalidateQueries({ queryKey: roomsOptions.queryKey });
+      },
+    })
   );
-  let list = threads;
-  if (tab === "watch") {
-    list = threads.filter((th) => watchedCodes.has(th.code));
-  } else if (tab === "hot") {
-    list = [...threads].sort((a, b) => b.likes - a.likes);
-  }
 
-  const toggleLike = (id: string) => {
-    const next = new Set(liked);
-    if (next.has(id)) {
-      next.delete(id);
-    } else {
-      next.add(id);
+  const handleToggleLike = (roomId: number) => {
+    if (!isAuthed) {
+      // TODO: open login sheet (consistent with other protected actions).
+      return;
     }
-    setLiked(next);
+    toggleLike.mutate({ roomId });
   };
+
+  const rooms = roomsQuery.data ?? [];
 
   return (
     <MrScreen>
-      <MrHeader
-        right={
-          <IconButton>
-            <Icon.search color={t.fgStrong} size={22} />
-          </IconButton>
+      <MrHeader title="토론" />
+      <ScrollView
+        refreshControl={
+          <RefreshControl
+            onRefresh={() => roomsQuery.refetch()}
+            refreshing={roomsQuery.isRefetching}
+            tintColor={t.primary}
+          />
         }
-        title="토론"
-      />
-      <ScrollView showsVerticalScrollIndicator={false}>
+        showsVerticalScrollIndicator={false}
+      >
         <ScrollView
           contentContainerStyle={{
             paddingHorizontal: 16,
@@ -71,38 +122,75 @@ export default function DiscussScreen() {
           ))}
         </ScrollView>
 
-        {list.map((th) => (
-          <ThreadRow
-            key={th.id}
-            liked={liked.has(th.id)}
-            onPress={() => nav.openThread(th.id)}
-            onToggleLike={() => toggleLike(th.id)}
-            thread={th}
+        {roomsQuery.isPending ? (
+          <View style={{ paddingVertical: 48, alignItems: "center" }}>
+            <ActivityIndicator color={t.primary} />
+          </View>
+        ) : null}
+
+        {roomsQuery.isSuccess && rooms.length === 0
+          ? renderEmpty(tab, isAuthed)
+          : null}
+
+        {rooms.map((r) => (
+          <DiscussionRoomRow
+            key={r.id}
+            onPress={() => nav.openDiscussionRoom(r.id)}
+            onToggleLike={() => handleToggleLike(r.id)}
+            room={r}
           />
         ))}
         <View style={{ height: 16 }} />
       </ScrollView>
 
-      <Pressable
-        style={{
-          position: "absolute",
-          right: 16,
-          bottom: 24,
-          width: 52,
-          height: 52,
-          borderRadius: 999,
-          backgroundColor: t.primary,
-          alignItems: "center",
-          justifyContent: "center",
-          shadowColor: t.primary,
-          shadowOffset: { width: 0, height: 8 },
-          shadowOpacity: 0.5,
-          shadowRadius: 12,
-          elevation: 6,
-        }}
-      >
-        <Icon.plus color="#fff" size={24} />
-      </Pressable>
+      {isAdmin ? (
+        <Pressable
+          onPress={nav.openCreateDiscussionRoom}
+          style={{
+            position: "absolute",
+            right: 16,
+            bottom: 24,
+            width: 52,
+            height: 52,
+            borderRadius: 999,
+            backgroundColor: t.primary,
+            alignItems: "center",
+            justifyContent: "center",
+            shadowColor: t.primary,
+            shadowOffset: { width: 0, height: 8 },
+            shadowOpacity: 0.5,
+            shadowRadius: 12,
+            elevation: 6,
+          }}
+        >
+          <Icon.plus color="#fff" size={24} />
+        </Pressable>
+      ) : null}
     </MrScreen>
+  );
+}
+
+function renderEmpty(tab: DiscussTab, isAuthed: boolean) {
+  if (tab === "watch") {
+    if (!isAuthed) {
+      return (
+        <EmptyState
+          body="로그인하면 관심 종목 토론방을 모아 봅니다."
+          title="로그인이 필요합니다"
+        />
+      );
+    }
+    return (
+      <EmptyState
+        body="관심 종목을 추가하면 관련 토론방이 여기 모입니다."
+        title="관심 종목 토론방이 없습니다"
+      />
+    );
+  }
+  return (
+    <EmptyState
+      body="관리자가 토론방을 열면 이곳에서 바로 참여할 수 있습니다."
+      title="아직 토론방이 없습니다"
+    />
   );
 }

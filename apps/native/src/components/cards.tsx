@@ -5,13 +5,7 @@ import { Gradient, Sparkline } from "@/components/charts";
 import { Icon, SIGNAL_ACTION_ICON } from "@/components/icons";
 import { ScorePill, StockLogo, StrengthBar } from "@/components/ui";
 import { useMrTheme } from "@/hooks/use-mr-theme";
-import type {
-  MarketIndex,
-  NewsItem,
-  Signal,
-  Stock,
-  Thread,
-} from "@/utils/data";
+import type { MarketIndex, NewsItem, Signal, Stock } from "@/utils/data";
 import { findStock } from "@/utils/data";
 import { changeColor, fmt } from "@/utils/format";
 import { type MrTokens, signalActionMeta } from "@/utils/theme";
@@ -604,21 +598,38 @@ export function AiBriefCard({
   );
 }
 
-// ── Discussion thread row ─────────────────────────────────────
-export function ThreadRow({
-  thread,
-  liked,
+// ── Discussion room row ─────────────────────────────────────
+// Mirrors the shape returned by `orpc.discussion.rooms` (one element of the
+// array). Defined inline to avoid coupling the UI to server-router internals;
+// TS structural matching catches drift at the call site.
+export type DiscussionRoomRowData = {
+  id: number;
+  name: string;
+  description: string;
+  stockCode: string | null;
+  stockName: string | null;
+  sentiment: "up" | "neutral" | "down";
+  createdBy: { id: string; name: string } | null;
+  time: string;
+  likesCount: number;
+  repliesCount: number;
+  membersCount: number;
+  liked: boolean;
+};
+
+export function DiscussionRoomRow({
+  room,
   onToggleLike,
   onPress,
 }: {
-  thread: Thread;
-  liked: boolean;
+  room: DiscussionRoomRowData;
   onToggleLike: () => void;
   onPress: () => void;
 }) {
   const { t } = useMrTheme();
-  const stock = findStock(thread.code);
-  const likeCount = thread.likes + (liked ? 1 : 0);
+  const stock = room.stockCode ? findStock(room.stockCode) : null;
+  const stockLabel = stock?.name ?? room.stockName;
+  const authorName = room.createdBy?.name ?? "관리자";
   return (
     <Pressable
       android_ripple={{ color: t.bgSubtle }}
@@ -649,13 +660,13 @@ export function ThreadRow({
               color: stock?.logoTxt ?? "#fff",
             }}
           >
-            {thread.author.slice(0, 1)}
+            {authorName.slice(0, 1)}
           </Text>
         </View>
         <Text style={{ fontSize: 11, color: t.fgStrong, fontWeight: "700" }}>
-          {thread.author}
+          {authorName}
         </Text>
-        {stock ? (
+        {stockLabel ? (
           <View
             style={{
               paddingHorizontal: 6,
@@ -665,7 +676,7 @@ export function ThreadRow({
             }}
           >
             <Text style={{ fontSize: 10, fontWeight: "700", color: t.fgMuted }}>
-              {stock.name}
+              {stockLabel}
             </Text>
           </View>
         ) : null}
@@ -677,7 +688,7 @@ export function ThreadRow({
             fontWeight: "600",
           }}
         >
-          {thread.time}
+          {room.time}
         </Text>
       </View>
       <Text
@@ -689,13 +700,13 @@ export function ThreadRow({
           lineHeight: 21,
         }}
       >
-        {thread.title}
+        {room.name}
       </Text>
       <Text
         numberOfLines={2}
         style={{ fontSize: 13, color: t.fgMuted, marginTop: 4, lineHeight: 20 }}
       >
-        {thread.body}
+        {room.description}
       </Text>
       <View
         style={{
@@ -711,50 +722,50 @@ export function ThreadRow({
           style={{ flexDirection: "row", alignItems: "center", gap: 4 }}
         >
           <Icon.thumbsUp
-            color={liked ? t.upStrong : t.fgMuted}
-            filled={liked}
+            color={room.liked ? t.upStrong : t.fgMuted}
+            filled={room.liked}
             size={15}
           />
           <Text
             style={{
               fontSize: 12,
               fontWeight: "700",
-              color: liked ? t.upStrong : t.fgMuted,
+              color: room.liked ? t.upStrong : t.fgMuted,
             }}
           >
-            {likeCount}
+            {room.likesCount}
           </Text>
         </Pressable>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
           <Icon.reply color={t.fgMuted} size={15} />
           <Text style={{ fontSize: 12, fontWeight: "700", color: t.fgMuted }}>
-            {thread.replies}
+            {room.repliesCount}
           </Text>
         </View>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
           <Icon.sigComm color={t.fgMuted} size={13} />
           <Text style={{ fontSize: 12, fontWeight: "700", color: t.fgMuted }}>
-            {thread.members}
+            {room.membersCount}
           </Text>
         </View>
-        {thread.sentiment === "neutral" ? null : (
+        {room.sentiment === "neutral" ? null : (
           <View
             style={{
               marginLeft: "auto",
               paddingHorizontal: 8,
               paddingVertical: 2,
               borderRadius: 999,
-              backgroundColor: thread.sentiment === "up" ? t.upBg : t.downBg,
+              backgroundColor: room.sentiment === "up" ? t.upBg : t.downBg,
             }}
           >
             <Text
               style={{
                 fontSize: 11,
                 fontWeight: "700",
-                color: thread.sentiment === "up" ? t.upStrong : t.downStrong,
+                color: room.sentiment === "up" ? t.upStrong : t.downStrong,
               }}
             >
-              {thread.sentiment === "up" ? "긍정" : "부정"}
+              {room.sentiment === "up" ? "긍정" : "부정"}
             </Text>
           </View>
         )}

@@ -60,7 +60,7 @@ export interface NewsItem {
   title: string;
 }
 
-export interface Thread {
+export interface DiscussionRoom {
   author: string;
   body: string;
   code: string;
@@ -355,7 +355,7 @@ export const news: NewsItem[] = [
   },
 ];
 
-export const threads: Thread[] = [
+export const discussionRooms: DiscussionRoom[] = [
   {
     id: "t1",
     code: "000660",
@@ -503,7 +503,7 @@ export const notifications: Notification[] = [
   },
 ];
 
-export const threadChats: Record<string, ChatMessage[]> = {
+export const discussionRoomMessages: Record<string, ChatMessage[]> = {
   t2: [
     {
       id: "m1",

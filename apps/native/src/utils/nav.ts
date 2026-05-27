@@ -17,6 +17,8 @@ export const nav = {
   openWatchlist: () => router.push(`${BASE}/watchlist` as Href),
   openDiscussionRoom: (id: number | string) =>
     router.push(`${BASE}/discussion-room/${id}` as Href),
+  openCreateDiscussionRoom: () =>
+    router.push(`${BASE}/discussion-room/new` as Href),
   openSettings: (page: string) =>
     router.push(`${BASE}/settings/${page}` as Href),
   goTab: (name: TabName) =>

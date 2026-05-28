@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import * as Haptics from "expo-haptics";
 import { useState } from "react";
 import {
   ActivityIndicator,
@@ -124,13 +125,39 @@ export default function WatchlistScreen() {
 
   const watched = new Set(list.data?.map((w) => w.code));
   const listKey = orpc.watchlist.list.queryKey();
+  // Reconcile with authoritative server state after the mutation settles
+  // (success confirms the optimistic change, error rolls it back).
   const invalidate = () => queryClient.invalidateQueries({ queryKey: listKey });
   const addMut = useMutation(
-    orpc.watchlist.add.mutationOptions({ onSuccess: invalidate })
+    orpc.watchlist.add.mutationOptions({ onSettled: invalidate })
   );
   const removeMut = useMutation(
-    orpc.watchlist.remove.mutationOptions({ onSuccess: invalidate })
+    orpc.watchlist.remove.mutationOptions({ onSettled: invalidate })
   );
+
+  type WatchItem = NonNullable<typeof list.data>[number];
+
+  // Optimistic toggle: flip the cached list immediately so the +/check state
+  // updates without waiting for the round-trip, with a light haptic tap.
+  const addEntry = (entry: StockEntry) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    queryClient.setQueryData<WatchItem[]>(listKey, (old) => {
+      const cur = old ?? [];
+      if (cur.some((w) => w.code === entry.code)) {
+        return cur;
+      }
+      return [{ ...entry, createdAt: new Date().toISOString() }, ...cur];
+    });
+    addMut.mutate({ stockCode: entry.code });
+  };
+
+  const removeEntry = (code: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    queryClient.setQueryData<WatchItem[]>(listKey, (old) =>
+      (old ?? []).filter((w) => w.code !== code)
+    );
+    removeMut.mutate({ stockCode: code });
+  };
 
   const items = list.data ?? [];
 
@@ -169,9 +196,9 @@ export default function WatchlistScreen() {
       <ScrollView keyboardShouldPersistTaps="handled">
         {searching ? (
           <SearchResults
-            addMut={addMut}
             isLoading={search.isLoading}
-            removeMut={removeMut}
+            onAdd={addEntry}
+            onRemove={removeEntry}
             results={search.data}
             t={t}
             watched={watched}
@@ -180,7 +207,7 @@ export default function WatchlistScreen() {
           <MyList
             isLoading={list.isLoading}
             items={items}
-            onRemove={(code) => removeMut.mutate({ stockCode: code })}
+            onRemove={removeEntry}
             t={t}
           />
         )}
@@ -194,15 +221,15 @@ function SearchResults({
   results,
   isLoading,
   watched,
-  addMut,
-  removeMut,
+  onAdd,
+  onRemove,
   t,
 }: {
   results: StockEntry[] | undefined;
   isLoading: boolean;
   watched: Set<string>;
-  addMut: { mutate: (v: { stockCode: string }) => void };
-  removeMut: { mutate: (v: { stockCode: string }) => void };
+  onAdd: (entry: StockEntry) => void;
+  onRemove: (code: string) => void;
   t: MrTokens;
 }) {
   if (isLoading) {
@@ -232,11 +259,7 @@ function SearchResults({
             right={
               <Pressable
                 hitSlop={8}
-                onPress={() =>
-                  isWatched
-                    ? removeMut.mutate({ stockCode: s.code })
-                    : addMut.mutate({ stockCode: s.code })
-                }
+                onPress={() => (isWatched ? onRemove(s.code) : onAdd(s))}
                 style={{
                   width: 32,
                   height: 32,

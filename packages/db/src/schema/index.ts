@@ -1,5 +1,6 @@
 export * from "./auth";
 export * from "./discussion";
+export * from "./inquiry";
 export * from "./news";
 export * from "./news-subscription";
 export * from "./notification-history";

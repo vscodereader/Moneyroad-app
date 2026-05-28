@@ -43,6 +43,13 @@
       "when": 1779895438356,
       "tag": "0005_sweet_gorgon",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1779982744154,
+      "tag": "0006_spotty_rafael_vega",
+      "breakpoints": true
     }
   ]
 }

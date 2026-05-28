@@ -348,6 +348,7 @@ function MyList({
         <EntryRow
           entry={s}
           key={s.code}
+          onPress={() => nav.openStock(s.code)}
           right={
             <Pressable
               hitSlop={8}

@@ -7,7 +7,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 const CHART_WIDTH = Dimensions.get("window").width - 16;
 
 import { NewsCard, SignalCard } from "@/components/cards";
-import { SignalDial, StockChart } from "@/components/charts";
+// import { SignalDial, StockChart } from "@/components/charts";
+import { StockChart } from "@/components/charts";
 import { Icon } from "@/components/icons";
 import {
   BackButton,
@@ -21,7 +22,8 @@ import { discussionRooms, findStock, news, stocks } from "@/utils/data";
 import { changeColor, fmt } from "@/utils/format";
 import { nav } from "@/utils/nav";
 import { orpc } from "@/utils/orpc";
-import { type MrTokens, SIGNAL_TYPE_KEYS, signalMeta } from "@/utils/theme";
+//import { type MrTokens, SIGNAL_TYPE_KEYS, signalMeta } from "@/utils/theme";
+import { type MrTokens, signalMeta } from "@/utils/theme";
 
 const RANGES = ["1D", "1W", "1M", "3M", "1Y"];
 
@@ -219,108 +221,108 @@ export default function StockDetailScreen() {
         </View>
 
         {/* Composite signal */}
-        <SectionHead title="종합 시그널 분석" />
-        <View style={{ paddingHorizontal: 16 }}>
-          <View
-            style={{
-              flexDirection: "row",
-              gap: 16,
-              alignItems: "center",
-              backgroundColor: t.bgElev,
-              borderWidth: 1,
-              borderColor: t.border,
-              borderRadius: 12,
-              padding: 16,
-            }}
-          >
-            <View
-              style={{
-                width: 120,
-                height: 120,
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <SignalDial breakdown={stock.signalBreakdown} size={120} t={t} />
-              <View style={{ position: "absolute", alignItems: "center" }}>
-                <Text
-                  style={{ fontSize: 11, color: t.fgMuted, fontWeight: "700" }}
-                >
-                  종합 시그널
-                </Text>
-                <Text
-                  style={{
-                    fontSize: 36,
-                    fontWeight: "800",
-                    color: t.fgStrong,
-                    marginTop: 2,
-                  }}
-                >
-                  {stock.score}
-                </Text>
-                <Text
-                  style={{ fontSize: 11, color: t.fgMuted, fontWeight: "600" }}
-                >
-                  / 100
-                </Text>
-              </View>
-            </View>
-            <View style={{ flex: 1, gap: 8 }}>
-              {SIGNAL_TYPE_KEYS.map((k) => (
-                <View
-                  key={k}
-                  style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
-                >
-                  <View
-                    style={{
-                      width: 8,
-                      height: 8,
-                      borderRadius: 999,
-                      backgroundColor: meta[k].color,
-                    }}
-                  />
-                  <Text
-                    style={{
-                      flex: 1,
-                      fontSize: 12,
-                      fontWeight: "600",
-                      color: t.fgMuted,
-                    }}
-                  >
-                    {meta[k].label}
-                  </Text>
-                  <Text
-                    style={{
-                      fontSize: 13,
-                      fontWeight: "800",
-                      color: t.fgStrong,
-                    }}
-                  >
-                    {stock.signalBreakdown[k]}
-                  </Text>
-                </View>
-              ))}
-            </View>
-          </View>
-          <View
-            style={{
-              marginTop: 10,
-              paddingVertical: 10,
-              paddingHorizontal: 12,
-              backgroundColor: summaryBg,
-              borderRadius: 10,
-            }}
-          >
-            <Text style={{ fontSize: 12, lineHeight: 18, color: t.fgStrong }}>
-              <Text style={{ fontWeight: "800", color: verdictColor }}>
-                {scoreVerdict(stock.score)}
-              </Text>
-              {
-                " · 최근 24시간 4개 시그널 종합 점수입니다. 시그널 점수는 매매 권유가 아닙니다."
-              }
-            </Text>
-          </View>
-        </View>
+        {/*<SectionHead title="종합 시그널 분석" />*/}
+        {/*<View style={{ paddingHorizontal: 16 }}>*/}
+        {/*  <View*/}
+        {/*    style={{*/}
+        {/*      flexDirection: "row",*/}
+        {/*      gap: 16,*/}
+        {/*      alignItems: "center",*/}
+        {/*      backgroundColor: t.bgElev,*/}
+        {/*      borderWidth: 1,*/}
+        {/*      borderColor: t.border,*/}
+        {/*      borderRadius: 12,*/}
+        {/*      padding: 16,*/}
+        {/*    }}*/}
+        {/*  >*/}
+        {/*    <View*/}
+        {/*      style={{*/}
+        {/*        width: 120,*/}
+        {/*        height: 120,*/}
+        {/*        alignItems: "center",*/}
+        {/*        justifyContent: "center",*/}
+        {/*      }}*/}
+        {/*    >*/}
+        {/*      <SignalDial breakdown={stock.signalBreakdown} size={120} t={t} />*/}
+        {/*      <View style={{ position: "absolute", alignItems: "center" }}>*/}
+        {/*        <Text*/}
+        {/*          style={{ fontSize: 11, color: t.fgMuted, fontWeight: "700" }}*/}
+        {/*        >*/}
+        {/*          종합 시그널*/}
+        {/*        </Text>*/}
+        {/*        <Text*/}
+        {/*          style={{*/}
+        {/*            fontSize: 36,*/}
+        {/*            fontWeight: "800",*/}
+        {/*            color: t.fgStrong,*/}
+        {/*            marginTop: 2,*/}
+        {/*          }}*/}
+        {/*        >*/}
+        {/*          {stock.score}*/}
+        {/*        </Text>*/}
+        {/*        <Text*/}
+        {/*          style={{ fontSize: 11, color: t.fgMuted, fontWeight: "600" }}*/}
+        {/*        >*/}
+        {/*          / 100*/}
+        {/*        </Text>*/}
+        {/*      </View>*/}
+        {/*    </View>*/}
+        {/*    <View style={{ flex: 1, gap: 8 }}>*/}
+        {/*      {SIGNAL_TYPE_KEYS.map((k) => (*/}
+        {/*        <View*/}
+        {/*          key={k}*/}
+        {/*          style={{ flexDirection: "row", alignItems: "center", gap: 8 }}*/}
+        {/*        >*/}
+        {/*          <View*/}
+        {/*            style={{*/}
+        {/*              width: 8,*/}
+        {/*              height: 8,*/}
+        {/*              borderRadius: 999,*/}
+        {/*              backgroundColor: meta[k].color,*/}
+        {/*            }}*/}
+        {/*          />*/}
+        {/*          <Text*/}
+        {/*            style={{*/}
+        {/*              flex: 1,*/}
+        {/*              fontSize: 12,*/}
+        {/*              fontWeight: "600",*/}
+        {/*              color: t.fgMuted,*/}
+        {/*            }}*/}
+        {/*          >*/}
+        {/*            {meta[k].label}*/}
+        {/*          </Text>*/}
+        {/*          <Text*/}
+        {/*            style={{*/}
+        {/*              fontSize: 13,*/}
+        {/*              fontWeight: "800",*/}
+        {/*              color: t.fgStrong,*/}
+        {/*            }}*/}
+        {/*          >*/}
+        {/*            {stock.signalBreakdown[k]}*/}
+        {/*          </Text>*/}
+        {/*        </View>*/}
+        {/*      ))}*/}
+        {/*    </View>*/}
+        {/*  </View>*/}
+        {/*  <View*/}
+        {/*    style={{*/}
+        {/*      marginTop: 10,*/}
+        {/*      paddingVertical: 10,*/}
+        {/*      paddingHorizontal: 12,*/}
+        {/*      backgroundColor: summaryBg,*/}
+        {/*      borderRadius: 10,*/}
+        {/*    }}*/}
+        {/*  >*/}
+        {/*    <Text style={{ fontSize: 12, lineHeight: 18, color: t.fgStrong }}>*/}
+        {/*      <Text style={{ fontWeight: "800", color: verdictColor }}>*/}
+        {/*        {scoreVerdict(stock.score)}*/}
+        {/*      </Text>*/}
+        {/*      {*/}
+        {/*        " · 최근 24시간 4개 시그널 종합 점수입니다. 시그널 점수는 매매 권유가 아닙니다."*/}
+        {/*      }*/}
+        {/*    </Text>*/}
+        {/*  </View>*/}
+        {/*</View>*/}
 
         {/* Recent signals */}
         <SectionHead more="더보기" title="최근 시그널" />

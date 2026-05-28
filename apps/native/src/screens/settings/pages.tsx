@@ -1,13 +1,15 @@
 // MoneyRoad — MyPage settings sub-screens (8)
 
 import { useState } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Linking, Pressable, Text, View } from "react-native";
 
 import { Gradient } from "@/components/charts";
 import { Icon } from "@/components/icons";
 import { SegmentedControl, StockLogo, Switch } from "@/components/ui";
 import { useMrTheme } from "@/hooks/use-mr-theme";
 import { useNotificationSettings } from "@/hooks/use-notification-settings";
+import InquiryFormScreen from "@/screens/settings/inquiry";
+import { PrivacyPolicy, TermsOfService } from "@/screens/settings/legal";
 import {
   SettingsGroup,
   SettingsRow,
@@ -1209,20 +1211,24 @@ export function Support() {
       <SettingsGroup label="문의하기">
         <SettingsRow
           label="1:1 문의 접수"
+          onPress={() => nav.openSettings("inquiry")}
           right={<Icon.chevRight color={t.fgSubtle} size={16} />}
           sub="평일 09:00~18:00 응답"
         />
         <SettingsRow
           label="이메일 문의"
+          onPress={() => Linking.openURL("mailto:support@moneyroad.ai.kr")}
           right={<Icon.chevRight color={t.fgSubtle} size={16} />}
           sub="support@moneyroad.ai.kr"
         />
         <SettingsRow
           label="이용약관"
+          onPress={() => nav.openSettings("terms")}
           right={<Icon.chevRight color={t.fgSubtle} size={16} />}
         />
         <SettingsRow
           label="개인정보 처리방침"
+          onPress={() => nav.openSettings("privacy")}
           right={<Icon.chevRight color={t.fgSubtle} size={16} />}
         />
       </SettingsGroup>
@@ -1240,4 +1246,7 @@ export const SETTINGS_PAGES: Record<string, () => React.JSX.Element> = {
   posts: MyPosts,
   invite: Invite,
   support: Support,
+  inquiry: InquiryFormScreen,
+  terms: TermsOfService,
+  privacy: PrivacyPolicy,
 };

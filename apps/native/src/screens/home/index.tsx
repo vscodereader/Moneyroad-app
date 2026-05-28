@@ -9,6 +9,7 @@ import {
   NewsCardSkeleton,
   SignalCard,
   WatchRow,
+  WatchRowSkeleton,
 } from "@/components/cards";
 import { Icon } from "@/components/icons";
 import { IconButton, MrHeader, MrScreen, SectionHead } from "@/components/ui";
@@ -25,6 +26,7 @@ const NEWS_SKELETON_KEYS = [
   "news-skeleton-2",
   "news-skeleton-3",
 ];
+const WATCHLIST_SKELETON_KEYS = ["watch-skeleton-1", "watch-skeleton-2"];
 
 function greeting(): string {
   const hour = new Date().getHours();
@@ -68,9 +70,11 @@ function WatchlistPreview({
 }) {
   if (isLoading) {
     return (
-      <View style={{ alignItems: "center", paddingVertical: 28 }}>
-        <ActivityIndicator color={t.primary} />
-      </View>
+      <>
+        {WATCHLIST_SKELETON_KEYS.map((key) => (
+          <WatchRowSkeleton key={key} />
+        ))}
+      </>
     );
   }
   if (items.length === 0) {

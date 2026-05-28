@@ -219,6 +219,31 @@ export function WatchRow({
   );
 }
 
+// ── Watchlist row loading placeholder ─────────────────────────
+export function WatchRowSkeleton() {
+  const { t } = useMrTheme();
+  return (
+    <View
+      style={{
+        alignItems: "center",
+        backgroundColor: t.bg,
+        borderTopColor: t.border,
+        borderTopWidth: 1,
+        flexDirection: "row",
+        gap: 12,
+        paddingHorizontal: 16,
+        paddingVertical: 14,
+      }}
+    >
+      <Skeleton height={36} radius={10} width={36} />
+      <View style={{ flex: 1, minWidth: 0, gap: 6 }}>
+        <Skeleton height={15} radius={4} width="55%" />
+        <Skeleton height={11} radius={4} width={84} />
+      </View>
+    </View>
+  );
+}
+
 // ── Signal card (expandable) ──────────────────────────────────
 export function SignalCard({
   signal,

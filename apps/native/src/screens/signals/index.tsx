@@ -175,6 +175,7 @@ export default function SignalsScreen() {
         renderItem={({ item }) => (
           <SignalCard
             expanded={openId === item.id}
+            onStockPress={() => nav.openStock(item.code)}
             onToggle={() => setOpenId(openId === item.id ? null : item.id)}
             signal={item}
           />

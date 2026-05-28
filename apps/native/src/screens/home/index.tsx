@@ -226,6 +226,7 @@ export default function HomeScreen() {
           <SignalCard
             expanded={openSigId === sig.id}
             key={sig.id}
+            onStockPress={() => nav.openStock(sig.code)}
             onToggle={() => setOpenSigId(openSigId === sig.id ? null : sig.id)}
             signal={sig}
           />

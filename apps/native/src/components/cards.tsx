@@ -249,11 +249,13 @@ export function SignalCard({
   signal,
   expanded,
   onToggle,
+  onStockPress,
   hideStock = false,
 }: {
   signal: Signal;
   expanded: boolean;
   onToggle: () => void;
+  onStockPress?: () => void;
   hideStock?: boolean;
 }) {
   const { t } = useMrTheme();
@@ -375,17 +377,21 @@ export function SignalCard({
             {signal.body}
           </Text>
           {stock ? (
-            <View
-              style={{
+            <Pressable
+              android_ripple={onStockPress ? { color: t.bgMuted } : undefined}
+              disabled={!onStockPress}
+              onPress={onStockPress}
+              style={({ pressed }) => ({
                 marginTop: 12,
                 flexDirection: "row",
                 alignItems: "center",
                 gap: 10,
                 paddingVertical: 10,
                 paddingHorizontal: 12,
-                backgroundColor: t.bgSubtle,
+                backgroundColor:
+                  pressed && onStockPress ? t.bgMuted : t.bgSubtle,
                 borderRadius: 10,
-              }}
+              })}
             >
               <StockLogo radius={8} size={32} stock={stock} />
               <View style={{ flex: 1 }}>
@@ -408,7 +414,10 @@ export function SignalCard({
                 t={t}
                 width={56}
               />
-            </View>
+              {onStockPress ? (
+                <Icon.chevRight color={t.fgSubtle} size={18} />
+              ) : null}
+            </Pressable>
           ) : null}
           <Text style={{ marginTop: 10, fontSize: 11, color: t.fgSubtle }}>
             ⓘ 매매 권유가 아니며 정보 제공 목적입니다.

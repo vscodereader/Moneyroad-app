@@ -1,9 +1,22 @@
-import ComingSoonScreen from "@/screens/coming-soon";
+import { useLocalSearchParams } from "expo-router";
 
-// Settings pages are post-MVP. Until then this route shows a transparent
-// "coming soon" overlay over the previous screen (see the transparentModal
-// presentation in (moneyroad)/_layout.tsx). The real pages live in
-// @/screens/settings and can be restored here later.
+import { AuthGate } from "@/components/auth-gate";
+import ComingSoonScreen from "@/screens/coming-soon";
+import SettingsPageScreen from "@/screens/settings";
+
+// Post-MVP pages show a transparent "coming soon" overlay over the previous
+// screen (see the transparentModal presentation in (moneyroad)/_layout.tsx).
+// Every other settings page renders its real screen.
+const COMING_SOON_PAGES = new Set(["ai", "display"]);
+
 export default function SettingsPageRoute() {
-  return <ComingSoonScreen />;
+  const { page } = useLocalSearchParams<{ page: string }>();
+  if (COMING_SOON_PAGES.has(page)) {
+    return <ComingSoonScreen />;
+  }
+  return (
+    <AuthGate>
+      <SettingsPageScreen />
+    </AuthGate>
+  );
 }

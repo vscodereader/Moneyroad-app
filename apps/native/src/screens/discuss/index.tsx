@@ -65,7 +65,7 @@ function EmptyState({ title, body }: { title: string; body: string }) {
 
 export default function DiscussScreen() {
   const { t } = useMrTheme();
-  const [tab, setTab] = useState<DiscussTab>("hot");
+  const [tab, setTab] = useState<DiscussTab>("watch");
   const { data: session } = authClient.useSession();
   const isAdmin = session?.user.role === "admin";
   const isAuthed = Boolean(session?.user);

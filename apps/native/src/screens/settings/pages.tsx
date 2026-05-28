@@ -10,6 +10,7 @@ import { useMrTheme } from "@/hooks/use-mr-theme";
 import { useNotificationSettings } from "@/hooks/use-notification-settings";
 import InquiryFormScreen from "@/screens/settings/inquiry";
 import { PrivacyPolicy, TermsOfService } from "@/screens/settings/legal";
+import ProfileScreen from "@/screens/settings/profile";
 import {
   SettingsGroup,
   SettingsRow,
@@ -1249,4 +1250,5 @@ export const SETTINGS_PAGES: Record<string, () => React.JSX.Element> = {
   inquiry: InquiryFormScreen,
   terms: TermsOfService,
   privacy: PrivacyPolicy,
+  profile: ProfileScreen,
 };

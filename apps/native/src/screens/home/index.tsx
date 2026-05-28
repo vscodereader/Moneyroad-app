@@ -1,6 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
-import { ActivityIndicator, ScrollView, Text, View } from "react-native";
+import {
+  ActivityIndicator,
+  Pressable,
+  ScrollView,
+  Text,
+  View,
+} from "react-native";
 
 import {
   // AiBriefCard,
@@ -39,23 +45,42 @@ function greeting(): string {
   return "장 마감 후 정리해볼까요";
 }
 
-function EmptyHint({ label, t }: { label: string; t: MrTokens }) {
-  return (
-    <View
-      style={{
-        alignItems: "center",
-        backgroundColor: t.bgSubtle,
-        borderRadius: 12,
-        gap: 8,
-        marginHorizontal: 16,
-        paddingVertical: 28,
-      }}
-    >
+function EmptyHint({
+  label,
+  onPress,
+  t,
+}: {
+  label: string;
+  onPress?: () => void;
+  t: MrTokens;
+}) {
+  const boxStyle = {
+    alignItems: "center" as const,
+    backgroundColor: t.bgSubtle,
+    borderRadius: 12,
+    gap: 8,
+    marginHorizontal: 16,
+    paddingVertical: 28,
+  };
+  const content = (
+    <>
       <Icon.navWatch color={t.fgSubtle} size={26} />
       <Text style={{ color: t.fgSubtle, fontSize: 13, textAlign: "center" }}>
         {label}
       </Text>
-    </View>
+    </>
+  );
+  if (!onPress) {
+    return <View style={boxStyle}>{content}</View>;
+  }
+  return (
+    <Pressable
+      android_ripple={{ color: t.bgMuted }}
+      onPress={onPress}
+      style={({ pressed }) => [boxStyle, pressed ? { opacity: 0.7 } : null]}
+    >
+      {content}
+    </Pressable>
   );
 }
 
@@ -78,7 +103,13 @@ function WatchlistPreview({
     );
   }
   if (items.length === 0) {
-    return <EmptyHint label="관심 종목이 아직 없어요." t={t} />;
+    return (
+      <EmptyHint
+        label="관심 종목이 아직 없어요."
+        onPress={nav.openWatchlist}
+        t={t}
+      />
+    );
   }
   return (
     <>

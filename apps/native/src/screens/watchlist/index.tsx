@@ -1,8 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  BackHandler,
+  Keyboard,
   Pressable,
   ScrollView,
   Text,
@@ -139,6 +141,7 @@ export default function WatchlistScreen() {
 
   // Optimistic toggle: flip the cached list immediately so the +/check state
   // updates without waiting for the round-trip, with a light haptic tap.
+  // Adding also clears the query so the user lands on their updated list.
   const addEntry = (entry: StockEntry) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     queryClient.setQueryData<WatchItem[]>(listKey, (old) => {
@@ -149,6 +152,8 @@ export default function WatchlistScreen() {
       return [{ ...entry, createdAt: new Date().toISOString() }, ...cur];
     });
     addMut.mutate({ stockCode: entry.code });
+    setQ("");
+    Keyboard.dismiss();
   };
 
   const removeEntry = (code: string) => {
@@ -159,11 +164,36 @@ export default function WatchlistScreen() {
     removeMut.mutate({ stockCode: code });
   };
 
+  // Back exits search first (returns to the list), then leaves the screen.
+  const exitSearch = () => {
+    setQ("");
+    Keyboard.dismiss();
+  };
+  const handleBack = () => {
+    if (searching) {
+      exitSearch();
+      return;
+    }
+    nav.back();
+  };
+
+  // Android hardware back mirrors the header back while searching.
+  useEffect(() => {
+    if (!searching) {
+      return;
+    }
+    const sub = BackHandler.addEventListener("hardwareBackPress", () => {
+      exitSearch();
+      return true;
+    });
+    return () => sub.remove();
+  }, [searching]);
+
   const items = list.data ?? [];
 
   return (
     <MrScreen>
-      <MrHeader left={<BackButton onPress={nav.back} />} title="관심 종목" />
+      <MrHeader left={<BackButton onPress={handleBack} />} title="관심 종목" />
       <View style={{ paddingHorizontal: 16, paddingVertical: 10 }}>
         <View
           style={{

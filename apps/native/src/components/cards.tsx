@@ -3,7 +3,7 @@
 import { Pressable, Text, View } from "react-native";
 import { Gradient, IndexIntradayChart, Sparkline } from "@/components/charts";
 import { Icon, SIGNAL_ACTION_ICON } from "@/components/icons";
-import { ScorePill, StockLogo, StrengthBar } from "@/components/ui";
+import { ScorePill, Skeleton, StockLogo, StrengthBar } from "@/components/ui";
 import { type LiveIndex, SESSION_MINUTES } from "@/hooks/use-index-stream";
 import { useMrTheme } from "@/hooks/use-mr-theme";
 import type { NewsItem, Signal, Stock } from "@/utils/data";
@@ -522,6 +522,33 @@ export function NewsCard({
         </View>
       </View>
     </Pressable>
+  );
+}
+
+// ── News card loading placeholder ─────────────────────────────
+// Mirrors NewsCard's layout (thumb + category/title/meta) with Skeletons.
+export function NewsCardSkeleton() {
+  const { t } = useMrTheme();
+  return (
+    <View
+      style={{
+        flexDirection: "row",
+        gap: 12,
+        paddingVertical: 14,
+        paddingHorizontal: 16,
+        backgroundColor: t.bg,
+        borderTopWidth: 1,
+        borderTopColor: t.border,
+      }}
+    >
+      <Skeleton height={78} radius={8} width={78} />
+      <View style={{ flex: 1, minWidth: 0, gap: 8 }}>
+        <Skeleton height={12} radius={4} width={56} />
+        <Skeleton height={14} radius={4} width="92%" />
+        <Skeleton height={14} radius={4} width="64%" />
+        <Skeleton height={11} radius={4} width={110} />
+      </View>
+    </View>
   );
 }
 

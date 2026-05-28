@@ -6,6 +6,7 @@ import {
   // AiBriefCard,
   IndexStrip,
   NewsCard,
+  NewsCardSkeleton,
   SignalCard,
   WatchRow,
 } from "@/components/cards";
@@ -14,10 +15,16 @@ import { IconButton, MrHeader, MrScreen, SectionHead } from "@/components/ui";
 import { useIndexStream } from "@/hooks/use-index-stream";
 import { useMrTheme } from "@/hooks/use-mr-theme";
 import { authClient } from "@/lib/auth-client";
-import { indices as fallbackIndices, news } from "@/utils/data";
+import { indices as fallbackIndices } from "@/utils/data";
 import { nav } from "@/utils/nav";
 import { orpc } from "@/utils/orpc";
 import type { MrTokens } from "@/utils/theme";
+
+const NEWS_SKELETON_KEYS = [
+  "news-skeleton-1",
+  "news-skeleton-2",
+  "news-skeleton-3",
+];
 
 function greeting(): string {
   const hour = new Date().getHours();
@@ -93,7 +100,10 @@ export default function HomeScreen() {
     orpc.signal.feed.queryOptions({ input: { window: "24h", limit: 3 } })
   );
   const topSignals = topSignalsQuery.data?.items ?? [];
-  const topNews = news.slice(0, 3);
+  const newsQuery = useQuery(
+    orpc.news.feed.queryOptions({ input: { tab: "all", limit: 3 } })
+  );
+  const topNews = newsQuery.data?.items ?? [];
   // Real watchlist (codes/names/market); price/score await the market API.
   const watchlistQuery = useQuery(
     orpc.watchlist.list.queryOptions({ enabled: isLoggedIn })
@@ -214,9 +224,17 @@ export default function HomeScreen() {
           onMore={() => nav.goTab("news")}
           title="주요 뉴스"
         />
-        {topNews.map((n) => (
-          <NewsCard key={n.id} news={n} />
-        ))}
+        {(() => {
+          if (newsQuery.isLoading) {
+            return NEWS_SKELETON_KEYS.map((key) => (
+              <NewsCardSkeleton key={key} />
+            ));
+          }
+          if (topNews.length === 0) {
+            return <EmptyHint label="표시할 뉴스가 아직 없어요." t={t} />;
+          }
+          return topNews.map((n) => <NewsCard key={n.id} news={n} />);
+        })()}
 
         <SectionHead
           more={

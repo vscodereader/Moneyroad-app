@@ -1,11 +1,36 @@
+import { useEffect } from "react";
 import { Pressable, Text, View } from "react-native";
+import Animated, {
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withTiming,
+} from "react-native-reanimated";
 
 import { Icon } from "@/components/icons";
 import { nav } from "@/utils/nav";
 
+const SPIN_DURATION_MS = 3600;
+
 // Full-screen, semi-transparent "coming soon" overlay. Rendered over the
 // previous screen via a transparentModal route; tapping anywhere goes back.
+// The gear slowly rotates to convey "work in progress".
 export default function ComingSoonScreen() {
+  const spin = useSharedValue(0);
+
+  useEffect(() => {
+    spin.value = withRepeat(
+      withTiming(1, { duration: SPIN_DURATION_MS, easing: Easing.linear }),
+      -1,
+      false
+    );
+  }, [spin]);
+
+  const spinStyle = useAnimatedStyle(() => ({
+    transform: [{ rotate: `${spin.value * 360}deg` }],
+  }));
+
   return (
     <Pressable
       onPress={nav.back}
@@ -27,7 +52,9 @@ export default function ComingSoonScreen() {
           justifyContent: "center",
         }}
       >
-        <Icon.sparkles color="#fff" size={28} />
+        <Animated.View style={spinStyle}>
+          <Icon.gear color="#fff" size={28} />
+        </Animated.View>
       </View>
       <Text
         style={{

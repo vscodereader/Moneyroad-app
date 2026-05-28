@@ -5,6 +5,7 @@ import { discussionRouter } from "./discussion";
 import { inquiryRouter } from "./inquiry";
 import { newsRouter } from "./news";
 import { notificationRouter } from "./notification";
+import { priceAlertRouter } from "./price-alert";
 import { signalRouter } from "./signal";
 import { stockRouter } from "./stock";
 import { todoRouter } from "./todo";
@@ -24,6 +25,7 @@ export const appRouter = {
   watchlist: watchlistRouter,
   discussion: discussionRouter,
   inquiry: inquiryRouter,
+  priceAlert: priceAlertRouter,
 };
 export type AppRouter = typeof appRouter;
 export type AppRouterClient = RouterClient<typeof appRouter>;

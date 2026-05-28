@@ -8,5 +8,6 @@ export * from "./signal";
 export * from "./stock-master";
 export * from "./todo";
 export * from "./user-notification-setting";
+export * from "./user-price-alert";
 export * from "./user-push-token";
 export * from "./user-watchlist";

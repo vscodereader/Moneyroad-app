@@ -11,7 +11,8 @@ import {
 
 import { SignalCard } from "@/components/cards";
 import { Icon } from "@/components/icons";
-import { Chip, IconButton, MrHeader, MrScreen } from "@/components/ui";
+//import { Chip, IconButton, MrHeader, MrScreen } from "@/components/ui";
+import { Chip, MrHeader, MrScreen } from "@/components/ui";
 import { useMrTheme } from "@/hooks/use-mr-theme";
 import { authClient } from "@/lib/auth-client";
 import type { Signal } from "@/utils/data";
@@ -65,11 +66,11 @@ export default function SignalsScreen() {
   return (
     <MrScreen>
       <MrHeader
-        right={
-          <IconButton>
-            <Icon.sliders color={t.fgStrong} size={22} />
-          </IconButton>
-        }
+        // right={
+        //   <IconButton>
+        //     <Icon.sliders color={t.fgStrong} size={22} />
+        //   </IconButton>
+        // }
         title="시그널"
       />
       <FlatList

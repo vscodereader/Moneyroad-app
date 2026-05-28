@@ -8,6 +8,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 
 import { AppThemeProvider } from "@/contexts/app-theme-context";
+import { useLogCurrentScreen } from "@/hooks/use-log-current-screen";
 import { usePushRegistration } from "@/hooks/use-push-registration";
 import { hydrateOnboarding } from "@/utils/onboarding";
 import { queryClient } from "@/utils/orpc";
@@ -19,6 +20,8 @@ export const unstable_settings = {
 function StackLayout() {
   // Register the device's push token once the user is signed in.
   usePushRegistration();
+  // Dev-only: log the active route to the Metro console.
+  useLogCurrentScreen();
   return (
     <Stack screenOptions={{}}>
       <Stack.Screen name="(moneyroad)" options={{ headerShown: false }} />

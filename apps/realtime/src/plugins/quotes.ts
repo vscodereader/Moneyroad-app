@@ -2,9 +2,30 @@ import { env } from "@moneyroad-app/env/realtime";
 import { verifyStreamToken } from "@moneyroad-app/stream-token";
 import { log } from "evlog";
 import type { FastifyInstance } from "fastify";
+import {
+  fetchIndexIntraday,
+  type IndexIntraday,
+} from "@/services/index-intraday";
 import { quoteHub, streamQuotes } from "@/services/quotes";
 
 const MAX_SYMBOLS = 40;
+
+// 분봉 시드는 분 단위로만 갱신되므로 짧게 캐시해 KIS REST 호출을 줄인다.
+const INTRADAY_TTL_MS = 30_000;
+const intradayCache = new Map<
+  string,
+  { at: number; data: IndexIntraday | null }
+>();
+
+async function getIntraday(code: string): Promise<IndexIntraday | null> {
+  const hit = intradayCache.get(code);
+  if (hit && Date.now() - hit.at < INTRADAY_TTL_MS) {
+    return hit.data;
+  }
+  const data = await fetchIndexIntraday(code);
+  intradayCache.set(code, { at: Date.now(), data });
+  return data;
+}
 
 function parseSymbols(raw: string | undefined): string[] {
   if (!raw) {
@@ -22,6 +43,37 @@ function parseSymbols(raw: string | undefined): string[] {
 
 export function registerQuotesPlugin(app: FastifyInstance) {
   app.get("/healthz", () => ({ status: "ok", clients: quoteHub.clientCount }));
+
+  // Today's intraday seed for index charts (KIS REST):
+  //   GET /index/intraday?symbols=0001,1001&token=<stream token>
+  // Returns per-code { prevClose, points[] } for codes that resolved; codes the
+  // upstream couldn't serve (e.g. paper/VTS) are simply omitted so the client
+  // falls back to live-tick accumulation.
+  app.get<{ Querystring: { symbols?: string; token?: string } }>(
+    "/index/intraday",
+    async (request, reply) => {
+      const payload = request.query.token
+        ? verifyStreamToken(request.query.token, env.STREAM_TOKEN_SECRET)
+        : null;
+      if (!payload) {
+        reply
+          .code(401)
+          .send({ error: "Unauthorized", code: "INVALID_STREAM_TOKEN" });
+        return;
+      }
+      const symbols = parseSymbols(request.query.symbols);
+      const result: Record<string, IndexIntraday> = {};
+      // Sequential: KIS (esp. VTS) rate-limits parallel quotation calls, which
+      // can intermittently drop one symbol. Two cached calls are cheap.
+      for (const code of symbols) {
+        const data = await getIntraday(code);
+        if (data) {
+          result[code] = data;
+        }
+      }
+      reply.send(result);
+    }
+  );
 
   // SSE stream of quotes for the requested symbols:
   //   GET /stream/quotes?symbols=005930,000660&token=<stream token>

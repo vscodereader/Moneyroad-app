@@ -1,17 +1,18 @@
 // MoneyRoad — composite cards & list rows
 
 import { Pressable, Text, View } from "react-native";
-import { Gradient, Sparkline } from "@/components/charts";
+import { Gradient, IndexIntradayChart, Sparkline } from "@/components/charts";
 import { Icon, SIGNAL_ACTION_ICON } from "@/components/icons";
 import { ScorePill, StockLogo, StrengthBar } from "@/components/ui";
+import { type LiveIndex, SESSION_MINUTES } from "@/hooks/use-index-stream";
 import { useMrTheme } from "@/hooks/use-mr-theme";
-import type { MarketIndex, NewsItem, Signal, Stock } from "@/utils/data";
+import type { NewsItem, Signal, Stock } from "@/utils/data";
 import { findStock } from "@/utils/data";
 import { changeColor, fmt } from "@/utils/format";
 import { type MrTokens, signalActionMeta } from "@/utils/theme";
 
 // ── Index strip (KOSPI / KOSDAQ) ──────────────────────────────
-export function IndexStrip({ indices }: { indices: MarketIndex[] }) {
+export function IndexStrip({ indices }: { indices: LiveIndex[] }) {
   const { t } = useMrTheme();
   return (
     <View
@@ -38,23 +39,13 @@ export function IndexStrip({ indices }: { indices: MarketIndex[] }) {
             <Text style={{ fontSize: 11, color: t.fgMuted, fontWeight: "600" }}>
               {idx.name}
             </Text>
-            <Sparkline
-              data={[
-                100,
-                102,
-                99,
-                101,
-                103,
-                100,
-                102,
-                105,
-                103,
-                idx.change > 0 ? 108 : 96,
-              ]}
-              height={16}
-              positive={idx.change > 0}
+            <IndexIntradayChart
+              height={20}
+              prevClose={idx.prevClose}
+              series={idx.series}
+              sessionMinutes={SESSION_MINUTES}
               t={t}
-              width={48}
+              width={56}
             />
           </View>
           <Text style={{ fontSize: 17, fontWeight: "800", color: t.fgStrong }}>

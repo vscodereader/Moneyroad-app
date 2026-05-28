@@ -11,9 +11,10 @@ import {
 } from "@/components/cards";
 import { Icon } from "@/components/icons";
 import { IconButton, MrHeader, MrScreen, SectionHead } from "@/components/ui";
+import { useIndexStream } from "@/hooks/use-index-stream";
 import { useMrTheme } from "@/hooks/use-mr-theme";
 import { authClient } from "@/lib/auth-client";
-import { indices, news } from "@/utils/data";
+import { indices as fallbackIndices, news } from "@/utils/data";
 import { nav } from "@/utils/nav";
 import { orpc } from "@/utils/orpc";
 import type { MrTokens } from "@/utils/theme";
@@ -87,6 +88,7 @@ export default function HomeScreen() {
   const { data: session } = authClient.useSession();
   const isLoggedIn = !!session?.user;
   const displayName = session?.user?.name?.trim() || "투자자";
+  const indices = useIndexStream(fallbackIndices);
   const topSignalsQuery = useQuery(
     orpc.signal.feed.queryOptions({ input: { window: "24h", limit: 3 } })
   );

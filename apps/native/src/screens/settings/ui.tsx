@@ -23,7 +23,12 @@ export function SettingsScreen({
         right={right}
         title={title}
       />
-      <ScrollView showsVerticalScrollIndicator={false}>{children}</ScrollView>
+      <ScrollView
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        {children}
+      </ScrollView>
     </MrScreen>
   );
 }

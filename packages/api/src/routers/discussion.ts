@@ -41,7 +41,13 @@ function counts(roomIdRef: SQL<number>) {
     likesCount: sql<number>`(SELECT COUNT(*)::int FROM ${discussionRoomLike} WHERE ${discussionRoomLike.roomId} = ${roomIdRef})`,
     membersCount: sql<number>`(SELECT COUNT(*)::int FROM ${discussionRoomMember} WHERE ${discussionRoomMember.roomId} = ${roomIdRef})`,
     repliesCount: sql<number>`(SELECT COUNT(*)::int FROM ${discussionMessage} WHERE ${discussionMessage.roomId} = ${roomIdRef})`,
-    lastMessageAt: sql<Date | null>`(SELECT MAX(${discussionMessage.createdAt}) FROM ${discussionMessage} WHERE ${discussionMessage.roomId} = ${roomIdRef})`,
+    // Raw sql subquery: pg returns a tz-naive string, not a Date. Decode it the
+    // same way drizzle decodes a `timestamp` column (treat as UTC) so callers can
+    // safely call `.toISOString()` / pass it to `relativeTime`.
+    lastMessageAt:
+      sql<Date | null>`(SELECT MAX(${discussionMessage.createdAt}) FROM ${discussionMessage} WHERE ${discussionMessage.roomId} = ${roomIdRef})`.mapWith(
+        (value) => (value == null ? null : new Date(`${value as string}+0000`))
+      ),
   };
 }
 

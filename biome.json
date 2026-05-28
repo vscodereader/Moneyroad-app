@@ -89,6 +89,9 @@
   "overrides": [
     {
       "includes": ["apps/native/**", "apps/web/**"],
+      "javascript": {
+        "globals": ["__DEV__"]
+      },
       "linter": {
         "rules": {
           "correctness": {

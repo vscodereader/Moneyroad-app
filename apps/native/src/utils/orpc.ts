@@ -11,7 +11,16 @@ import { authClient } from "@/lib/auth-client";
 export const queryClient = new QueryClient({
   queryCache: new QueryCache({
     onError: (error) => {
-      console.log(error);
+      // In dev the server attaches the real message + stack (see the server's
+      // orpc plugin). Surface both so failures are debuggable from Metro.
+      if (__DEV__) {
+        const serverStack = (error as { data?: { stack?: string } }).data
+          ?.stack;
+        console.error("[orpc] query failed:", error.message);
+        if (serverStack) {
+          console.error("[orpc] server stack:\n", serverStack);
+        }
+      }
     },
   }),
 });

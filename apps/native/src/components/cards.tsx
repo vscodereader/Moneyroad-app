@@ -816,3 +816,38 @@ export function DiscussionRoomRow({
     </Pressable>
   );
 }
+
+export function DiscussionRoomRowSkeleton() {
+  const { t } = useMrTheme();
+  return (
+    <View
+      style={{
+        paddingVertical: 14,
+        paddingHorizontal: 16,
+        backgroundColor: t.bg,
+        borderTopWidth: 1,
+        borderTopColor: t.border,
+      }}
+    >
+      <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
+        <Skeleton height={28} radius={999} width={28} />
+        <Skeleton height={11} radius={4} width={64} />
+        <Skeleton height={16} radius={4} width={56} />
+        <Skeleton
+          height={11}
+          radius={4}
+          style={{ marginLeft: "auto" }}
+          width={40}
+        />
+      </View>
+      <Skeleton height={15} radius={4} style={{ marginTop: 10 }} width="70%" />
+      <Skeleton height={13} radius={4} style={{ marginTop: 8 }} width="100%" />
+      <Skeleton height={13} radius={4} style={{ marginTop: 6 }} width="45%" />
+      <View style={{ flexDirection: "row", gap: 16, marginTop: 12 }}>
+        <Skeleton height={13} radius={4} width={28} />
+        <Skeleton height={13} radius={4} width={28} />
+        <Skeleton height={13} radius={4} width={28} />
+      </View>
+    </View>
+  );
+}

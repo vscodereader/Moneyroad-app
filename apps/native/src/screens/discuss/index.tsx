@@ -1,7 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import {
-  ActivityIndicator,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -9,7 +8,10 @@ import {
   View,
 } from "react-native";
 
-import { DiscussionRoomRow } from "@/components/cards";
+import {
+  DiscussionRoomRow,
+  DiscussionRoomRowSkeleton,
+} from "@/components/cards";
 import { Icon } from "@/components/icons";
 import { Chip, MrHeader, MrScreen } from "@/components/ui";
 import { useMrTheme } from "@/hooks/use-mr-theme";
@@ -24,6 +26,8 @@ const TABS: { k: DiscussTab; l: string }[] = [
   { k: "watch", l: "관심 종목" },
   { k: "recent", l: "최신" },
 ];
+
+const ROOM_SKELETON_KEYS = ["s1", "s2", "s3", "s4"] as const;
 
 function EmptyState({ title, body }: { title: string; body: string }) {
   const { t } = useMrTheme();
@@ -122,11 +126,11 @@ export default function DiscussScreen() {
           ))}
         </ScrollView>
 
-        {roomsQuery.isPending ? (
-          <View style={{ paddingVertical: 48, alignItems: "center" }}>
-            <ActivityIndicator color={t.primary} />
-          </View>
-        ) : null}
+        {roomsQuery.isPending
+          ? ROOM_SKELETON_KEYS.map((key) => (
+              <DiscussionRoomRowSkeleton key={key} />
+            ))
+          : null}
 
         {roomsQuery.isSuccess && rooms.length === 0
           ? renderEmpty(tab, isAuthed)

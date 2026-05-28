@@ -144,6 +144,8 @@ export const newsRouter = {
     .input(
       z.object({
         tab: tabSchema.default("all"),
+        // Limit to one stock (used by the stock detail screen).
+        code: z.string().optional(),
         // Keyset cursor: pubDate (ISO) of the last item from the previous page.
         cursor: z.string().optional(),
         limit: z.number().int().min(1).max(MAX_LIMIT).default(DEFAULT_LIMIT),
@@ -176,6 +178,10 @@ export const newsRouter = {
         if (catFilter) {
           filters.push(catFilter);
         }
+      }
+
+      if (input.code) {
+        filters.push(eq(news.stockCode, input.code));
       }
 
       if (input.cursor) {

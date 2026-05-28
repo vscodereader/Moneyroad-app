@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocalSearchParams } from "expo-router";
 import { useState } from "react";
 import { Dimensions, Pressable, ScrollView, Text, View } from "react-native";
@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const CHART_WIDTH = Dimensions.get("window").width - 16;
 
-import { NewsCard, SignalCard } from "@/components/cards";
+import { DiscussionRoomRow, NewsCard, SignalCard } from "@/components/cards";
 // import { SignalDial, StockChart } from "@/components/charts";
 import { StockChart } from "@/components/charts";
 import { Icon } from "@/components/icons";
@@ -18,7 +18,8 @@ import {
   SectionHead,
 } from "@/components/ui";
 import { useMrTheme } from "@/hooks/use-mr-theme";
-import { discussionRooms, findStock, news, stocks } from "@/utils/data";
+import { authClient } from "@/lib/auth-client";
+import { findStock, stocks } from "@/utils/data";
 import { changeColor, fmt } from "@/utils/format";
 import { nav } from "@/utils/nav";
 import { orpc } from "@/utils/orpc";
@@ -71,16 +72,40 @@ export default function StockDetailScreen() {
   const [openSignal, setOpenSignal] = useState<string | null>(null);
 
   const up = stock.change > 0;
+  const queryClient = useQueryClient();
+  const { data: session } = authClient.useSession();
+  const isAuthed = Boolean(session?.user);
+
   const relSignalsQuery = useQuery(
     orpc.signal.feed.queryOptions({
       input: { code: stock.code, window: "24h", limit: 2 },
     })
   );
   const relSignals = relSignalsQuery.data?.items ?? [];
-  const relNews = news.filter((n) => n.code === stock.code).slice(0, 2);
-  const relRooms = discussionRooms
-    .filter((r) => r.code === stock.code)
-    .slice(0, 2);
+
+  const relNewsQuery = useQuery(
+    orpc.news.feed.queryOptions({ input: { code: stock.code, limit: 2 } })
+  );
+  const relNews = relNewsQuery.data?.items ?? [];
+
+  const relRoomsOptions = orpc.discussion.rooms.queryOptions({
+    input: { tab: "recent", stockCode: stock.code },
+  });
+  const relRoomsQuery = useQuery(relRoomsOptions);
+  const relRooms = (relRoomsQuery.data ?? []).slice(0, 2);
+
+  const toggleLike = useMutation(
+    orpc.discussion.toggleLike.mutationOptions({
+      onSuccess: () =>
+        queryClient.invalidateQueries({ queryKey: relRoomsOptions.queryKey }),
+    })
+  );
+  const handleToggleLike = (roomId: number) => {
+    if (!isAuthed) {
+      return;
+    }
+    toggleLike.mutate({ roomId });
+  };
 
   const summaryBg = summaryBgFor(stock.score, t);
   const verdictColor = verdictColorFor(stock.score, t);
@@ -354,9 +379,17 @@ export default function StockDetailScreen() {
           onMore={() => nav.goTab("news")}
           title="관련 뉴스"
         />
-        {relNews.map((n) => (
-          <NewsCard key={n.id} news={n} showAiChip />
-        ))}
+        {relNews.length > 0 ? (
+          relNews.map((n) => <NewsCard key={n.id} news={n} showAiChip />)
+        ) : (
+          <View style={{ padding: 40 }}>
+            <Text
+              style={{ textAlign: "center", color: t.fgMuted, fontSize: 14 }}
+            >
+              관련 뉴스가 아직 없어요.
+            </Text>
+          </View>
+        )}
 
         {/* Related discussion */}
         <SectionHead
@@ -364,95 +397,24 @@ export default function StockDetailScreen() {
           onMore={() => nav.goTab("discuss")}
           title="관련 토론"
         />
-        {relRooms.map((r) => (
-          <Pressable
-            key={r.id}
-            onPress={() => nav.openDiscussionRoom(r.id)}
-            style={({ pressed }) => ({
-              paddingVertical: 14,
-              paddingHorizontal: 16,
-              backgroundColor: pressed ? t.bgSubtle : t.bg,
-              borderTopWidth: 1,
-              borderTopColor: t.border,
-            })}
-          >
-            <View
-              style={{ flexDirection: "row", gap: 8, alignItems: "center" }}
-            >
-              <View
-                style={{
-                  width: 28,
-                  height: 28,
-                  borderRadius: 999,
-                  backgroundColor: t.bgMuted,
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <Text
-                  style={{ fontSize: 12, fontWeight: "700", color: t.fgMuted }}
-                >
-                  {r.author.slice(0, 1)}
-                </Text>
-              </View>
-              <Text
-                style={{ fontSize: 11, color: t.fgStrong, fontWeight: "700" }}
-              >
-                {r.author}
-              </Text>
-              <Text style={{ fontSize: 11, color: t.fgMuted }}>·</Text>
-              <Text
-                style={{ fontSize: 11, color: t.fgMuted, fontWeight: "600" }}
-              >
-                {r.time}
-              </Text>
-            </View>
+        {relRooms.length > 0 ? (
+          relRooms.map((r) => (
+            <DiscussionRoomRow
+              key={r.id}
+              onPress={() => nav.openDiscussionRoom(r.id)}
+              onToggleLike={() => handleToggleLike(r.id)}
+              room={r}
+            />
+          ))
+        ) : (
+          <View style={{ padding: 40 }}>
             <Text
-              style={{
-                fontSize: 14,
-                fontWeight: "700",
-                color: t.fgStrong,
-                marginTop: 6,
-                lineHeight: 20,
-              }}
+              style={{ textAlign: "center", color: t.fgMuted, fontSize: 14 }}
             >
-              {r.title}
+              관련 토론방이 아직 없어요.
             </Text>
-            <Text
-              numberOfLines={2}
-              style={{
-                fontSize: 13,
-                color: t.fgMuted,
-                marginTop: 4,
-                lineHeight: 20,
-              }}
-            >
-              {r.body}
-            </Text>
-            <View style={{ flexDirection: "row", gap: 14, marginTop: 8 }}>
-              <View
-                style={{ flexDirection: "row", alignItems: "center", gap: 4 }}
-              >
-                <Icon.thumbsUp color={t.fgMuted} size={13} />
-                <Text
-                  style={{ fontSize: 12, fontWeight: "600", color: t.fgMuted }}
-                >
-                  {r.likes}
-                </Text>
-              </View>
-              <View
-                style={{ flexDirection: "row", alignItems: "center", gap: 4 }}
-              >
-                <Icon.reply color={t.fgMuted} size={13} />
-                <Text
-                  style={{ fontSize: 12, fontWeight: "600", color: t.fgMuted }}
-                >
-                  {r.replies}
-                </Text>
-              </View>
-            </View>
-          </Pressable>
-        ))}
+          </View>
+        )}
 
         <View style={{ height: 24 + insets.bottom }} />
       </ScrollView>

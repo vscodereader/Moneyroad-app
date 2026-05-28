@@ -192,10 +192,20 @@ export const discussionRouter = {
    *   - recent: last_message_at DESC NULLS LAST, created_at DESC
    */
   rooms: publicProcedure
-    .input(z.object({ tab: tabSchema.default("hot") }))
+    .input(
+      z.object({
+        tab: tabSchema.default("hot"),
+        // Limit to one stock (used by the stock detail screen).
+        stockCode: z.string().optional(),
+      })
+    )
     .handler(async ({ context, input }) => {
       const userId = context.session?.user?.id ?? null;
       const filters: SQL[] = [];
+
+      if (input.stockCode) {
+        filters.push(eq(discussionRoom.stockCode, input.stockCode));
+      }
 
       if (input.tab === "watch") {
         if (!userId) {

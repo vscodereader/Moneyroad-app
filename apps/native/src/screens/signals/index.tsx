@@ -3,6 +3,7 @@ import { useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
+  Pressable,
   ScrollView,
   Text,
   View,
@@ -12,7 +13,9 @@ import { SignalCard } from "@/components/cards";
 import { Icon } from "@/components/icons";
 import { Chip, IconButton, MrHeader, MrScreen } from "@/components/ui";
 import { useMrTheme } from "@/hooks/use-mr-theme";
+import { authClient } from "@/lib/auth-client";
 import type { Signal } from "@/utils/data";
+import { nav } from "@/utils/nav";
 import { orpc } from "@/utils/orpc";
 import { SIGNAL_ACTION_KEYS, type SignalAction } from "@/utils/theme";
 
@@ -32,6 +35,8 @@ export default function SignalsScreen() {
   const { t } = useMrTheme();
   const [filter, setFilter] = useState<FilterKey>("all");
   const [openId, setOpenId] = useState<string | null>(null);
+  const { data: session } = authClient.useSession();
+  const isAdmin = session?.user.role === "admin";
 
   const counts = useQuery(
     orpc.signal.counts.queryOptions({ input: { window: "24h" } })
@@ -175,6 +180,30 @@ export default function SignalsScreen() {
         )}
         showsVerticalScrollIndicator={false}
       />
+
+      {isAdmin ? (
+        <Pressable
+          onPress={nav.openCreateSignal}
+          style={{
+            position: "absolute",
+            right: 16,
+            bottom: 24,
+            width: 52,
+            height: 52,
+            borderRadius: 999,
+            backgroundColor: t.primary,
+            alignItems: "center",
+            justifyContent: "center",
+            shadowColor: t.primary,
+            shadowOffset: { width: 0, height: 8 },
+            shadowOpacity: 0.5,
+            shadowRadius: 12,
+            elevation: 6,
+          }}
+        >
+          <Icon.plus color="#fff" size={24} />
+        </Pressable>
+      ) : null}
     </MrScreen>
   );
 }

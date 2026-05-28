@@ -22,6 +22,7 @@ export default function MoneyRoadLayout() {
         <Stack.Screen name="stock/[code]" />
         <Stack.Screen name="discussion-room/[id]" />
         <Stack.Screen name="discussion-room/new" />
+        <Stack.Screen name="signal/new" />
         <Stack.Screen name="settings/[page]" />
       </Stack>
     </>

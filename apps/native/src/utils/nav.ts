@@ -19,6 +19,7 @@ export const nav = {
     router.push(`${BASE}/discussion-room/${id}` as Href),
   openCreateDiscussionRoom: () =>
     router.push(`${BASE}/discussion-room/new` as Href),
+  openCreateSignal: () => router.push(`${BASE}/signal/new` as Href),
   openSettings: (page: string) =>
     router.push(`${BASE}/settings/${page}` as Href),
   goTab: (name: TabName) =>

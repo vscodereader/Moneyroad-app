@@ -23,7 +23,7 @@ export function buildServer() {
   app.register(registerNewsPlugin);
   app.register(registerSchedulerPlugin);
 
-  app.get("/", () => "OK");
+  app.get("/", () => "OK RT");
 
   return app;
 }

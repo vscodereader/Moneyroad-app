@@ -49,7 +49,7 @@ export function buildServer() {
   app.register(registerAiPlugin);
   app.register(registerStreamTokenPlugin);
 
-  app.get("/", () => "OK");
+  app.get("/", () => "OK API");
 
   return app;
 }

@@ -20,8 +20,13 @@ export default function MoneyRoadLayout() {
         <Stack.Screen name="search" />
         <Stack.Screen name="alerts" />
         <Stack.Screen name="stock/[code]" />
-        <Stack.Screen name="thread/[id]" />
-        <Stack.Screen name="settings/[page]" />
+        <Stack.Screen name="discussion-room/[id]" />
+        <Stack.Screen name="discussion-room/new" />
+        <Stack.Screen name="signal/new" />
+        <Stack.Screen
+          name="settings/[page]"
+          options={{ presentation: "transparentModal", animation: "fade" }}
+        />
       </Stack>
     </>
   );

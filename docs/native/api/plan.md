@@ -16,12 +16,12 @@
       Zod input, better-auth 세션 컨텍스트 (`packages/api/src/index.ts`)
 - [x] DB 토대: Drizzle + node-postgres, `schema/index.ts` re-export 패턴
 - [x] 실시간 시세 인프라: `apps/realtime` SSE(허브·인증 토큰·KIS WS 어댑터)
-- [x] 도메인 라우터: `news` / `notification` / `signal` / `stock` / `watchlist`
-      (+ `healthCheck`/`todo`). 남은 도메인: `market`(시세), `discuss`(토론)
+- [x] 도메인 라우터: `news` / `notification` / `signal` / `stock` / `watchlist` /
+      `discussion` (+ `healthCheck`/`todo`). 남은 도메인: `market`(시세)
 - [x] 인증: 이메일 + 소셜(구글/애플/네이버/카카오) 로그인, 로그인 화면, mypage 게이트
 - [ ] KIS **REST** 클라이언트(서버측): 현재 `apps/realtime`엔 WS 어댑터만 있음
       → 시세(market) + 시그널 엔진 양쪽에서 필요
-- [ ] 화면 mock 잔존: 시세(지수·현재가·차트), 토론, 종목 카드(price/score), 차트
+- [ ] 화면 mock 잔존: 시세(지수·현재가·차트), 종목 카드(price/score), 차트
 
 ---
 
@@ -117,10 +117,18 @@ oRPC 라우터 (입력검증·인증)
 - [x] `news.feed({ tab, cursor, limit })` / `news.detail({ id })` (화면 연결 + SSE 라이브 갱신)
 - [ ] 웹(Next.js) 뉴스 화면 연동 (앱만 완료)
 
-### Phase 4 — 콘텐츠: 토론 (🔵 DB, 🔑 Auth)
-- [ ] `discuss.threads` / `toggleLike` / `createThread`
-- [ ] `discuss.thread` / `messages` / `sendMessage`
-- [ ] (⚡) `discuss.stream` 실시간 채팅 — realtime SSE 재사용 검토
+### Phase 4 — 콘텐츠: 토론 (🔵 DB, 🔑 Auth) — 완료
+**DiscussionRoom 모델**로 통일: 스레드/메시지 2계층이 아닌 **종목 바인딩 채팅방**.
+종목 연결은 선택([ADR 0003](../../adr/0003-discussion-room-stock-binding.md),
+`stock_code` nullable), 멤버십은 첫 전송 시 암묵 등록([ADR 0002](../../adr/0002-implicit-membership.md)).
+- [x] `discussion.rooms({ tab })` / `room({ id })` / `toggleLike` (목록·상세·좋아요)
+- [x] `discussion.messages` / `send` / `deleteMessage`(soft delete) / `leaveRoom` (채팅)
+- [x] 화면 연결: 토론 목록(`screens/discuss`) · 채팅방(`screens/discussion-room`) ·
+      방 생성 admin(`screens/discussion-room-new`)
+- [x] DB: `discussion_room` / `discussion_message` / `discussion_room_member` /
+      `discussion_room_like`
+- [x] 실시간 채팅: **폴링 우선**(`refetchInterval: 5000`,
+      [ADR 0001](../../adr/0001-polling-first-ws-later.md)). WS/SSE 전환은 Phase 6
 
 ### Phase 5 — 시그널 (⚙️) — 기반 완료, 엔진 남음
 **모델 전환**: 소스 기반 → **액션 기반(매수/매도/관망)**. 소스(`tech` 등)는 부가 필드.
@@ -136,7 +144,7 @@ oRPC 라우터 (입력검증·인증)
 
 ### Phase 6 — 실시간 전환 (⚡ RT)
 - [ ] 관심종목 현재가를 폴링 → SSE 구독으로 전환(`apps/realtime` 연동)
-- [ ] 채팅 실시간 수신 안정화
+- [ ] 토론 채팅 폴링(`refetchInterval: 5000`) → WS/SSE 전환 (ADR 0001, PMF 검증 후)
 
 ---
 
@@ -166,7 +174,7 @@ oRPC 라우터 (입력검증·인증)
 | ~~로그인 라우트 게이트 정리~~ ✅ | `AuthGate` 컴포넌트로 watchlist/alerts/settings/mypage 보호 | `components/auth-gate.tsx` |
 | 실기기 푸시 발송 검증 | dev build + 실기기에서 속보/시그널 푸시 e2e | [realtime/plan.md](../../realtime/plan.md#다음-단계--푸시-알림-보류) |
 | 웹 뉴스 화면 연동 | `apps/web` 뉴스 페이지(앱만 완료) | Phase 3 |
-| 토론(discuss) 도메인 | 스레드/좋아요/채팅(+SSE) | Phase 4 |
+| ~~토론(discuss) 도메인~~ ✅ | DiscussionRoom 채팅방·좋아요·폴링 채팅 (Phase 4 완료) | `routers/discussion.ts` |
 | realtime 시세 SSE 클라 연동 + 배포 | 관심종목 실시간 시세, Cloud Run 배포 | [realtime/plan.md](../../realtime/plan.md) |
 
 ---

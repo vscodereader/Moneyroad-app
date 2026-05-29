@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocalSearchParams } from "expo-router";
 import { useState } from "react";
 import { Dimensions, Pressable, ScrollView, Text, View } from "react-native";
@@ -6,8 +6,9 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const CHART_WIDTH = Dimensions.get("window").width - 16;
 
-import { NewsCard, SignalCard } from "@/components/cards";
-import { SignalDial, StockChart } from "@/components/charts";
+import { DiscussionRoomRow, NewsCard, SignalCard } from "@/components/cards";
+// import { SignalDial, StockChart } from "@/components/charts";
+import { StockChart } from "@/components/charts";
 import { Icon } from "@/components/icons";
 import {
   BackButton,
@@ -17,11 +18,13 @@ import {
   SectionHead,
 } from "@/components/ui";
 import { useMrTheme } from "@/hooks/use-mr-theme";
-import { findStock, news, stocks, threads } from "@/utils/data";
+import { authClient } from "@/lib/auth-client";
+import { findStock, stocks } from "@/utils/data";
 import { changeColor, fmt } from "@/utils/format";
 import { nav } from "@/utils/nav";
 import { orpc } from "@/utils/orpc";
-import { type MrTokens, SIGNAL_TYPE_KEYS, signalMeta } from "@/utils/theme";
+//import { type MrTokens, SIGNAL_TYPE_KEYS, signalMeta } from "@/utils/theme";
+import { type MrTokens, signalMeta } from "@/utils/theme";
 
 const RANGES = ["1D", "1W", "1M", "3M", "1Y"];
 
@@ -69,14 +72,40 @@ export default function StockDetailScreen() {
   const [openSignal, setOpenSignal] = useState<string | null>(null);
 
   const up = stock.change > 0;
+  const queryClient = useQueryClient();
+  const { data: session } = authClient.useSession();
+  const isAuthed = Boolean(session?.user);
+
   const relSignalsQuery = useQuery(
     orpc.signal.feed.queryOptions({
       input: { code: stock.code, window: "24h", limit: 2 },
     })
   );
   const relSignals = relSignalsQuery.data?.items ?? [];
-  const relNews = news.filter((n) => n.code === stock.code).slice(0, 2);
-  const relThreads = threads.filter((th) => th.code === stock.code).slice(0, 2);
+
+  const relNewsQuery = useQuery(
+    orpc.news.feed.queryOptions({ input: { code: stock.code, limit: 2 } })
+  );
+  const relNews = relNewsQuery.data?.items ?? [];
+
+  const relRoomsOptions = orpc.discussion.rooms.queryOptions({
+    input: { tab: "recent", stockCode: stock.code },
+  });
+  const relRoomsQuery = useQuery(relRoomsOptions);
+  const relRooms = (relRoomsQuery.data ?? []).slice(0, 2);
+
+  const toggleLike = useMutation(
+    orpc.discussion.toggleLike.mutationOptions({
+      onSuccess: () =>
+        queryClient.invalidateQueries({ queryKey: relRoomsOptions.queryKey }),
+    })
+  );
+  const handleToggleLike = (roomId: number) => {
+    if (!isAuthed) {
+      return;
+    }
+    toggleLike.mutate({ roomId });
+  };
 
   const summaryBg = summaryBgFor(stock.score, t);
   const verdictColor = verdictColorFor(stock.score, t);
@@ -217,108 +246,108 @@ export default function StockDetailScreen() {
         </View>
 
         {/* Composite signal */}
-        <SectionHead title="종합 시그널 분석" />
-        <View style={{ paddingHorizontal: 16 }}>
-          <View
-            style={{
-              flexDirection: "row",
-              gap: 16,
-              alignItems: "center",
-              backgroundColor: t.bgElev,
-              borderWidth: 1,
-              borderColor: t.border,
-              borderRadius: 12,
-              padding: 16,
-            }}
-          >
-            <View
-              style={{
-                width: 120,
-                height: 120,
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <SignalDial breakdown={stock.signalBreakdown} size={120} t={t} />
-              <View style={{ position: "absolute", alignItems: "center" }}>
-                <Text
-                  style={{ fontSize: 11, color: t.fgMuted, fontWeight: "700" }}
-                >
-                  종합 시그널
-                </Text>
-                <Text
-                  style={{
-                    fontSize: 36,
-                    fontWeight: "800",
-                    color: t.fgStrong,
-                    marginTop: 2,
-                  }}
-                >
-                  {stock.score}
-                </Text>
-                <Text
-                  style={{ fontSize: 11, color: t.fgMuted, fontWeight: "600" }}
-                >
-                  / 100
-                </Text>
-              </View>
-            </View>
-            <View style={{ flex: 1, gap: 8 }}>
-              {SIGNAL_TYPE_KEYS.map((k) => (
-                <View
-                  key={k}
-                  style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
-                >
-                  <View
-                    style={{
-                      width: 8,
-                      height: 8,
-                      borderRadius: 999,
-                      backgroundColor: meta[k].color,
-                    }}
-                  />
-                  <Text
-                    style={{
-                      flex: 1,
-                      fontSize: 12,
-                      fontWeight: "600",
-                      color: t.fgMuted,
-                    }}
-                  >
-                    {meta[k].label}
-                  </Text>
-                  <Text
-                    style={{
-                      fontSize: 13,
-                      fontWeight: "800",
-                      color: t.fgStrong,
-                    }}
-                  >
-                    {stock.signalBreakdown[k]}
-                  </Text>
-                </View>
-              ))}
-            </View>
-          </View>
-          <View
-            style={{
-              marginTop: 10,
-              paddingVertical: 10,
-              paddingHorizontal: 12,
-              backgroundColor: summaryBg,
-              borderRadius: 10,
-            }}
-          >
-            <Text style={{ fontSize: 12, lineHeight: 18, color: t.fgStrong }}>
-              <Text style={{ fontWeight: "800", color: verdictColor }}>
-                {scoreVerdict(stock.score)}
-              </Text>
-              {
-                " · 최근 24시간 4개 시그널 종합 점수입니다. 시그널 점수는 매매 권유가 아닙니다."
-              }
-            </Text>
-          </View>
-        </View>
+        {/*<SectionHead title="종합 시그널 분석" />*/}
+        {/*<View style={{ paddingHorizontal: 16 }}>*/}
+        {/*  <View*/}
+        {/*    style={{*/}
+        {/*      flexDirection: "row",*/}
+        {/*      gap: 16,*/}
+        {/*      alignItems: "center",*/}
+        {/*      backgroundColor: t.bgElev,*/}
+        {/*      borderWidth: 1,*/}
+        {/*      borderColor: t.border,*/}
+        {/*      borderRadius: 12,*/}
+        {/*      padding: 16,*/}
+        {/*    }}*/}
+        {/*  >*/}
+        {/*    <View*/}
+        {/*      style={{*/}
+        {/*        width: 120,*/}
+        {/*        height: 120,*/}
+        {/*        alignItems: "center",*/}
+        {/*        justifyContent: "center",*/}
+        {/*      }}*/}
+        {/*    >*/}
+        {/*      <SignalDial breakdown={stock.signalBreakdown} size={120} t={t} />*/}
+        {/*      <View style={{ position: "absolute", alignItems: "center" }}>*/}
+        {/*        <Text*/}
+        {/*          style={{ fontSize: 11, color: t.fgMuted, fontWeight: "700" }}*/}
+        {/*        >*/}
+        {/*          종합 시그널*/}
+        {/*        </Text>*/}
+        {/*        <Text*/}
+        {/*          style={{*/}
+        {/*            fontSize: 36,*/}
+        {/*            fontWeight: "800",*/}
+        {/*            color: t.fgStrong,*/}
+        {/*            marginTop: 2,*/}
+        {/*          }}*/}
+        {/*        >*/}
+        {/*          {stock.score}*/}
+        {/*        </Text>*/}
+        {/*        <Text*/}
+        {/*          style={{ fontSize: 11, color: t.fgMuted, fontWeight: "600" }}*/}
+        {/*        >*/}
+        {/*          / 100*/}
+        {/*        </Text>*/}
+        {/*      </View>*/}
+        {/*    </View>*/}
+        {/*    <View style={{ flex: 1, gap: 8 }}>*/}
+        {/*      {SIGNAL_TYPE_KEYS.map((k) => (*/}
+        {/*        <View*/}
+        {/*          key={k}*/}
+        {/*          style={{ flexDirection: "row", alignItems: "center", gap: 8 }}*/}
+        {/*        >*/}
+        {/*          <View*/}
+        {/*            style={{*/}
+        {/*              width: 8,*/}
+        {/*              height: 8,*/}
+        {/*              borderRadius: 999,*/}
+        {/*              backgroundColor: meta[k].color,*/}
+        {/*            }}*/}
+        {/*          />*/}
+        {/*          <Text*/}
+        {/*            style={{*/}
+        {/*              flex: 1,*/}
+        {/*              fontSize: 12,*/}
+        {/*              fontWeight: "600",*/}
+        {/*              color: t.fgMuted,*/}
+        {/*            }}*/}
+        {/*          >*/}
+        {/*            {meta[k].label}*/}
+        {/*          </Text>*/}
+        {/*          <Text*/}
+        {/*            style={{*/}
+        {/*              fontSize: 13,*/}
+        {/*              fontWeight: "800",*/}
+        {/*              color: t.fgStrong,*/}
+        {/*            }}*/}
+        {/*          >*/}
+        {/*            {stock.signalBreakdown[k]}*/}
+        {/*          </Text>*/}
+        {/*        </View>*/}
+        {/*      ))}*/}
+        {/*    </View>*/}
+        {/*  </View>*/}
+        {/*  <View*/}
+        {/*    style={{*/}
+        {/*      marginTop: 10,*/}
+        {/*      paddingVertical: 10,*/}
+        {/*      paddingHorizontal: 12,*/}
+        {/*      backgroundColor: summaryBg,*/}
+        {/*      borderRadius: 10,*/}
+        {/*    }}*/}
+        {/*  >*/}
+        {/*    <Text style={{ fontSize: 12, lineHeight: 18, color: t.fgStrong }}>*/}
+        {/*      <Text style={{ fontWeight: "800", color: verdictColor }}>*/}
+        {/*        {scoreVerdict(stock.score)}*/}
+        {/*      </Text>*/}
+        {/*      {*/}
+        {/*        " · 최근 24시간 4개 시그널 종합 점수입니다. 시그널 점수는 매매 권유가 아닙니다."*/}
+        {/*      }*/}
+        {/*    </Text>*/}
+        {/*  </View>*/}
+        {/*</View>*/}
 
         {/* Recent signals */}
         <SectionHead more="더보기" title="최근 시그널" />
@@ -350,9 +379,17 @@ export default function StockDetailScreen() {
           onMore={() => nav.goTab("news")}
           title="관련 뉴스"
         />
-        {relNews.map((n) => (
-          <NewsCard key={n.id} news={n} showAiChip />
-        ))}
+        {relNews.length > 0 ? (
+          relNews.map((n) => <NewsCard key={n.id} news={n} showAiChip />)
+        ) : (
+          <View style={{ padding: 40 }}>
+            <Text
+              style={{ textAlign: "center", color: t.fgMuted, fontSize: 14 }}
+            >
+              관련 뉴스가 아직 없어요.
+            </Text>
+          </View>
+        )}
 
         {/* Related discussion */}
         <SectionHead
@@ -360,95 +397,24 @@ export default function StockDetailScreen() {
           onMore={() => nav.goTab("discuss")}
           title="관련 토론"
         />
-        {relThreads.map((th) => (
-          <Pressable
-            key={th.id}
-            onPress={() => nav.openThread(th.id)}
-            style={({ pressed }) => ({
-              paddingVertical: 14,
-              paddingHorizontal: 16,
-              backgroundColor: pressed ? t.bgSubtle : t.bg,
-              borderTopWidth: 1,
-              borderTopColor: t.border,
-            })}
-          >
-            <View
-              style={{ flexDirection: "row", gap: 8, alignItems: "center" }}
-            >
-              <View
-                style={{
-                  width: 28,
-                  height: 28,
-                  borderRadius: 999,
-                  backgroundColor: t.bgMuted,
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <Text
-                  style={{ fontSize: 12, fontWeight: "700", color: t.fgMuted }}
-                >
-                  {th.author.slice(0, 1)}
-                </Text>
-              </View>
-              <Text
-                style={{ fontSize: 11, color: t.fgStrong, fontWeight: "700" }}
-              >
-                {th.author}
-              </Text>
-              <Text style={{ fontSize: 11, color: t.fgMuted }}>·</Text>
-              <Text
-                style={{ fontSize: 11, color: t.fgMuted, fontWeight: "600" }}
-              >
-                {th.time}
-              </Text>
-            </View>
+        {relRooms.length > 0 ? (
+          relRooms.map((r) => (
+            <DiscussionRoomRow
+              key={r.id}
+              onPress={() => nav.openDiscussionRoom(r.id)}
+              onToggleLike={() => handleToggleLike(r.id)}
+              room={r}
+            />
+          ))
+        ) : (
+          <View style={{ padding: 40 }}>
             <Text
-              style={{
-                fontSize: 14,
-                fontWeight: "700",
-                color: t.fgStrong,
-                marginTop: 6,
-                lineHeight: 20,
-              }}
+              style={{ textAlign: "center", color: t.fgMuted, fontSize: 14 }}
             >
-              {th.title}
+              관련 토론방이 아직 없어요.
             </Text>
-            <Text
-              numberOfLines={2}
-              style={{
-                fontSize: 13,
-                color: t.fgMuted,
-                marginTop: 4,
-                lineHeight: 20,
-              }}
-            >
-              {th.body}
-            </Text>
-            <View style={{ flexDirection: "row", gap: 14, marginTop: 8 }}>
-              <View
-                style={{ flexDirection: "row", alignItems: "center", gap: 4 }}
-              >
-                <Icon.thumbsUp color={t.fgMuted} size={13} />
-                <Text
-                  style={{ fontSize: 12, fontWeight: "600", color: t.fgMuted }}
-                >
-                  {th.likes}
-                </Text>
-              </View>
-              <View
-                style={{ flexDirection: "row", alignItems: "center", gap: 4 }}
-              >
-                <Icon.reply color={t.fgMuted} size={13} />
-                <Text
-                  style={{ fontSize: 12, fontWeight: "600", color: t.fgMuted }}
-                >
-                  {th.replies}
-                </Text>
-              </View>
-            </View>
-          </Pressable>
-        ))}
+          </View>
+        )}
 
         <View style={{ height: 24 + insets.bottom }} />
       </ScrollView>

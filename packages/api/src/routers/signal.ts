@@ -3,7 +3,7 @@ import { signal, stockMaster, userWatchlist } from "@moneyroad-app/db/schema";
 import { and, count, desc, eq, gte, inArray, lt, type SQL } from "drizzle-orm";
 import z from "zod";
 
-import { protectedProcedure, publicProcedure } from "../index";
+import { adminProcedure, protectedProcedure, publicProcedure } from "../index";
 
 const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 50;
@@ -151,6 +151,36 @@ export const signalRouter = {
         result.all += r.n;
       }
       return result;
+    }),
+
+  // Admin: manually register a signal. source is fixed to "community" since
+  // engine-derived signals are "tech"; manual entries come from the admin team.
+  create: adminProcedure
+    .input(
+      z.object({
+        stockCode: z.string().min(1),
+        action: actionSchema,
+        strength: z.number().int().min(1).max(5),
+        title: z.string().min(1).max(80),
+        body: z.string().min(1).max(500),
+      })
+    )
+    .handler(async ({ input }) => {
+      const [row] = await db
+        .insert(signal)
+        .values({
+          stockCode: input.stockCode,
+          action: input.action,
+          source: "community",
+          strength: input.strength,
+          title: input.title.trim(),
+          body: input.body.trim(),
+        })
+        .returning({ id: signal.id });
+      if (!row) {
+        throw new Error("시그널 생성 실패");
+      }
+      return { id: row.id };
     }),
 
   // Count of signals on the current user's watched stocks in the last 24h.

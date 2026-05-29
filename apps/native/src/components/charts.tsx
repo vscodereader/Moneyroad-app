@@ -4,6 +4,7 @@ import { useId } from "react";
 import { StyleSheet, View, type ViewStyle } from "react-native";
 import Svg, {
   Circle,
+  ClipPath,
   Defs,
   G,
   LinearGradient,
@@ -54,6 +55,110 @@ export function Sparkline({
         strokeWidth={1.5}
       />
       <Circle cx={lastX} cy={lastY} fill={color} r={2} />
+    </Svg>
+  );
+}
+
+// ── Index intraday chart (full session vs previous close) ─────
+// Fixed x-axis over the trading session; dashed baseline at the previous close;
+// area above the baseline filled red (up), below filled blue (down) — Korean
+// market convention. Points are { m: minutes-since-open, v: index value }.
+const INTRADAY_PAD_Y = 2;
+const SAFE_ID = /[^a-zA-Z0-9]/g;
+
+export function IndexIntradayChart({
+  series,
+  prevClose,
+  sessionMinutes,
+  width = 56,
+  height = 28,
+  t,
+}: {
+  series: { m: number; v: number }[];
+  prevClose: number;
+  sessionMinutes: number;
+  width?: number;
+  height?: number;
+  t: MrTokens;
+}) {
+  const rawId = useId();
+  const id = `idx${rawId.replace(SAFE_ID, "")}`;
+
+  const values = series.map((p) => p.v);
+  if (prevClose > 0) {
+    values.push(prevClose);
+  }
+  const max = values.length > 0 ? Math.max(...values) : 1;
+  const min = values.length > 0 ? Math.min(...values) : 0;
+  const range = max - min || 1;
+
+  const xAt = (m: number) =>
+    Math.max(0, Math.min(width, (m / sessionMinutes) * width));
+  const yAt = (v: number) =>
+    INTRADAY_PAD_Y + (height - INTRADAY_PAD_Y * 2) * (1 - (v - min) / range);
+
+  const baselineY = yAt(prevClose);
+  const up = (series.at(-1)?.v ?? prevClose) >= prevClose;
+  const lineColor = up ? t.upStrong : t.downStrong;
+
+  const pts = series.map((p) => [xAt(p.m), yAt(p.v)] as const);
+  const linePath = pts
+    .map(
+      (p, i) => `${i === 0 ? "M" : "L"}${p[0].toFixed(2)} ${p[1].toFixed(2)}`
+    )
+    .join(" ");
+  const first = pts[0];
+  const last = pts.at(-1);
+  const areaPath =
+    first && last
+      ? `${linePath} L${last[0].toFixed(2)} ${baselineY.toFixed(2)} L${first[0].toFixed(2)} ${baselineY.toFixed(2)} Z`
+      : "";
+
+  return (
+    <Svg height={height} viewBox={`0 0 ${width} ${height}`} width={width}>
+      <Defs>
+        <ClipPath id={`${id}up`}>
+          <Rect height={baselineY} width={width} x={0} y={0} />
+        </ClipPath>
+        <ClipPath id={`${id}down`}>
+          <Rect height={height - baselineY} width={width} x={0} y={baselineY} />
+        </ClipPath>
+      </Defs>
+      {areaPath ? (
+        <Path
+          clipPath={`url(#${id}up)`}
+          d={areaPath}
+          fill={t.upBg}
+          opacity={0.7}
+        />
+      ) : null}
+      {areaPath ? (
+        <Path
+          clipPath={`url(#${id}down)`}
+          d={areaPath}
+          fill={t.downBg}
+          opacity={0.7}
+        />
+      ) : null}
+      <Path
+        d={`M0 ${baselineY.toFixed(2)} L${width} ${baselineY.toFixed(2)}`}
+        stroke={t.fgSubtle}
+        strokeDasharray="2 2"
+        strokeWidth={0.75}
+      />
+      {linePath ? (
+        <Path
+          d={linePath}
+          fill="none"
+          stroke={lineColor}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={1.5}
+        />
+      ) : null}
+      {last ? (
+        <Circle cx={last[0]} cy={last[1]} fill={lineColor} r={1.5} />
+      ) : null}
     </Svg>
   );
 }

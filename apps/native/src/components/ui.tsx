@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import {
+  type DimensionValue,
   Pressable,
   type StyleProp,
   Text,
@@ -11,6 +12,7 @@ import {
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
+  withRepeat,
   withTiming,
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -469,6 +471,43 @@ export function AiChip({ label = "AI 요약" }: { label?: string }) {
         {label}
       </Text>
     </View>
+  );
+}
+
+// ── Skeleton (loading placeholder) ────────────────────────────
+// Reusable shimmer block: an opacity pulse over a muted fill, à la shadcn's
+// `animate-pulse`. Compose several to mock a component's layout while loading.
+const SKELETON_PULSE_MS = 900;
+
+export function Skeleton({
+  width,
+  height,
+  radius = 8,
+  style,
+}: {
+  width?: DimensionValue;
+  height?: DimensionValue;
+  radius?: number;
+  style?: StyleProp<ViewStyle>;
+}) {
+  const { t } = useMrTheme();
+  const pulse = useSharedValue(0.5);
+  useEffect(() => {
+    pulse.value = withRepeat(
+      withTiming(1, { duration: SKELETON_PULSE_MS }),
+      -1,
+      true
+    );
+  }, [pulse]);
+  const animStyle = useAnimatedStyle(() => ({ opacity: pulse.value }));
+  return (
+    <Animated.View
+      style={[
+        { width, height, borderRadius: radius, backgroundColor: t.bgMuted },
+        animStyle,
+        style,
+      ]}
+    />
   );
 }
 

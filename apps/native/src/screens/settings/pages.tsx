@@ -1,13 +1,24 @@
 // MoneyRoad — MyPage settings sub-screens (8)
 
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { Pressable, Text, View } from "react-native";
+import {
+  ActivityIndicator,
+  Linking,
+  Pressable,
+  Text,
+  View,
+} from "react-native";
 
 import { Gradient } from "@/components/charts";
 import { Icon } from "@/components/icons";
 import { SegmentedControl, StockLogo, Switch } from "@/components/ui";
 import { useMrTheme } from "@/hooks/use-mr-theme";
 import { useNotificationSettings } from "@/hooks/use-notification-settings";
+import InquiryFormScreen from "@/screens/settings/inquiry";
+import { PrivacyPolicy, TermsOfService } from "@/screens/settings/legal";
+import PriceAlertNewScreen from "@/screens/settings/price-alert-new";
+import ProfileScreen from "@/screens/settings/profile";
 import {
   SettingsGroup,
   SettingsRow,
@@ -17,6 +28,7 @@ import {
 import { findStock } from "@/utils/data";
 import { fmt } from "@/utils/format";
 import { nav } from "@/utils/nav";
+import { orpc } from "@/utils/orpc";
 import {
   SIGNAL_TYPE_KEYS,
   type SignalTypeKey,
@@ -118,55 +130,110 @@ export function NewsAlertSettings() {
 }
 
 // ── 3. 가격 알림 ──────────────────────────────────────────────
-interface PriceAlert {
+type AlertItem = {
+  id: number;
+  stockCode: string;
+  stockName: string | null;
+  direction: "above" | "below";
+  targetPrice: number;
   active: boolean;
-  code: string;
-  hit: boolean;
-  hitTime?: string;
-  id: string;
-  type: "above" | "below";
-  value: number;
+  triggeredAt: string | null;
+  createdAt: string;
+};
+
+function PriceAlertRow({
+  alert,
+  onToggle,
+  onRemove,
+}: {
+  alert: AlertItem;
+  onToggle: (active: boolean) => void;
+  onRemove: () => void;
+}) {
+  const { t } = useMrTheme();
+  const stock = findStock(alert.stockCode);
+  const name = stock?.name ?? alert.stockName ?? alert.stockCode;
+  const diff = stock
+    ? ((alert.targetPrice - stock.price) / stock.price) * 100
+    : null;
+  return (
+    <View
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 12,
+        paddingVertical: 14,
+        paddingHorizontal: 16,
+        backgroundColor: t.bg,
+        borderBottomWidth: 1,
+        borderBottomColor: t.border,
+      }}
+    >
+      {stock ? (
+        <StockLogo radius={8} size={36} stock={stock} />
+      ) : (
+        <View
+          style={{
+            width: 36,
+            height: 36,
+            borderRadius: 8,
+            backgroundColor: t.bgSubtle,
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <Text style={{ fontSize: 14, fontWeight: "800", color: t.fgMuted }}>
+            {name.charAt(0)}
+          </Text>
+        </View>
+      )}
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text style={{ fontSize: 14, fontWeight: "700", color: t.fgStrong }}>
+          {name}
+        </Text>
+        <Text style={{ fontSize: 12, color: t.fgMuted, marginTop: 3 }}>
+          <Text
+            style={{
+              fontWeight: "700",
+              color: alert.direction === "above" ? t.upStrong : t.downStrong,
+            }}
+          >
+            {alert.direction === "above" ? "↑ 도달가" : "↓ 도달가"}
+          </Text>
+          <Text style={{ fontWeight: "700", color: t.fgStrong }}>
+            {" "}
+            {fmt.price(alert.targetPrice)}원
+          </Text>
+          {diff === null ? null : (
+            <Text style={{ color: t.fgSubtle }}>
+              {"  "}(현재가 대비 {diff > 0 ? "+" : ""}
+              {diff.toFixed(1)}%)
+            </Text>
+          )}
+        </Text>
+      </View>
+      <Switch on={alert.active} onChange={onToggle} />
+      <Pressable hitSlop={8} onPress={onRemove} style={{ padding: 4 }}>
+        <Icon.close color={t.fgSubtle} size={16} />
+      </Pressable>
+    </View>
+  );
 }
 
 export function PriceAlerts() {
   const { t } = useMrTheme();
-  const [alerts, setAlerts] = useState<PriceAlert[]>([
-    {
-      id: "a1",
-      code: "005930",
-      type: "above",
-      value: 80_000,
-      active: true,
-      hit: false,
-    },
-    {
-      id: "a2",
-      code: "000660",
-      type: "below",
-      value: 200_000,
-      active: true,
-      hit: false,
-    },
-    {
-      id: "a3",
-      code: "035420",
-      type: "below",
-      value: 185_000,
-      active: false,
-      hit: true,
-      hitTime: "오늘 14:20",
-    },
-    {
-      id: "a4",
-      code: "373220",
-      type: "above",
-      value: 380_000,
-      active: true,
-      hit: false,
-    },
-  ]);
-  const toggle = (id: string, v: boolean) =>
-    setAlerts(alerts.map((a) => (a.id === id ? { ...a, active: v } : a)));
+  const queryClient = useQueryClient();
+  const listOptions = orpc.priceAlert.list.queryOptions();
+  const alertsQuery = useQuery(listOptions);
+  const alerts = alertsQuery.data ?? [];
+  const invalidate = () =>
+    queryClient.invalidateQueries({ queryKey: listOptions.queryKey });
+  const setActive = useMutation(
+    orpc.priceAlert.setActive.mutationOptions({ onSuccess: invalidate })
+  );
+  const remove = useMutation(
+    orpc.priceAlert.remove.mutationOptions({ onSuccess: invalidate })
+  );
   const activeCount = alerts.filter((a) => a.active).length;
 
   return (
@@ -174,6 +241,7 @@ export function PriceAlerts() {
       right={
         <Pressable
           hitSlop={6}
+          onPress={() => nav.openSettings("price-alert-new")}
           style={{
             flexDirection: "row",
             alignItems: "center",
@@ -189,96 +257,51 @@ export function PriceAlerts() {
       }
       title="가격 알림"
     >
-      <SettingsGroup
-        label="활성 알림"
-        sublabel={`${activeCount}개의 알림이 활성화되어 있습니다.`}
-      >
-        {alerts.map((a) => {
-          const stock = findStock(a.code);
-          if (!stock) {
-            return null;
-          }
-          const diff = ((a.value - stock.price) / stock.price) * 100;
-          return (
-            <View
+      {alertsQuery.isPending ? (
+        <View style={{ paddingVertical: 40, alignItems: "center" }}>
+          <ActivityIndicator color={t.primary} />
+        </View>
+      ) : null}
+
+      {alertsQuery.isSuccess && alerts.length === 0 ? (
+        <View
+          style={{
+            paddingVertical: 48,
+            paddingHorizontal: 24,
+            alignItems: "center",
+            gap: 8,
+          }}
+        >
+          <Icon.bell color={t.fgSubtle} size={28} />
+          <Text
+            style={{
+              fontSize: 13,
+              color: t.fgMuted,
+              textAlign: "center",
+              lineHeight: 19,
+            }}
+          >
+            설정된 가격 알림이 없어요.{"\n"}우측 상단 추가로 도달가 알림을
+            만들어 보세요.
+          </Text>
+        </View>
+      ) : null}
+
+      {alerts.length > 0 ? (
+        <SettingsGroup
+          label="활성 알림"
+          sublabel={`${activeCount}개의 알림이 활성화되어 있습니다.`}
+        >
+          {alerts.map((a) => (
+            <PriceAlertRow
+              alert={a}
               key={a.id}
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 12,
-                paddingVertical: 14,
-                paddingHorizontal: 16,
-                backgroundColor: t.bg,
-                borderBottomWidth: 1,
-                borderBottomColor: t.border,
-              }}
-            >
-              <StockLogo radius={8} size={36} stock={stock} />
-              <View style={{ flex: 1, minWidth: 0 }}>
-                <View
-                  style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
-                >
-                  <Text
-                    style={{
-                      fontSize: 14,
-                      fontWeight: "700",
-                      color: t.fgStrong,
-                    }}
-                  >
-                    {stock.name}
-                  </Text>
-                  {a.hit ? (
-                    <View
-                      style={{
-                        paddingHorizontal: 6,
-                        paddingVertical: 1,
-                        borderRadius: 4,
-                        backgroundColor: t.successBg,
-                      }}
-                    >
-                      <Text
-                        style={{
-                          fontSize: 10,
-                          fontWeight: "800",
-                          color: t.success,
-                        }}
-                      >
-                        도달
-                      </Text>
-                    </View>
-                  ) : null}
-                </View>
-                <Text style={{ fontSize: 12, color: t.fgMuted, marginTop: 3 }}>
-                  <Text
-                    style={{
-                      fontWeight: "700",
-                      color: a.type === "above" ? t.upStrong : t.downStrong,
-                    }}
-                  >
-                    {a.type === "above" ? "↑ 도달가" : "↓ 도달가"}
-                  </Text>
-                  <Text style={{ fontWeight: "700", color: t.fgStrong }}>
-                    {" "}
-                    {fmt.price(a.value)}원
-                  </Text>
-                  <Text style={{ color: t.fgSubtle }}>
-                    {"  "}(현재가 대비 {diff > 0 ? "+" : ""}
-                    {diff.toFixed(1)}%)
-                  </Text>
-                </Text>
-                {a.hit ? (
-                  <Text
-                    style={{ fontSize: 11, color: t.fgSubtle, marginTop: 2 }}
-                  >
-                    {a.hitTime} 도달
-                  </Text>
-                ) : null}
-              </View>
-              <Switch on={a.active} onChange={(v) => toggle(a.id, v)} />
-            </View>
-          );
-        })}
-      </SettingsGroup>
+              onRemove={() => remove.mutate({ id: a.id })}
+              onToggle={(v) => setActive.mutate({ id: a.id, active: v })}
+            />
+          ))}
+        </SettingsGroup>
+      ) : null}
 
       <View style={{ padding: 16, marginTop: 8 }}>
         <View
@@ -295,9 +318,8 @@ export function PriceAlerts() {
             가격 알림은 어떻게 작동하나요?
           </Text>
           <Text style={{ fontSize: 12, lineHeight: 19, color: t.fgMuted }}>
-            설정한 도달가에 주가가 처음 닿을 때 1회 푸시 알림이 옵니다. 도달
-            후에는 자동으로 비활성화되며, 다시 활성화하려면 토글을 켜세요. 장
-            운영 시간 외에는 알림이 지연될 수 있습니다.
+            설정한 도달가에 주가가 처음 닿을 때 1회 푸시 알림이 옵니다. 장 운영
+            시간 외에는 알림이 지연될 수 있습니다.
           </Text>
         </View>
       </View>
@@ -675,7 +697,7 @@ export function MyPosts() {
             return (
               <Pressable
                 key={p.id}
-                onPress={() => nav.openThread(p.id)}
+                onPress={() => nav.openDiscussionRoom(p.id)}
                 style={{
                   paddingVertical: 14,
                   paddingHorizontal: 16,
@@ -768,7 +790,7 @@ export function MyPosts() {
             return (
               <Pressable
                 key={r.id}
-                onPress={() => nav.openThread(r.threadId)}
+                onPress={() => nav.openDiscussionRoom(r.threadId)}
                 style={{
                   paddingVertical: 14,
                   paddingHorizontal: 16,
@@ -1209,20 +1231,24 @@ export function Support() {
       <SettingsGroup label="문의하기">
         <SettingsRow
           label="1:1 문의 접수"
+          onPress={() => nav.openSettings("inquiry")}
           right={<Icon.chevRight color={t.fgSubtle} size={16} />}
           sub="평일 09:00~18:00 응답"
         />
         <SettingsRow
           label="이메일 문의"
+          onPress={() => Linking.openURL("mailto:support@moneyroad.ai.kr")}
           right={<Icon.chevRight color={t.fgSubtle} size={16} />}
           sub="support@moneyroad.ai.kr"
         />
         <SettingsRow
           label="이용약관"
+          onPress={() => nav.openSettings("terms")}
           right={<Icon.chevRight color={t.fgSubtle} size={16} />}
         />
         <SettingsRow
           label="개인정보 처리방침"
+          onPress={() => nav.openSettings("privacy")}
           right={<Icon.chevRight color={t.fgSubtle} size={16} />}
         />
       </SettingsGroup>
@@ -1240,4 +1266,9 @@ export const SETTINGS_PAGES: Record<string, () => React.JSX.Element> = {
   posts: MyPosts,
   invite: Invite,
   support: Support,
+  inquiry: InquiryFormScreen,
+  terms: TermsOfService,
+  privacy: PrivacyPolicy,
+  profile: ProfileScreen,
+  "price-alert-new": PriceAlertNewScreen,
 };

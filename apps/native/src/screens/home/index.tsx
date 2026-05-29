@@ -1,22 +1,38 @@
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
-import { ActivityIndicator, ScrollView, Text, View } from "react-native";
+import {
+  ActivityIndicator,
+  Pressable,
+  ScrollView,
+  Text,
+  View,
+} from "react-native";
 
 import {
   // AiBriefCard,
   IndexStrip,
   NewsCard,
+  NewsCardSkeleton,
   SignalCard,
   WatchRow,
+  WatchRowSkeleton,
 } from "@/components/cards";
 import { Icon } from "@/components/icons";
 import { IconButton, MrHeader, MrScreen, SectionHead } from "@/components/ui";
+import { useIndexStream } from "@/hooks/use-index-stream";
 import { useMrTheme } from "@/hooks/use-mr-theme";
 import { authClient } from "@/lib/auth-client";
-import { indices, news } from "@/utils/data";
+import { indices as fallbackIndices } from "@/utils/data";
 import { nav } from "@/utils/nav";
 import { orpc } from "@/utils/orpc";
 import type { MrTokens } from "@/utils/theme";
+
+const NEWS_SKELETON_KEYS = [
+  "news-skeleton-1",
+  "news-skeleton-2",
+  "news-skeleton-3",
+];
+const WATCHLIST_SKELETON_KEYS = ["watch-skeleton-1", "watch-skeleton-2"];
 
 function greeting(): string {
   const hour = new Date().getHours();
@@ -29,23 +45,42 @@ function greeting(): string {
   return "장 마감 후 정리해볼까요";
 }
 
-function EmptyHint({ label, t }: { label: string; t: MrTokens }) {
-  return (
-    <View
-      style={{
-        alignItems: "center",
-        backgroundColor: t.bgSubtle,
-        borderRadius: 12,
-        gap: 8,
-        marginHorizontal: 16,
-        paddingVertical: 28,
-      }}
-    >
+function EmptyHint({
+  label,
+  onPress,
+  t,
+}: {
+  label: string;
+  onPress?: () => void;
+  t: MrTokens;
+}) {
+  const boxStyle = {
+    alignItems: "center" as const,
+    backgroundColor: t.bgSubtle,
+    borderRadius: 12,
+    gap: 8,
+    marginHorizontal: 16,
+    paddingVertical: 28,
+  };
+  const content = (
+    <>
       <Icon.navWatch color={t.fgSubtle} size={26} />
       <Text style={{ color: t.fgSubtle, fontSize: 13, textAlign: "center" }}>
         {label}
       </Text>
-    </View>
+    </>
+  );
+  if (!onPress) {
+    return <View style={boxStyle}>{content}</View>;
+  }
+  return (
+    <Pressable
+      android_ripple={{ color: t.bgMuted }}
+      onPress={onPress}
+      style={({ pressed }) => [boxStyle, pressed ? { opacity: 0.7 } : null]}
+    >
+      {content}
+    </Pressable>
   );
 }
 
@@ -60,13 +95,21 @@ function WatchlistPreview({
 }) {
   if (isLoading) {
     return (
-      <View style={{ alignItems: "center", paddingVertical: 28 }}>
-        <ActivityIndicator color={t.primary} />
-      </View>
+      <>
+        {WATCHLIST_SKELETON_KEYS.map((key) => (
+          <WatchRowSkeleton key={key} />
+        ))}
+      </>
     );
   }
   if (items.length === 0) {
-    return <EmptyHint label="관심 종목이 아직 없어요." t={t} />;
+    return (
+      <EmptyHint
+        label="관심 종목이 아직 없어요."
+        onPress={nav.openWatchlist}
+        t={t}
+      />
+    );
   }
   return (
     <>
@@ -87,11 +130,15 @@ export default function HomeScreen() {
   const { data: session } = authClient.useSession();
   const isLoggedIn = !!session?.user;
   const displayName = session?.user?.name?.trim() || "투자자";
+  const indices = useIndexStream(fallbackIndices);
   const topSignalsQuery = useQuery(
     orpc.signal.feed.queryOptions({ input: { window: "24h", limit: 3 } })
   );
   const topSignals = topSignalsQuery.data?.items ?? [];
-  const topNews = news.slice(0, 3);
+  const newsQuery = useQuery(
+    orpc.news.feed.queryOptions({ input: { tab: "all", limit: 3 } })
+  );
+  const topNews = newsQuery.data?.items ?? [];
   // Real watchlist (codes/names/market); price/score await the market API.
   const watchlistQuery = useQuery(
     orpc.watchlist.list.queryOptions({ enabled: isLoggedIn })
@@ -179,6 +226,7 @@ export default function HomeScreen() {
           <SignalCard
             expanded={openSigId === sig.id}
             key={sig.id}
+            onStockPress={() => nav.openStock(sig.code)}
             onToggle={() => setOpenSigId(openSigId === sig.id ? null : sig.id)}
             signal={sig}
           />
@@ -212,9 +260,17 @@ export default function HomeScreen() {
           onMore={() => nav.goTab("news")}
           title="주요 뉴스"
         />
-        {topNews.map((n) => (
-          <NewsCard key={n.id} news={n} />
-        ))}
+        {(() => {
+          if (newsQuery.isLoading) {
+            return NEWS_SKELETON_KEYS.map((key) => (
+              <NewsCardSkeleton key={key} />
+            ));
+          }
+          if (topNews.length === 0) {
+            return <EmptyHint label="표시할 뉴스가 아직 없어요." t={t} />;
+          }
+          return topNews.map((n) => <NewsCard key={n.id} news={n} />);
+        })()}
 
         <SectionHead
           more={

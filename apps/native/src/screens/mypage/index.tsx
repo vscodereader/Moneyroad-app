@@ -199,6 +199,7 @@ export default function MyPageScreen() {
             ) : null}
           </View>
           <Pressable
+            onPress={() => nav.openSettings("profile")}
             style={{
               paddingVertical: 6,
               paddingHorizontal: 12,

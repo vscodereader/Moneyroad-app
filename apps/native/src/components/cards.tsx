@@ -1,23 +1,18 @@
 // MoneyRoad — composite cards & list rows
 
 import { Pressable, Text, View } from "react-native";
-import { Gradient, Sparkline } from "@/components/charts";
+import { Gradient, IndexIntradayChart, Sparkline } from "@/components/charts";
 import { Icon, SIGNAL_ACTION_ICON } from "@/components/icons";
-import { ScorePill, StockLogo, StrengthBar } from "@/components/ui";
+import { ScorePill, Skeleton, StockLogo, StrengthBar } from "@/components/ui";
+import { type LiveIndex, SESSION_MINUTES } from "@/hooks/use-index-stream";
 import { useMrTheme } from "@/hooks/use-mr-theme";
-import type {
-  MarketIndex,
-  NewsItem,
-  Signal,
-  Stock,
-  Thread,
-} from "@/utils/data";
+import type { NewsItem, Signal, Stock } from "@/utils/data";
 import { findStock } from "@/utils/data";
 import { changeColor, fmt } from "@/utils/format";
 import { type MrTokens, signalActionMeta } from "@/utils/theme";
 
 // ── Index strip (KOSPI / KOSDAQ) ──────────────────────────────
-export function IndexStrip({ indices }: { indices: MarketIndex[] }) {
+export function IndexStrip({ indices }: { indices: LiveIndex[] }) {
   const { t } = useMrTheme();
   return (
     <View
@@ -44,23 +39,13 @@ export function IndexStrip({ indices }: { indices: MarketIndex[] }) {
             <Text style={{ fontSize: 11, color: t.fgMuted, fontWeight: "600" }}>
               {idx.name}
             </Text>
-            <Sparkline
-              data={[
-                100,
-                102,
-                99,
-                101,
-                103,
-                100,
-                102,
-                105,
-                103,
-                idx.change > 0 ? 108 : 96,
-              ]}
-              height={16}
-              positive={idx.change > 0}
+            <IndexIntradayChart
+              height={20}
+              prevClose={idx.prevClose}
+              series={idx.series}
+              sessionMinutes={SESSION_MINUTES}
               t={t}
-              width={48}
+              width={56}
             />
           </View>
           <Text style={{ fontSize: 17, fontWeight: "800", color: t.fgStrong }}>
@@ -234,16 +219,43 @@ export function WatchRow({
   );
 }
 
+// ── Watchlist row loading placeholder ─────────────────────────
+export function WatchRowSkeleton() {
+  const { t } = useMrTheme();
+  return (
+    <View
+      style={{
+        alignItems: "center",
+        backgroundColor: t.bg,
+        borderTopColor: t.border,
+        borderTopWidth: 1,
+        flexDirection: "row",
+        gap: 12,
+        paddingHorizontal: 16,
+        paddingVertical: 14,
+      }}
+    >
+      <Skeleton height={36} radius={10} width={36} />
+      <View style={{ flex: 1, minWidth: 0, gap: 6 }}>
+        <Skeleton height={15} radius={4} width="55%" />
+        <Skeleton height={11} radius={4} width={84} />
+      </View>
+    </View>
+  );
+}
+
 // ── Signal card (expandable) ──────────────────────────────────
 export function SignalCard({
   signal,
   expanded,
   onToggle,
+  onStockPress,
   hideStock = false,
 }: {
   signal: Signal;
   expanded: boolean;
   onToggle: () => void;
+  onStockPress?: () => void;
   hideStock?: boolean;
 }) {
   const { t } = useMrTheme();
@@ -365,17 +377,21 @@ export function SignalCard({
             {signal.body}
           </Text>
           {stock ? (
-            <View
-              style={{
+            <Pressable
+              android_ripple={onStockPress ? { color: t.bgMuted } : undefined}
+              disabled={!onStockPress}
+              onPress={onStockPress}
+              style={({ pressed }) => ({
                 marginTop: 12,
                 flexDirection: "row",
                 alignItems: "center",
                 gap: 10,
                 paddingVertical: 10,
                 paddingHorizontal: 12,
-                backgroundColor: t.bgSubtle,
+                backgroundColor:
+                  pressed && onStockPress ? t.bgMuted : t.bgSubtle,
                 borderRadius: 10,
-              }}
+              })}
             >
               <StockLogo radius={8} size={32} stock={stock} />
               <View style={{ flex: 1 }}>
@@ -398,7 +414,10 @@ export function SignalCard({
                 t={t}
                 width={56}
               />
-            </View>
+              {onStockPress ? (
+                <Icon.chevRight color={t.fgSubtle} size={18} />
+              ) : null}
+            </Pressable>
           ) : null}
           <Text style={{ marginTop: 10, fontSize: 11, color: t.fgSubtle }}>
             ⓘ 매매 권유가 아니며 정보 제공 목적입니다.
@@ -540,6 +559,33 @@ export function NewsCard({
   );
 }
 
+// ── News card loading placeholder ─────────────────────────────
+// Mirrors NewsCard's layout (thumb + category/title/meta) with Skeletons.
+export function NewsCardSkeleton() {
+  const { t } = useMrTheme();
+  return (
+    <View
+      style={{
+        flexDirection: "row",
+        gap: 12,
+        paddingVertical: 14,
+        paddingHorizontal: 16,
+        backgroundColor: t.bg,
+        borderTopWidth: 1,
+        borderTopColor: t.border,
+      }}
+    >
+      <Skeleton height={78} radius={8} width={78} />
+      <View style={{ flex: 1, minWidth: 0, gap: 8 }}>
+        <Skeleton height={12} radius={4} width={56} />
+        <Skeleton height={14} radius={4} width="92%" />
+        <Skeleton height={14} radius={4} width="64%" />
+        <Skeleton height={11} radius={4} width={110} />
+      </View>
+    </View>
+  );
+}
+
 // ── AI daily brief card (home + news) ─────────────────────────
 export function AiBriefCard({
   time,
@@ -604,21 +650,38 @@ export function AiBriefCard({
   );
 }
 
-// ── Discussion thread row ─────────────────────────────────────
-export function ThreadRow({
-  thread,
-  liked,
+// ── Discussion room row ─────────────────────────────────────
+// Mirrors the shape returned by `orpc.discussion.rooms` (one element of the
+// array). Defined inline to avoid coupling the UI to server-router internals;
+// TS structural matching catches drift at the call site.
+export type DiscussionRoomRowData = {
+  id: number;
+  name: string;
+  description: string;
+  stockCode: string | null;
+  stockName: string | null;
+  sentiment: "up" | "neutral" | "down";
+  createdBy: { id: string; name: string } | null;
+  time: string;
+  likesCount: number;
+  repliesCount: number;
+  membersCount: number;
+  liked: boolean;
+};
+
+export function DiscussionRoomRow({
+  room,
   onToggleLike,
   onPress,
 }: {
-  thread: Thread;
-  liked: boolean;
+  room: DiscussionRoomRowData;
   onToggleLike: () => void;
   onPress: () => void;
 }) {
   const { t } = useMrTheme();
-  const stock = findStock(thread.code);
-  const likeCount = thread.likes + (liked ? 1 : 0);
+  const stock = room.stockCode ? findStock(room.stockCode) : null;
+  const stockLabel = stock?.name ?? room.stockName;
+  const authorName = room.createdBy?.name ?? "관리자";
   return (
     <Pressable
       android_ripple={{ color: t.bgSubtle }}
@@ -649,13 +712,13 @@ export function ThreadRow({
               color: stock?.logoTxt ?? "#fff",
             }}
           >
-            {thread.author.slice(0, 1)}
+            {authorName.slice(0, 1)}
           </Text>
         </View>
         <Text style={{ fontSize: 11, color: t.fgStrong, fontWeight: "700" }}>
-          {thread.author}
+          {authorName}
         </Text>
-        {stock ? (
+        {stockLabel ? (
           <View
             style={{
               paddingHorizontal: 6,
@@ -665,7 +728,7 @@ export function ThreadRow({
             }}
           >
             <Text style={{ fontSize: 10, fontWeight: "700", color: t.fgMuted }}>
-              {stock.name}
+              {stockLabel}
             </Text>
           </View>
         ) : null}
@@ -677,7 +740,7 @@ export function ThreadRow({
             fontWeight: "600",
           }}
         >
-          {thread.time}
+          {room.time}
         </Text>
       </View>
       <Text
@@ -689,13 +752,13 @@ export function ThreadRow({
           lineHeight: 21,
         }}
       >
-        {thread.title}
+        {room.name}
       </Text>
       <Text
         numberOfLines={2}
         style={{ fontSize: 13, color: t.fgMuted, marginTop: 4, lineHeight: 20 }}
       >
-        {thread.body}
+        {room.description}
       </Text>
       <View
         style={{
@@ -711,54 +774,89 @@ export function ThreadRow({
           style={{ flexDirection: "row", alignItems: "center", gap: 4 }}
         >
           <Icon.thumbsUp
-            color={liked ? t.upStrong : t.fgMuted}
-            filled={liked}
+            color={room.liked ? t.upStrong : t.fgMuted}
+            filled={room.liked}
             size={15}
           />
           <Text
             style={{
               fontSize: 12,
               fontWeight: "700",
-              color: liked ? t.upStrong : t.fgMuted,
+              color: room.liked ? t.upStrong : t.fgMuted,
             }}
           >
-            {likeCount}
+            {room.likesCount}
           </Text>
         </Pressable>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
           <Icon.reply color={t.fgMuted} size={15} />
           <Text style={{ fontSize: 12, fontWeight: "700", color: t.fgMuted }}>
-            {thread.replies}
+            {room.repliesCount}
           </Text>
         </View>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
           <Icon.sigComm color={t.fgMuted} size={13} />
           <Text style={{ fontSize: 12, fontWeight: "700", color: t.fgMuted }}>
-            {thread.members}
+            {room.membersCount}
           </Text>
         </View>
-        {thread.sentiment === "neutral" ? null : (
+        {room.sentiment === "neutral" ? null : (
           <View
             style={{
               marginLeft: "auto",
               paddingHorizontal: 8,
               paddingVertical: 2,
               borderRadius: 999,
-              backgroundColor: thread.sentiment === "up" ? t.upBg : t.downBg,
+              backgroundColor: room.sentiment === "up" ? t.upBg : t.downBg,
             }}
           >
             <Text
               style={{
                 fontSize: 11,
                 fontWeight: "700",
-                color: thread.sentiment === "up" ? t.upStrong : t.downStrong,
+                color: room.sentiment === "up" ? t.upStrong : t.downStrong,
               }}
             >
-              {thread.sentiment === "up" ? "긍정" : "부정"}
+              {room.sentiment === "up" ? "긍정" : "부정"}
             </Text>
           </View>
         )}
       </View>
     </Pressable>
+  );
+}
+
+export function DiscussionRoomRowSkeleton() {
+  const { t } = useMrTheme();
+  return (
+    <View
+      style={{
+        paddingVertical: 14,
+        paddingHorizontal: 16,
+        backgroundColor: t.bg,
+        borderTopWidth: 1,
+        borderTopColor: t.border,
+      }}
+    >
+      <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
+        <Skeleton height={28} radius={999} width={28} />
+        <Skeleton height={11} radius={4} width={64} />
+        <Skeleton height={16} radius={4} width={56} />
+        <Skeleton
+          height={11}
+          radius={4}
+          style={{ marginLeft: "auto" }}
+          width={40}
+        />
+      </View>
+      <Skeleton height={15} radius={4} style={{ marginTop: 10 }} width="70%" />
+      <Skeleton height={13} radius={4} style={{ marginTop: 8 }} width="100%" />
+      <Skeleton height={13} radius={4} style={{ marginTop: 6 }} width="45%" />
+      <View style={{ flexDirection: "row", gap: 16, marginTop: 12 }}>
+        <Skeleton height={13} radius={4} width={28} />
+        <Skeleton height={13} radius={4} width={28} />
+        <Skeleton height={13} radius={4} width={28} />
+      </View>
+    </View>
   );
 }

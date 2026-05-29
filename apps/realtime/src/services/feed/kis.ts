@@ -16,8 +16,17 @@ const REST_URL = {
 
 // 실시간 체결가(KRX) TR. 호가(H0STASP0) 등은 별도 TR로 추가.
 const TR_TRADE = "H0STCNT0";
+// 국내지수 실시간 체결 TR. tr_key는 업종 구분 코드(KOSPI 0001, KOSDAQ 1001).
+const TR_INDEX = "H0UPCNT0";
 const TR_TYPE_SUBSCRIBE = "1";
 const TR_TYPE_UNSUBSCRIBE = "0";
+
+// 지수 코드는 종목 체결가가 아니라 업종 지수 TR로 구독해야 한다.
+const INDEX_SYMBOLS = new Set(["0001", "1001"]);
+
+function trIdFor(symbol: string): string {
+  return INDEX_SYMBOLS.has(symbol) ? TR_INDEX : TR_TRADE;
+}
 
 // KIS limits ~41 registrations per connection.
 const MAX_SYMBOLS = 40;
@@ -30,6 +39,13 @@ const F_SIGN = 3; // 1:상한 2:상승 3:보합 4:하한 5:하락
 const F_DIFF = 4; // 전일 대비 (magnitude)
 const F_RATE = 5; // 전일 대비율 (%)
 const F_ACML_VOL = 13; // 누적 거래량
+
+// 국내지수 실시간 체결(H0UPCNT0) 레코드 필드 인덱스.
+const F_IDX_SYMBOL = 0; // bstp_cls_code 업종 구분 코드
+const F_IDX_PRICE = 2; // prpr_nmix 현재가 지수
+const F_IDX_SIGN = 3; // prdy_vrss_sign 전일 대비 부호
+const F_IDX_DIFF = 4; // bstp_nmix_prdy_vrss 전일 대비 (magnitude)
+const F_IDX_RATE = 9; // prdy_ctrt 전일 대비율 (%)
 
 const RECONNECT_BASE_MS = 1000;
 const RECONNECT_MAX_MS = 30_000;
@@ -201,7 +217,7 @@ export class KisFeed implements MarketDataFeed {
           tr_type: trType,
           "content-type": "utf-8",
         },
-        body: { input: { tr_id: TR_TRADE, tr_key: symbol } },
+        body: { input: { tr_id: trIdFor(symbol), tr_key: symbol } },
       })
     );
   }
@@ -232,7 +248,12 @@ export class KisFeed implements MarketDataFeed {
       }
       return;
     }
-    for (const quote of parseTradeFrames(raw)) {
+    // 체결가(H0STCNT0)와 지수(H0UPCNT0)는 필드 레이아웃이 다르므로 tr_id로 분기.
+    const quotes =
+      raw.split("|")[1] === TR_INDEX
+        ? parseIndexFrames(raw)
+        : parseTradeFrames(raw);
+    for (const quote of quotes) {
       this.handler?.(quote);
     }
   }
@@ -270,6 +291,45 @@ export function parseTradeFrames(raw: string): Quote[] {
       change: signed(Number(fields[base + F_DIFF]), fields[base + F_SIGN]),
       changeRate: signed(Number(fields[base + F_RATE]), fields[base + F_SIGN]),
       volume: Number(fields[base + F_ACML_VOL]) || undefined,
+      ts,
+    });
+  }
+  return quotes;
+}
+
+/**
+ * Parses a KIS 국내지수 실시간 체결(H0UPCNT0) frame into quotes. Same pipe-frame
+ * envelope as 체결가, but index records carry the 업종 지수 field set. The stride
+ * is derived from the payload so the parser does not depend on the exact field
+ * count. 현재가 지수(prpr_nmix)는 소수(2742.18 등)라 그대로 Number로 파싱한다.
+ */
+export function parseIndexFrames(raw: string): Quote[] {
+  const parts = raw.split("|");
+  const encrypted = parts[0];
+  const trId = parts[1];
+  const count = Number(parts[2]);
+  const payload = parts[3];
+  if (encrypted !== "0" || trId !== TR_INDEX || !payload || count < 1) {
+    return [];
+  }
+
+  const fields = payload.split("^");
+  const stride = Math.floor(fields.length / count);
+  const ts = Date.now();
+  const quotes: Quote[] = [];
+  for (let i = 0; i < count; i += 1) {
+    const base = i * stride;
+    const symbol = fields[base + F_IDX_SYMBOL];
+    const price = Number(fields[base + F_IDX_PRICE]);
+    if (!symbol || Number.isNaN(price)) {
+      continue;
+    }
+    const sign = fields[base + F_IDX_SIGN];
+    quotes.push({
+      symbol,
+      price,
+      change: signed(Number(fields[base + F_IDX_DIFF]), sign),
+      changeRate: signed(Number(fields[base + F_IDX_RATE]), sign),
       ts,
     });
   }

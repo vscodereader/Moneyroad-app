@@ -24,7 +24,10 @@
       }
     },
     "ios": {
-      "bundleIdentifier": "kr.ai.moneyroad"
+      "bundleIdentifier": "kr.ai.moneyroad",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "extra": {
       "eas": {

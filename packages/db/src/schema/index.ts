@@ -1,4 +1,6 @@
 export * from "./auth";
+export * from "./discussion";
+export * from "./inquiry";
 export * from "./news";
 export * from "./news-subscription";
 export * from "./notification-history";
@@ -6,5 +8,6 @@ export * from "./signal";
 export * from "./stock-master";
 export * from "./todo";
 export * from "./user-notification-setting";
+export * from "./user-price-alert";
 export * from "./user-push-token";
 export * from "./user-watchlist";

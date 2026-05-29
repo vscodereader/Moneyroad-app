@@ -59,8 +59,9 @@ function liveMinute(): number {
  * Drives the market-index strip: seeds today's intraday series (10-min candles)
  * from the realtime REST endpoint, then appends live SSE ticks per minute. Falls
  * back to the passed-in static indices until data arrives, and degrades to
- * live-tick-only (no morning history) if the seed is unavailable. Connects only
- * when signed in and `EXPO_PUBLIC_REALTIME_URL` is set.
+ * live-tick-only (no morning history) if the seed is unavailable. Connects
+ * whenever `EXPO_PUBLIC_REALTIME_URL` is set — indices are public so no token
+ * is required; a stream token is attached when signed in.
  */
 export function useIndexStream(fallback: MarketIndex[]): LiveIndex[] {
   const { data: session } = authClient.useSession();
@@ -70,7 +71,7 @@ export function useIndexStream(fallback: MarketIndex[]): LiveIndex[] {
 
   useEffect(() => {
     const baseUrl = env.EXPO_PUBLIC_REALTIME_URL;
-    if (!(baseUrl && userId)) {
+    if (!baseUrl) {
       return;
     }
 
@@ -143,12 +144,14 @@ export function useIndexStream(fallback: MarketIndex[]): LiveIndex[] {
       });
     };
 
-    const fetchSeed = async (token: string): Promise<SeedResponse | null> => {
+    const fetchSeed = async (
+      token: string | null
+    ): Promise<SeedResponse | null> => {
       try {
-        const params = new URLSearchParams({
-          token,
-          symbols: INDEX_CODES.join(","),
-        });
+        const params = new URLSearchParams({ symbols: INDEX_CODES.join(",") });
+        if (token) {
+          params.set("token", token);
+        }
         const res = await fetch(`${baseUrl}/index/intraday?${params}`);
         if (!res.ok) {
           return null;
@@ -163,9 +166,10 @@ export function useIndexStream(fallback: MarketIndex[]): LiveIndex[] {
       if (closed) {
         return;
       }
-      const token = await fetchStreamToken();
-      if (closed || !token) {
-        scheduleReconnect();
+      // Public indices stream without a token; signed-in users attach one so the
+      // connection is attributed to them (and may include private symbols).
+      const token = userId ? await fetchStreamToken() : null;
+      if (closed) {
         return;
       }
       const seed = await fetchSeed(token);
@@ -175,10 +179,10 @@ export function useIndexStream(fallback: MarketIndex[]): LiveIndex[] {
       if (seed) {
         applySeed(seed);
       }
-      const params = new URLSearchParams({
-        token,
-        symbols: INDEX_CODES.join(","),
-      });
+      const params = new URLSearchParams({ symbols: INDEX_CODES.join(",") });
+      if (token) {
+        params.set("token", token);
+      }
       // pollingInterval: 0 disables the library's auto-reconnect so we can
       // reconnect with a freshly-minted (unexpired) token ourselves.
       source = new EventSource<"quote">(

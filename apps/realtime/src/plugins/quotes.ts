@@ -10,6 +10,10 @@ import { quoteHub, streamQuotes } from "@/services/quotes";
 
 const MAX_SYMBOLS = 40;
 
+// Symbols anyone may stream without a token (market indices: KOSPI/KOSDAQ).
+// Everything else requires a valid stream token.
+const PUBLIC_SYMBOLS = new Set(["0001", "1001"]);
+
 // 분봉 시드는 분 단위로만 갱신되므로 짧게 캐시해 KIS REST 호출을 줄인다.
 const INTRADAY_TTL_MS = 30_000;
 const intradayCache = new Map<
@@ -41,6 +45,12 @@ function parseSymbols(raw: string | undefined): string[] {
   return [...seen].slice(0, MAX_SYMBOLS);
 }
 
+// A valid token authorizes any symbol; anonymous requests are limited to the
+// public allowlist. Returns the subset the caller is allowed to receive.
+function authorizeSymbols(symbols: string[], authed: boolean): string[] {
+  return authed ? symbols : symbols.filter((s) => PUBLIC_SYMBOLS.has(s));
+}
+
 export function registerQuotesPlugin(app: FastifyInstance) {
   app.get("/healthz", () => ({ status: "ok", clients: quoteHub.clientCount }));
 
@@ -55,13 +65,16 @@ export function registerQuotesPlugin(app: FastifyInstance) {
       const payload = request.query.token
         ? verifyStreamToken(request.query.token, env.STREAM_TOKEN_SECRET)
         : null;
-      if (!payload) {
+      const symbols = authorizeSymbols(
+        parseSymbols(request.query.symbols),
+        payload != null
+      );
+      if (symbols.length === 0) {
         reply
           .code(401)
           .send({ error: "Unauthorized", code: "INVALID_STREAM_TOKEN" });
         return;
       }
-      const symbols = parseSymbols(request.query.symbols);
       const result: Record<string, IndexIntraday> = {};
       // Sequential: KIS (esp. VTS) rate-limits parallel quotation calls, which
       // can intermittently drop one symbol. Two cached calls are cheap.
@@ -84,16 +97,11 @@ export function registerQuotesPlugin(app: FastifyInstance) {
     "/stream/quotes",
     { sse: true },
     async (request, reply) => {
-      // Auth gate: verify the signed stream token minted by the API server.
+      // Auth gate: a valid token authorizes any symbol; without one, only the
+      // public allowlist (indices) is streamable.
       const payload = request.query.token
         ? verifyStreamToken(request.query.token, env.STREAM_TOKEN_SECRET)
         : null;
-      if (!payload) {
-        reply
-          .code(401)
-          .send({ error: "Unauthorized", code: "INVALID_STREAM_TOKEN" });
-        return;
-      }
 
       // @fastify/sse only enables reply.sse when the client negotiates SSE.
       if (!request.headers.accept?.includes("text/event-stream")) {
@@ -103,8 +111,16 @@ export function registerQuotesPlugin(app: FastifyInstance) {
         return;
       }
 
-      const symbols = parseSymbols(request.query.symbols);
+      const requested = parseSymbols(request.query.symbols);
+      const symbols = authorizeSymbols(requested, payload != null);
       if (symbols.length === 0) {
+        // Anonymous client asked only for non-public symbols → reject.
+        if (requested.length > 0 && payload == null) {
+          reply
+            .code(401)
+            .send({ error: "Unauthorized", code: "INVALID_STREAM_TOKEN" });
+          return;
+        }
         await reply.sse.send({
           event: "error",
           data: { error: "symbols query parameter is required" },
@@ -114,8 +130,9 @@ export function registerQuotesPlugin(app: FastifyInstance) {
 
       // @fastify/sse hijacks the response, so the per-request wide event never
       // emits for SSE. Log the session lifecycle explicitly instead.
+      const user = payload?.sub ?? "anon";
       const startedAt = Date.now();
-      log.info({ stream: { event: "open", user: payload.sub, symbols } });
+      log.info({ stream: { event: "open", user, symbols } });
 
       const controller = new AbortController();
       request.raw.on("close", () => {
@@ -123,7 +140,7 @@ export function registerQuotesPlugin(app: FastifyInstance) {
         log.info({
           stream: {
             event: "close",
-            user: payload.sub,
+            user,
             symbols,
             durationMs: Date.now() - startedAt,
           },

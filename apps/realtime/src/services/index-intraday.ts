@@ -146,7 +146,7 @@ async function resolveToken(): Promise<string> {
 
 // KIS는 tokenP 발급을 분당 1회로 제한하므로, ① 인메모리 캐시 → ② DB 영속 토큰 재사용
 // → ③ 신규 발급 순으로 해결하고, 동시 요청은 단일 in-flight 프로미스로 합친다.
-function getAccessToken(): Promise<string> {
+export function getAccessToken(): Promise<string> {
   if (cachedToken && isFresh(cachedToken.expiresAt)) {
     return Promise.resolve(cachedToken.value);
   }

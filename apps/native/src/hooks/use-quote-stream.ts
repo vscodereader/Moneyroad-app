@@ -23,13 +23,33 @@ interface QuoteEvent {
 const RECONNECT_BASE_MS = 1000;
 const RECONNECT_MAX_MS = 30_000;
 
+async function fetchSnapshotSeed(
+  baseUrl: string,
+  symbolsKey: string,
+  token: string
+): Promise<Record<string, LiveQuote>> {
+  try {
+    const params = new URLSearchParams({ symbols: symbolsKey, token });
+    const res = await fetch(`${baseUrl}/quote/snapshot?${params}`);
+    if (!res.ok) {
+      return {};
+    }
+    return (await res.json()) as Record<string, LiveQuote>;
+  } catch {
+    return {};
+  }
+}
+
 /**
  * Subscribes to the realtime `/stream/quotes` SSE for the given symbols and
- * returns a `symbol → LiveQuote` map updated per tick. Individual symbols are
- * private, so a stream token is attached and the hook short-circuits when the
- * user is not signed in or the symbol list is empty. Reconnect uses an
- * exponential backoff and mints a fresh token each attempt so the 120s TTL
- * never bites mid-session.
+ * returns a `symbol → LiveQuote` map updated per tick. On (re)connect the hook
+ * also fetches `/quote/snapshot` as a seed so the UI shows the last-known price
+ * immediately and keeps showing it when WS ticks aren't flowing (off hours,
+ * 동시호가, just-connected client). SSE ticks always win — the seed only fills
+ * symbols that don't already have a live tick to avoid stomping fresher data.
+ * Individual symbols are private, so a stream token is attached and the hook
+ * short-circuits when the user is not signed in or the symbol list is empty.
+ * Reconnect uses an exponential backoff and mints a fresh token each attempt.
  */
 export function useQuoteStream(symbols: string[]): Record<string, LiveQuote> {
   const { data: session } = authClient.useSession();
@@ -60,6 +80,19 @@ export function useQuoteStream(symbols: string[]): Record<string, LiveQuote> {
         connect();
       }, backoff);
       backoff = Math.min(backoff * 2, RECONNECT_MAX_MS);
+    };
+
+    const applySeed = (seed: Record<string, LiveQuote>) => {
+      setQuotes((prev) => {
+        const next = { ...prev };
+        for (const [sym, q] of Object.entries(seed)) {
+          // SSE 라이브 틱이 이미 있으면 그걸 유지(시드는 더 오래된 값).
+          if (!next[sym]) {
+            next[sym] = q;
+          }
+        }
+        return next;
+      });
     };
 
     const onQuote = (data: string | null) => {
@@ -95,6 +128,13 @@ export function useQuoteStream(symbols: string[]): Record<string, LiveQuote> {
         scheduleReconnect();
         return;
       }
+      // 시드와 SSE는 독립적으로 진행. 시드가 늦게 도착하더라도 SSE가 먼저 채운
+      // 값은 applySeed가 덮어쓰지 않으므로 순서 경합은 안전.
+      fetchSnapshotSeed(baseUrl, symbolsKey, token).then((seed) => {
+        if (!closed) {
+          applySeed(seed);
+        }
+      });
       const params = new URLSearchParams({ symbols: symbolsKey, token });
       // pollingInterval: 0 disables the library's auto-reconnect so we can
       // reconnect with a freshly-minted (unexpired) token ourselves.

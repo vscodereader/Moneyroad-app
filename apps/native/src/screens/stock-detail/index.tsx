@@ -19,6 +19,11 @@ import {
 } from "@/components/ui";
 import { useMrTheme } from "@/hooks/use-mr-theme";
 import { useQuoteStream } from "@/hooks/use-quote-stream";
+import {
+  STOCK_CHART_RANGES,
+  type StockChartRange,
+  useStockChart,
+} from "@/hooks/use-stock-chart";
 import { authClient } from "@/lib/auth-client";
 import { findStock, stocks } from "@/utils/data";
 import { changeColor, fmt } from "@/utils/format";
@@ -27,7 +32,7 @@ import { orpc } from "@/utils/orpc";
 //import { type MrTokens, SIGNAL_TYPE_KEYS, signalMeta } from "@/utils/theme";
 import { type MrTokens, signalMeta } from "@/utils/theme";
 
-const RANGES = ["1D", "1W", "1M", "3M", "1Y"];
+const RANGES: readonly StockChartRange[] = STOCK_CHART_RANGES;
 
 function scoreVerdict(score: number): string {
   if (score >= 80) {
@@ -68,7 +73,7 @@ export default function StockDetailScreen() {
   const meta = signalMeta(t);
   const { code } = useLocalSearchParams<{ code: string }>();
   const stock = findStock(code) ?? stocks[0];
-  const [range, setRange] = useState("1M");
+  const [range, setRange] = useState<StockChartRange>("1D");
   const [starred, setStarred] = useState(stock.watched);
   const [openSignal, setOpenSignal] = useState<string | null>(null);
 
@@ -80,6 +85,22 @@ export default function StockDetailScreen() {
   const change = live?.change ?? 0;
   const changePct = live?.changeRate ?? 0;
   const up = change > 0;
+
+  // Range별 차트 시리즈(가격+거래량+prevClose)를 realtime 프록시에서 가져옴.
+  // 1D에 한해 마지막 점의 가격을 라이브 가격으로 갱신해 헤더 가격과 차트 끝점이
+  // 어긋나지 않게 한다.
+  const seriesRaw = useStockChart(stock.code, range);
+  const lastSeed = seriesRaw.points.at(-1);
+  const series =
+    range === "1D" && live && lastSeed
+      ? {
+          ...seriesRaw,
+          points: [
+            ...seriesRaw.points.slice(0, -1),
+            { ...lastSeed, v: live.price },
+          ],
+        }
+      : seriesRaw;
   const queryClient = useQueryClient();
   const { data: session } = authClient.useSession();
   const isAuthed = Boolean(session?.user);
@@ -241,13 +262,28 @@ export default function StockDetailScreen() {
 
         {/* Chart */}
         <View style={{ paddingHorizontal: 8, paddingTop: 16 }}>
-          <StockChart
-            data={stock.chart90}
-            height={180}
-            positive={up}
-            t={t}
-            width={CHART_WIDTH}
-          />
+          {series.points.length > 1 ? (
+            <StockChart
+              height={220}
+              positive={up}
+              range={range}
+              series={series}
+              t={t}
+              width={CHART_WIDTH}
+            />
+          ) : (
+            <View
+              style={{
+                alignItems: "center",
+                height: 220,
+                justifyContent: "center",
+              }}
+            >
+              <Text style={{ color: t.fgSubtle, fontSize: 13 }}>
+                차트 데이터를 불러오는 중…
+              </Text>
+            </View>
+          )}
         </View>
 
         {/* Composite signal */}

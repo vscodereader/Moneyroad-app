@@ -19,7 +19,9 @@ const TR_TRADE = "H0STCNT0";
 // 국내지수 실시간 체결 TR. tr_key는 업종 구분 코드(KOSPI 0001, KOSDAQ 1001).
 const TR_INDEX = "H0UPCNT0";
 const TR_TYPE_SUBSCRIBE = "1";
-const TR_TYPE_UNSUBSCRIBE = "0";
+// KIS 공식 코드는 "2"(해제). "0"을 보내면 "invalid tr_type"으로 거부되어
+// KIS WS에 stale 가입이 남고 재구독 시 ALREADY IN SUBSCRIBE가 떨어진다.
+const TR_TYPE_UNSUBSCRIBE = "2";
 
 // 지수 코드는 종목 체결가가 아니라 업종 지수 TR로 구독해야 한다.
 const INDEX_SYMBOLS = new Set(["0001", "1001"]);

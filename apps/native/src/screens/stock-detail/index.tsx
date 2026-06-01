@@ -1,7 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocalSearchParams } from "expo-router";
 import { useState } from "react";
-import { Dimensions, Pressable, ScrollView, Text, View } from "react-native";
+import {
+  Alert,
+  Dimensions,
+  Pressable,
+  ScrollView,
+  Text,
+  View,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const CHART_WIDTH = Dimensions.get("window").width - 16;
@@ -17,7 +24,14 @@ import {
   MrScreen,
   SectionHead,
 } from "@/components/ui";
+import { useLiveQuote } from "@/hooks/use-live-quotes";
 import { useMrTheme } from "@/hooks/use-mr-theme";
+import {
+  STOCK_CHART_RANGE_LABELS,
+  STOCK_CHART_RANGES,
+  type StockChartRange,
+  useStockChart,
+} from "@/hooks/use-stock-chart";
 import { authClient } from "@/lib/auth-client";
 import { findStock, stocks } from "@/utils/data";
 import { changeColor, fmt } from "@/utils/format";
@@ -26,7 +40,7 @@ import { orpc } from "@/utils/orpc";
 //import { type MrTokens, SIGNAL_TYPE_KEYS, signalMeta } from "@/utils/theme";
 import { type MrTokens, signalMeta } from "@/utils/theme";
 
-const RANGES = ["1D", "1W", "1M", "3M", "1Y"];
+const RANGES: readonly StockChartRange[] = STOCK_CHART_RANGES;
 
 function scoreVerdict(score: number): string {
   if (score >= 80) {
@@ -67,14 +81,89 @@ export default function StockDetailScreen() {
   const meta = signalMeta(t);
   const { code } = useLocalSearchParams<{ code: string }>();
   const stock = findStock(code) ?? stocks[0];
-  const [range, setRange] = useState("1M");
-  const [starred, setStarred] = useState(stock.watched);
+  const [range, setRange] = useState<StockChartRange>("1D");
   const [openSignal, setOpenSignal] = useState<string | null>(null);
 
-  const up = stock.change > 0;
+  // Show 0 until a live tick arrives — the static stock metadata is seed data
+  // and would be mistaken for a real price otherwise.
+  const live = useLiveQuote(stock.code);
+  const price = live?.price ?? 0;
+  const change = live?.change ?? 0;
+  const changePct = live?.changeRate ?? 0;
+  const up = change > 0;
+
+  // Range별 차트 시리즈(가격+거래량+prevClose)를 realtime 프록시에서 가져옴.
+  // 1D에 한해 마지막 점의 가격을 라이브 가격으로 갱신해 헤더 가격과 차트 끝점이
+  // 어긋나지 않게 한다.
+  const seriesRaw = useStockChart(stock.code, range);
+  const lastSeed = seriesRaw.points.at(-1);
+  const series =
+    range === "1D" && live && lastSeed
+      ? {
+          ...seriesRaw,
+          points: [
+            ...seriesRaw.points.slice(0, -1),
+            { ...lastSeed, v: live.price },
+          ],
+        }
+      : seriesRaw;
   const queryClient = useQueryClient();
   const { data: session } = authClient.useSession();
   const isAuthed = Boolean(session?.user);
+
+  // 워치리스트 server state로 별 토글 상태를 결정. 로컬 starred state 없이도
+  // 다른 화면에서의 변경(워치리스트 화면 추가/제거)이 즉시 반영된다.
+  const watchlistQuery = useQuery(
+    orpc.watchlist.list.queryOptions({ enabled: isAuthed })
+  );
+  const watchlistKey = orpc.watchlist.list.queryKey();
+  const isWatched = (watchlistQuery.data ?? []).some(
+    (w) => w.code === stock.code
+  );
+  const invalidateWatchlist = () =>
+    queryClient.invalidateQueries({ queryKey: watchlistKey });
+  const addWatchMut = useMutation(
+    orpc.watchlist.add.mutationOptions({ onSettled: invalidateWatchlist })
+  );
+  const removeWatchMut = useMutation(
+    orpc.watchlist.remove.mutationOptions({ onSettled: invalidateWatchlist })
+  );
+
+  const toggleWatch = () => {
+    if (!isAuthed) {
+      Alert.alert(
+        "로그인이 필요해요",
+        "관심 종목 등록은 로그인 후 이용할 수 있어요."
+      );
+      return;
+    }
+    if (isWatched) {
+      Alert.alert(
+        "관심 종목 해제",
+        `${stock.name}을(를) 관심 종목에서 해제할까요?`,
+        [
+          { text: "취소", style: "cancel" },
+          {
+            text: "해제",
+            style: "destructive",
+            onPress: () => removeWatchMut.mutate({ stockCode: stock.code }),
+          },
+        ]
+      );
+      return;
+    }
+    Alert.alert(
+      "관심 종목 등록",
+      `${stock.name}을(를) 관심 종목에 추가할까요?`,
+      [
+        { text: "취소", style: "cancel" },
+        {
+          text: "등록",
+          onPress: () => addWatchMut.mutate({ stockCode: stock.code }),
+        },
+      ]
+    );
+  };
 
   const relSignalsQuery = useQuery(
     orpc.signal.feed.queryOptions({
@@ -116,16 +205,16 @@ export default function StockDetailScreen() {
         left={<BackButton onPress={nav.back} />}
         right={
           <>
-            <IconButton onPress={() => setStarred((v) => !v)}>
+            <IconButton onPress={toggleWatch}>
               <Icon.star
-                color={starred ? "#E29A1B" : t.fgSubtle}
-                filled={starred}
+                color={isWatched ? t.sigTech : t.fgSubtle}
+                filled={isWatched}
                 size={22}
               />
             </IconButton>
-            <IconButton>
-              <Icon.share color={t.fgStrong} size={20} />
-            </IconButton>
+            {/*<IconButton>*/}
+            {/*  <Icon.share color={t.fgStrong} size={20} />*/}
+            {/*</IconButton>*/}
           </>
         }
         title={
@@ -152,7 +241,7 @@ export default function StockDetailScreen() {
               color: t.fgStrong,
             }}
           >
-            {fmt.price(stock.price)}
+            {fmt.price(price)}
             <Text style={{ fontSize: 16, fontWeight: "600", color: t.fgMuted }}>
               {" "}
               원
@@ -169,22 +258,19 @@ export default function StockDetailScreen() {
             <View
               style={{ flexDirection: "row", alignItems: "center", gap: 2 }}
             >
-              {up ? (
-                <Icon.arrowUp color={changeColor(stock.change, t)} size={14} />
-              ) : (
-                <Icon.arrowDown
-                  color={changeColor(stock.change, t)}
-                  size={14}
-                />
-              )}
+              {/*{up ? (*/}
+              {/*  <Icon.arrowUp color={changeColor(change, t)} size={14} />*/}
+              {/*) : (*/}
+              {/*  <Icon.arrowDown color={changeColor(change, t)} size={14} />*/}
+              {/*)}*/}
               <Text
                 style={{
                   fontSize: 14,
                   fontWeight: "700",
-                  color: changeColor(stock.change, t),
+                  color: changeColor(change, t),
                 }}
               >
-                {fmt.signedNum(stock.change)} ({fmt.pct(stock.changePct)})
+                {fmt.signedNum(change)} ({fmt.pct(changePct)})
               </Text>
             </View>
             <Text
@@ -227,7 +313,7 @@ export default function StockDetailScreen() {
                     color: active ? t.fgStrong : t.fgMuted,
                   }}
                 >
-                  {r}
+                  {STOCK_CHART_RANGE_LABELS[r]}
                 </Text>
               </Pressable>
             );
@@ -236,13 +322,28 @@ export default function StockDetailScreen() {
 
         {/* Chart */}
         <View style={{ paddingHorizontal: 8, paddingTop: 16 }}>
-          <StockChart
-            data={stock.chart90}
-            height={180}
-            positive={up}
-            t={t}
-            width={CHART_WIDTH}
-          />
+          {series.points.length > 1 ? (
+            <StockChart
+              height={220}
+              positive={up}
+              range={range}
+              series={series}
+              t={t}
+              width={CHART_WIDTH}
+            />
+          ) : (
+            <View
+              style={{
+                alignItems: "center",
+                height: 220,
+                justifyContent: "center",
+              }}
+            >
+              <Text style={{ color: t.fgSubtle, fontSize: 13 }}>
+                차트 데이터를 불러오는 중…
+              </Text>
+            </View>
+          )}
         </View>
 
         {/* Composite signal */}

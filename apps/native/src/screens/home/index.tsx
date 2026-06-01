@@ -145,6 +145,12 @@ export default function HomeScreen() {
   );
   const watched = watchlistQuery.data ?? [];
   const watchedPreview = watched.slice(0, 4);
+  // 시세 구독은 WatchRow가 코드별로 store에 직접 register하므로 여기선 없음.
+  // 미읽음 알림이 있을 때만 종 아이콘에 dot 표시.
+  const unreadCountQuery = useQuery(
+    orpc.notification.unreadCount.queryOptions({ enabled: isLoggedIn })
+  );
+  const hasUnreadAlerts = (unreadCountQuery.data ?? 0) > 0;
 
   return (
     <MrScreen>
@@ -154,7 +160,7 @@ export default function HomeScreen() {
             <IconButton onPress={nav.openSearch}>
               <Icon.search color={t.fgStrong} size={22} />
             </IconButton>
-            <IconButton dot onPress={nav.openAlerts}>
+            <IconButton dot={hasUnreadAlerts} onPress={nav.openAlerts}>
               <Icon.bell color={t.fgStrong} size={22} />
             </IconButton>
           </>
@@ -218,6 +224,29 @@ export default function HomeScreen() {
         {/*</View>*/}
 
         <SectionHead
+          more={
+            isLoggedIn && watched.length > 0
+              ? `전체보기 (${watched.length}) →`
+              : undefined
+          }
+          onMore={
+            isLoggedIn && watched.length > 0 ? nav.openWatchlist : undefined
+          }
+          title="내 관심 종목"
+        />
+        <View style={{ paddingBottom: 8 }}>
+          {isLoggedIn ? (
+            <WatchlistPreview
+              isLoading={watchlistQuery.isLoading}
+              items={watchedPreview}
+              t={t}
+            />
+          ) : (
+            <EmptyHint label="로그인하고 관심 종목을 추가해 보세요." t={t} />
+          )}
+        </View>
+
+        <SectionHead
           more="전체보기 →"
           onMore={() => nav.goTab("signals")}
           title="오늘의 시그널"
@@ -271,29 +300,6 @@ export default function HomeScreen() {
           }
           return topNews.map((n) => <NewsCard key={n.id} news={n} />);
         })()}
-
-        <SectionHead
-          more={
-            isLoggedIn && watched.length > 0
-              ? `전체보기 (${watched.length}) →`
-              : undefined
-          }
-          onMore={
-            isLoggedIn && watched.length > 0 ? nav.openWatchlist : undefined
-          }
-          title="내 관심 종목"
-        />
-        <View style={{ paddingBottom: 8 }}>
-          {isLoggedIn ? (
-            <WatchlistPreview
-              isLoading={watchlistQuery.isLoading}
-              items={watchedPreview}
-              t={t}
-            />
-          ) : (
-            <EmptyHint label="로그인하고 관심 종목을 추가해 보세요." t={t} />
-          )}
-        </View>
 
         <View style={{ height: 24 }} />
       </ScrollView>

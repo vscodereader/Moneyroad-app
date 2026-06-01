@@ -70,7 +70,8 @@
     "tailwind-variants": "^3.2.2",
     "tailwindcss": "^4.2.4",
     "uniwind": "^1.6.3",
-    "zod": "catalog:"
+    "zod": "catalog:",
+    "zustand": "^5.0.14"
   },
   "devDependencies": {
     "@moneyroad-app/config": "workspace:*",

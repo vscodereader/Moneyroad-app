@@ -34,6 +34,12 @@ export const env = createEnv({
     STOCK_MASTER_CRON: z.string().default("0 6 * * *"),
     STOCK_MASTER_TZ: z.string().default("Asia/Seoul"),
 
+    // Watchlist union poll interval. The poller reads user_watchlist and pins
+    // the unique stock_code set on QuoteHub so those symbols stay subscribed
+    // upstream even when no SSE client is connected (alarm evaluation needs
+    // the ticks). No-op without DATABASE_URL.
+    WATCHLIST_POLL_INTERVAL_MS: z.coerce.number().default(10_000),
+
     NODE_ENV: z
       .enum(["development", "production", "test"])
       .default("development"),

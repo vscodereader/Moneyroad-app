@@ -14,7 +14,10 @@ import {
 
 import { Icon } from "@/components/icons";
 import { BackButton, MrHeader, MrScreen } from "@/components/ui";
+import { useLiveQuote } from "@/hooks/use-live-quotes";
 import { useMrTheme } from "@/hooks/use-mr-theme";
+import type { LiveQuote } from "@/stores/quotes-store";
+import { changeColor, fmt } from "@/utils/format";
 import { nav } from "@/utils/nav";
 import { orpc } from "@/utils/orpc";
 import type { MrTokens } from "@/utils/theme";
@@ -314,6 +317,65 @@ function SearchResults({
   );
 }
 
+function PriceBlock({ quote, t }: { quote: LiveQuote; t: MrTokens }) {
+  return (
+    <View style={{ alignItems: "flex-end", gap: 2 }}>
+      <Text style={{ color: t.fgStrong, fontSize: 14, fontWeight: "800" }}>
+        {fmt.price(quote.price)}
+      </Text>
+      <Text
+        style={{
+          color: changeColor(quote.change, t),
+          fontSize: 11,
+          fontWeight: "700",
+        }}
+      >
+        {fmt.pct(quote.changeRate)}
+      </Text>
+    </View>
+  );
+}
+
+// Row-level subscription: 각 행은 자기 종목 코드로 store에 직접 register하므로
+// 한 종목 틱이 다른 행을 리렌더하지 않는다.
+function MyListRow({
+  entry,
+  onRemove,
+  t,
+}: {
+  entry: StockEntry;
+  onRemove: (code: string) => void;
+  t: MrTokens;
+}) {
+  const quote = useLiveQuote(entry.code);
+  return (
+    <EntryRow
+      entry={entry}
+      onPress={() => nav.openStock(entry.code)}
+      right={
+        <View style={{ alignItems: "center", flexDirection: "row", gap: 10 }}>
+          {quote ? <PriceBlock quote={quote} t={t} /> : null}
+          <Pressable
+            hitSlop={8}
+            onPress={() => onRemove(entry.code)}
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: 999,
+              alignItems: "center",
+              justifyContent: "center",
+              backgroundColor: t.bgSubtle,
+            }}
+          >
+            <Icon.close color={t.fgMuted} size={16} />
+          </Pressable>
+        </View>
+      }
+      t={t}
+    />
+  );
+}
+
 function MyList({
   items,
   isLoading,
@@ -345,28 +407,7 @@ function MyList({
   return (
     <View>
       {items.map((s) => (
-        <EntryRow
-          entry={s}
-          key={s.code}
-          onPress={() => nav.openStock(s.code)}
-          right={
-            <Pressable
-              hitSlop={8}
-              onPress={() => onRemove(s.code)}
-              style={{
-                width: 32,
-                height: 32,
-                borderRadius: 999,
-                alignItems: "center",
-                justifyContent: "center",
-                backgroundColor: t.bgSubtle,
-              }}
-            >
-              <Icon.close color={t.fgMuted} size={16} />
-            </Pressable>
-          }
-          t={t}
-        />
+        <MyListRow entry={s} key={s.code} onRemove={onRemove} t={t} />
       ))}
     </View>
   );

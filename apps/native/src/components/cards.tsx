@@ -5,7 +5,9 @@ import { Gradient, IndexIntradayChart, Sparkline } from "@/components/charts";
 import { Icon, SIGNAL_ACTION_ICON } from "@/components/icons";
 import { ScorePill, Skeleton, StockLogo, StrengthBar } from "@/components/ui";
 import { type LiveIndex, SESSION_MINUTES } from "@/hooks/use-index-stream";
+import { useLiveQuote } from "@/hooks/use-live-quotes";
 import { useMrTheme } from "@/hooks/use-mr-theme";
+import { useStockSparkline } from "@/hooks/use-stock-sparkline";
 import type { NewsItem, Signal, Stock } from "@/utils/data";
 import { findStock } from "@/utils/data";
 import { changeColor, fmt } from "@/utils/format";
@@ -76,6 +78,8 @@ export function StockRow({
 }) {
   const { t } = useMrTheme();
   const up = stock.change > 0;
+  const spark = useStockSparkline(stock.code);
+  const sparkData = spark.length > 1 ? spark : stock.spark;
   return (
     <Pressable
       android_ripple={{ color: t.bgSubtle }}
@@ -123,7 +127,7 @@ export function StockRow({
       </View>
       <View style={{ alignItems: "flex-end", gap: 4 }}>
         <Sparkline
-          data={stock.spark}
+          data={sparkData}
           height={22}
           positive={up}
           t={t}
@@ -146,7 +150,7 @@ export function StockRow({
   );
 }
 
-// ── Watchlist row (real watchlist; no market price yet) ───────
+// ── Watchlist row (real watchlist; live quote via store) ──────
 export function WatchRow({
   entry,
   onPress,
@@ -155,6 +159,9 @@ export function WatchRow({
   onPress?: () => void;
 }) {
   const { t } = useMrTheme();
+  // Row-level subscription: this row only re-renders when ITS symbol ticks,
+  // not when other rows in the list tick.
+  const quote = useLiveQuote(entry.code);
   return (
     <Pressable
       android_ripple={{ color: t.bgSubtle }}
@@ -214,7 +221,24 @@ export function WatchRow({
           </View>
         </View>
       </View>
-      <Icon.chevRight color={t.fgSubtle} size={16} />
+      {quote ? (
+        <View style={{ alignItems: "flex-end", gap: 2 }}>
+          <Text style={{ color: t.fgStrong, fontSize: 14, fontWeight: "800" }}>
+            {fmt.price(quote.price)}
+          </Text>
+          <Text
+            style={{
+              color: changeColor(quote.change, t),
+              fontSize: 11,
+              fontWeight: "700",
+            }}
+          >
+            {fmt.pct(quote.changeRate)}
+          </Text>
+        </View>
+      ) : (
+        <Icon.chevRight color={t.fgSubtle} size={16} />
+      )}
     </Pressable>
   );
 }
@@ -241,6 +265,63 @@ export function WatchRowSkeleton() {
         <Skeleton height={11} radius={4} width={84} />
       </View>
     </View>
+  );
+}
+
+// Expanded 시그널 카드 안의 종목 미니카드. 별도 컴포넌트로 둬서 카드가 접혀
+// 있는 동안엔 useLiveQuote가 호출되지 않아 SSE에 쓸데없이 가입하지 않는다.
+function SignalStockRow({
+  stock,
+  onPress,
+  t,
+}: {
+  stock: Stock;
+  onPress?: () => void;
+  t: MrTokens;
+}) {
+  const live = useLiveQuote(stock.code);
+  const price = live?.price ?? stock.price;
+  const change = live?.change ?? stock.change;
+  const changePct = live?.changeRate ?? stock.changePct;
+  const spark = useStockSparkline(stock.code);
+  const sparkData = spark.length > 1 ? spark : stock.spark;
+  return (
+    <Pressable
+      android_ripple={onPress ? { color: t.bgMuted } : undefined}
+      disabled={!onPress}
+      onPress={onPress}
+      style={({ pressed }) => ({
+        marginTop: 12,
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 10,
+        paddingVertical: 10,
+        paddingHorizontal: 12,
+        backgroundColor: pressed && onPress ? t.bgMuted : t.bgSubtle,
+        borderRadius: 10,
+      })}
+    >
+      <StockLogo radius={8} size={32} stock={stock} />
+      <View style={{ flex: 1 }}>
+        <Text style={{ fontSize: 13, fontWeight: "700", color: t.fgStrong }}>
+          {stock.name}
+        </Text>
+        <Text style={{ fontSize: 11, color: t.fgMuted }}>
+          {fmt.price(price)}원 ·{" "}
+          <Text style={{ color: changeColor(change, t) }}>
+            {fmt.pct(changePct)}
+          </Text>
+        </Text>
+      </View>
+      <Sparkline
+        data={sparkData}
+        height={22}
+        positive={change > 0}
+        t={t}
+        width={56}
+      />
+      {onPress ? <Icon.chevRight color={t.fgSubtle} size={18} /> : null}
+    </Pressable>
   );
 }
 
@@ -285,18 +366,18 @@ export function SignalCard({
           gap: 12,
         }}
       >
-        <View
-          style={{
-            width: 36,
-            height: 36,
-            borderRadius: 10,
-            backgroundColor: meta.bg,
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <TypeIcon color={meta.color} size={20} />
-        </View>
+        {/*<View*/}
+        {/*  style={{*/}
+        {/*    width: 36,*/}
+        {/*    height: 36,*/}
+        {/*    borderRadius: 10,*/}
+        {/*    backgroundColor: meta.bg,*/}
+        {/*    alignItems: "center",*/}
+        {/*    justifyContent: "center",*/}
+        {/*  }}*/}
+        {/*>*/}
+        {/*  <TypeIcon color={meta.color} size={20} />*/}
+        {/*</View>*/}
         <View style={{ flex: 1, minWidth: 0 }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
             <Text
@@ -377,47 +458,7 @@ export function SignalCard({
             {signal.body}
           </Text>
           {stock ? (
-            <Pressable
-              android_ripple={onStockPress ? { color: t.bgMuted } : undefined}
-              disabled={!onStockPress}
-              onPress={onStockPress}
-              style={({ pressed }) => ({
-                marginTop: 12,
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 10,
-                paddingVertical: 10,
-                paddingHorizontal: 12,
-                backgroundColor:
-                  pressed && onStockPress ? t.bgMuted : t.bgSubtle,
-                borderRadius: 10,
-              })}
-            >
-              <StockLogo radius={8} size={32} stock={stock} />
-              <View style={{ flex: 1 }}>
-                <Text
-                  style={{ fontSize: 13, fontWeight: "700", color: t.fgStrong }}
-                >
-                  {stock.name}
-                </Text>
-                <Text style={{ fontSize: 11, color: t.fgMuted }}>
-                  {fmt.price(stock.price)}원 ·{" "}
-                  <Text style={{ color: changeColor(stock.change, t) }}>
-                    {fmt.pct(stock.changePct)}
-                  </Text>
-                </Text>
-              </View>
-              <Sparkline
-                data={stock.spark}
-                height={22}
-                positive={stock.change > 0}
-                t={t}
-                width={56}
-              />
-              {onStockPress ? (
-                <Icon.chevRight color={t.fgSubtle} size={18} />
-              ) : null}
-            </Pressable>
+            <SignalStockRow onPress={onStockPress} stock={stock} t={t} />
           ) : null}
           <Text style={{ marginTop: 10, fontSize: 11, color: t.fgSubtle }}>
             ⓘ 매매 권유가 아니며 정보 제공 목적입니다.

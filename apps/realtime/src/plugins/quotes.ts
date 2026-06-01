@@ -7,6 +7,13 @@ import {
   type IndexIntraday,
 } from "@/services/index-intraday";
 import { quoteHub, streamQuotes } from "@/services/quotes";
+import {
+  type ChartRange,
+  fetchStockChart,
+  fetchStockSparkline,
+  isChartRange,
+} from "@/services/stock-chart";
+import { fetchStockSnapshots } from "@/services/stock-price";
 
 const MAX_SYMBOLS = 40;
 
@@ -76,15 +83,108 @@ export function registerQuotesPlugin(app: FastifyInstance) {
         return;
       }
       const result: Record<string, IndexIntraday> = {};
-      // Sequential: KIS (esp. VTS) rate-limits parallel quotation calls, which
-      // can intermittently drop one symbol. Two cached calls are cheap.
-      for (const code of symbols) {
+      // Sequential + throttle: KIS paper의 초당 호출 한도(EGW00201)를 피하려고
+      // 호출 간격을 둔다. 캐시 hit이면 함수 자체가 빨라 무의미한 지연 X.
+      for (let i = 0; i < symbols.length; i += 1) {
+        const code = symbols[i];
+        if (!code) {
+          continue;
+        }
         const data = await getIntraday(code);
         if (data) {
           result[code] = data;
         }
+        if (i + 1 < symbols.length) {
+          await new Promise((resolve) => setTimeout(resolve, 250));
+        }
       }
       reply.send(result);
+    }
+  );
+
+  // Last-known price snapshots for the requested symbols (KIS REST). Pairs with
+  // the /stream/quotes SSE as a seed so the client can render immediately and
+  // continue showing the most recent price when WS ticks aren't flowing
+  // (off hours, 동시호가, freshly-connected client).
+  //   GET /quote/snapshot?symbols=005930,000660&token=<stream token>
+  app.get<{ Querystring: { symbols?: string; token?: string } }>(
+    "/quote/snapshot",
+    async (request, reply) => {
+      const payload = request.query.token
+        ? verifyStreamToken(request.query.token, env.STREAM_TOKEN_SECRET)
+        : null;
+      const requested = parseSymbols(request.query.symbols);
+      const symbols = authorizeSymbols(requested, payload != null);
+      if (symbols.length === 0) {
+        if (requested.length > 0 && payload == null) {
+          reply
+            .code(401)
+            .send({ error: "Unauthorized", code: "INVALID_STREAM_TOKEN" });
+          return;
+        }
+        reply.send({});
+        return;
+      }
+      const snapshots = await fetchStockSnapshots(symbols);
+      reply.send(snapshots);
+    }
+  );
+
+  // Sparkline series — recent ~30 daily closes for a small inline chart.
+  //   GET /quote/sparkline?code=000660&token=<stream token>
+  // Single KIS REST call (1h cached). Token required (private symbol).
+  app.get<{ Querystring: { code?: string; token?: string } }>(
+    "/quote/sparkline",
+    async (request, reply) => {
+      const payload = request.query.token
+        ? verifyStreamToken(request.query.token, env.STREAM_TOKEN_SECRET)
+        : null;
+      if (!payload) {
+        reply
+          .code(401)
+          .send({ error: "Unauthorized", code: "INVALID_STREAM_TOKEN" });
+        return;
+      }
+      const code = request.query.code?.trim();
+      if (!code) {
+        reply.code(400).send({ error: "code query parameter is required" });
+        return;
+      }
+      const points = await fetchStockSparkline(code);
+      reply.send({ points });
+    }
+  );
+
+  // Stock chart series (close prices, oldest→newest) for the requested range:
+  //   GET /chart/stock?code=000660&range=1D&token=<stream token>
+  // Individual stocks are private, so a valid token is required. Returns
+  // `{ points: number[] }` — empty array when the upstream call fails so the
+  // client can render an empty state without a special error path.
+  app.get<{ Querystring: { code?: string; range?: string; token?: string } }>(
+    "/chart/stock",
+    async (request, reply) => {
+      const payload = request.query.token
+        ? verifyStreamToken(request.query.token, env.STREAM_TOKEN_SECRET)
+        : null;
+      if (!payload) {
+        reply
+          .code(401)
+          .send({ error: "Unauthorized", code: "INVALID_STREAM_TOKEN" });
+        return;
+      }
+      const code = request.query.code?.trim();
+      const rangeRaw = request.query.range?.trim() ?? "1D";
+      if (!code) {
+        reply.code(400).send({ error: "code query parameter is required" });
+        return;
+      }
+      if (!isChartRange(rangeRaw)) {
+        reply.code(400).send({ error: "invalid range" });
+        return;
+      }
+      const range: ChartRange = rangeRaw;
+      const series = await fetchStockChart(code, range);
+      reply.send(series);
     }
   );
 

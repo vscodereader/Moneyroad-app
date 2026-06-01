@@ -1,5 +1,9 @@
+import { kisToken } from "@moneyroad-app/db/schema";
 import { env } from "@moneyroad-app/env/realtime";
+import { eq } from "drizzle-orm";
 import { createError, log } from "evlog";
+
+import { getDb, isNewsDbConfigured } from "@/services/news/db";
 
 // KIS REST 베이스 URL (체결 WS와 동일 호스트, REST는 https).
 const REST_URL = {
@@ -31,8 +35,64 @@ export interface IndexIntraday {
   prevClose: number;
 }
 
+// cachedToken.expiresAt is the token's true expiry; the margin is applied when
+// checking freshness so we keep reusing a token until just before it lapses.
 let cachedToken: { value: string; expiresAt: number } | null = null;
 let tokenInFlight: Promise<string> | null = null;
+
+function isFresh(expiresAt: number): boolean {
+  return expiresAt - TOKEN_EXPIRY_MARGIN_MS > Date.now();
+}
+
+// Reuses a token persisted by a previous container so redeploys/restarts don't
+// each mint a new one (KIS rate-limits reissue and caps issuance ~1/day).
+async function loadPersistedToken(): Promise<string | null> {
+  if (!isNewsDbConfigured()) {
+    return null;
+  }
+  try {
+    const [row] = await getDb()
+      .select({
+        accessToken: kisToken.accessToken,
+        expiresAt: kisToken.expiresAt,
+      })
+      .from(kisToken)
+      .where(eq(kisToken.env, env.KIS_ENV));
+    if (!(row && isFresh(row.expiresAt.getTime()))) {
+      return null;
+    }
+    cachedToken = {
+      value: row.accessToken,
+      expiresAt: row.expiresAt.getTime(),
+    };
+    log.info({ kis: { event: "token_reused", env: env.KIS_ENV } });
+    return row.accessToken;
+  } catch (error) {
+    log.warn({ kis: { event: "token_db_read", ok: false }, error });
+    return null;
+  }
+}
+
+async function persistToken(value: string, expiresAt: number): Promise<void> {
+  if (!isNewsDbConfigured()) {
+    return;
+  }
+  try {
+    await getDb()
+      .insert(kisToken)
+      .values({
+        env: env.KIS_ENV,
+        accessToken: value,
+        expiresAt: new Date(expiresAt),
+      })
+      .onConflictDoUpdate({
+        target: kisToken.env,
+        set: { accessToken: value, expiresAt: new Date(expiresAt) },
+      });
+  } catch (error) {
+    log.warn({ kis: { event: "token_db_write", ok: false }, error });
+  }
+}
 
 async function requestToken(): Promise<string> {
   const res = await fetch(`${REST_URL[env.KIS_ENV]}/oauth2/tokenP`, {
@@ -66,21 +126,32 @@ async function requestToken(): Promise<string> {
     });
   }
   const ttlMs = (json.expires_in ?? 86_400) * 1000;
-  cachedToken = {
-    value: json.access_token,
-    expiresAt: Date.now() + ttlMs - TOKEN_EXPIRY_MARGIN_MS,
-  };
+  const expiresAt = Date.now() + ttlMs;
+  cachedToken = { value: json.access_token, expiresAt };
+  await persistToken(json.access_token, expiresAt);
+  log.info({
+    kis: {
+      event: "token_issued",
+      env: env.KIS_ENV,
+      expiresInS: json.expires_in,
+    },
+  });
   return json.access_token;
 }
 
-// KIS는 tokenP 발급을 분당 1회로 제한하므로 토큰을 캐시하고, 동시 요청은 단일
-// in-flight 프로미스로 합친다.
+async function resolveToken(): Promise<string> {
+  const persisted = await loadPersistedToken();
+  return persisted ?? (await requestToken());
+}
+
+// KIS는 tokenP 발급을 분당 1회로 제한하므로, ① 인메모리 캐시 → ② DB 영속 토큰 재사용
+// → ③ 신규 발급 순으로 해결하고, 동시 요청은 단일 in-flight 프로미스로 합친다.
 function getAccessToken(): Promise<string> {
-  if (cachedToken && cachedToken.expiresAt > Date.now()) {
+  if (cachedToken && isFresh(cachedToken.expiresAt)) {
     return Promise.resolve(cachedToken.value);
   }
   if (!tokenInFlight) {
-    tokenInFlight = requestToken().finally(() => {
+    tokenInFlight = resolveToken().finally(() => {
       tokenInFlight = null;
     });
   }

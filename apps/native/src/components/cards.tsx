@@ -6,6 +6,7 @@ import { Icon, SIGNAL_ACTION_ICON } from "@/components/icons";
 import { ScorePill, Skeleton, StockLogo, StrengthBar } from "@/components/ui";
 import { type LiveIndex, SESSION_MINUTES } from "@/hooks/use-index-stream";
 import { useMrTheme } from "@/hooks/use-mr-theme";
+import type { LiveQuote } from "@/hooks/use-quote-stream";
 import type { NewsItem, Signal, Stock } from "@/utils/data";
 import { findStock } from "@/utils/data";
 import { changeColor, fmt } from "@/utils/format";
@@ -146,13 +147,15 @@ export function StockRow({
   );
 }
 
-// ── Watchlist row (real watchlist; no market price yet) ───────
+// ── Watchlist row (real watchlist; live quote optional) ───────
 export function WatchRow({
   entry,
   onPress,
+  quote,
 }: {
   entry: { code: string; market: string; name: string };
   onPress?: () => void;
+  quote?: LiveQuote;
 }) {
   const { t } = useMrTheme();
   return (
@@ -214,7 +217,24 @@ export function WatchRow({
           </View>
         </View>
       </View>
-      <Icon.chevRight color={t.fgSubtle} size={16} />
+      {quote ? (
+        <View style={{ alignItems: "flex-end", gap: 2 }}>
+          <Text style={{ color: t.fgStrong, fontSize: 14, fontWeight: "800" }}>
+            {fmt.price(quote.price)}
+          </Text>
+          <Text
+            style={{
+              color: changeColor(quote.change, t),
+              fontSize: 11,
+              fontWeight: "700",
+            }}
+          >
+            {fmt.pct(quote.changeRate)}
+          </Text>
+        </View>
+      ) : (
+        <Icon.chevRight color={t.fgSubtle} size={16} />
+      )}
     </Pressable>
   );
 }

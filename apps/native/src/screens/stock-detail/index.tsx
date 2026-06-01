@@ -1,7 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocalSearchParams } from "expo-router";
 import { useState } from "react";
-import { Dimensions, Pressable, ScrollView, Text, View } from "react-native";
+import {
+  Alert,
+  Dimensions,
+  Pressable,
+  ScrollView,
+  Text,
+  View,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const CHART_WIDTH = Dimensions.get("window").width - 16;
@@ -75,7 +82,6 @@ export default function StockDetailScreen() {
   const { code } = useLocalSearchParams<{ code: string }>();
   const stock = findStock(code) ?? stocks[0];
   const [range, setRange] = useState<StockChartRange>("1D");
-  const [starred, setStarred] = useState(stock.watched);
   const [openSignal, setOpenSignal] = useState<string | null>(null);
 
   // Show 0 until a live tick arrives — the static stock metadata is seed data
@@ -104,6 +110,60 @@ export default function StockDetailScreen() {
   const queryClient = useQueryClient();
   const { data: session } = authClient.useSession();
   const isAuthed = Boolean(session?.user);
+
+  // 워치리스트 server state로 별 토글 상태를 결정. 로컬 starred state 없이도
+  // 다른 화면에서의 변경(워치리스트 화면 추가/제거)이 즉시 반영된다.
+  const watchlistQuery = useQuery(
+    orpc.watchlist.list.queryOptions({ enabled: isAuthed })
+  );
+  const watchlistKey = orpc.watchlist.list.queryKey();
+  const isWatched = (watchlistQuery.data ?? []).some(
+    (w) => w.code === stock.code
+  );
+  const invalidateWatchlist = () =>
+    queryClient.invalidateQueries({ queryKey: watchlistKey });
+  const addWatchMut = useMutation(
+    orpc.watchlist.add.mutationOptions({ onSettled: invalidateWatchlist })
+  );
+  const removeWatchMut = useMutation(
+    orpc.watchlist.remove.mutationOptions({ onSettled: invalidateWatchlist })
+  );
+
+  const toggleWatch = () => {
+    if (!isAuthed) {
+      Alert.alert(
+        "로그인이 필요해요",
+        "관심 종목 등록은 로그인 후 이용할 수 있어요."
+      );
+      return;
+    }
+    if (isWatched) {
+      Alert.alert(
+        "관심 종목 해제",
+        `${stock.name}을(를) 관심 종목에서 해제할까요?`,
+        [
+          { text: "취소", style: "cancel" },
+          {
+            text: "해제",
+            style: "destructive",
+            onPress: () => removeWatchMut.mutate({ stockCode: stock.code }),
+          },
+        ]
+      );
+      return;
+    }
+    Alert.alert(
+      "관심 종목 등록",
+      `${stock.name}을(를) 관심 종목에 추가할까요?`,
+      [
+        { text: "취소", style: "cancel" },
+        {
+          text: "등록",
+          onPress: () => addWatchMut.mutate({ stockCode: stock.code }),
+        },
+      ]
+    );
+  };
 
   const relSignalsQuery = useQuery(
     orpc.signal.feed.queryOptions({
@@ -145,16 +205,16 @@ export default function StockDetailScreen() {
         left={<BackButton onPress={nav.back} />}
         right={
           <>
-            <IconButton onPress={() => setStarred((v) => !v)}>
+            <IconButton onPress={toggleWatch}>
               <Icon.star
-                color={starred ? "#E29A1B" : t.fgSubtle}
-                filled={starred}
+                color={isWatched ? t.sigTech : t.fgSubtle}
+                filled={isWatched}
                 size={22}
               />
             </IconButton>
-            <IconButton>
-              <Icon.share color={t.fgStrong} size={20} />
-            </IconButton>
+            {/*<IconButton>*/}
+            {/*  <Icon.share color={t.fgStrong} size={20} />*/}
+            {/*</IconButton>*/}
           </>
         }
         title={

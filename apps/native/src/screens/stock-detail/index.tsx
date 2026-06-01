@@ -18,6 +18,7 @@ import {
   SectionHead,
 } from "@/components/ui";
 import { useMrTheme } from "@/hooks/use-mr-theme";
+import { useQuoteStream } from "@/hooks/use-quote-stream";
 import { authClient } from "@/lib/auth-client";
 import { findStock, stocks } from "@/utils/data";
 import { changeColor, fmt } from "@/utils/format";
@@ -71,7 +72,14 @@ export default function StockDetailScreen() {
   const [starred, setStarred] = useState(stock.watched);
   const [openSignal, setOpenSignal] = useState<string | null>(null);
 
-  const up = stock.change > 0;
+  // Show 0 until a live tick arrives — the static stock metadata is seed data
+  // and would be mistaken for a real price otherwise.
+  const quotes = useQuoteStream([stock.code]);
+  const live = quotes[stock.code];
+  const price = live?.price ?? 0;
+  const change = live?.change ?? 0;
+  const changePct = live?.changeRate ?? 0;
+  const up = change > 0;
   const queryClient = useQueryClient();
   const { data: session } = authClient.useSession();
   const isAuthed = Boolean(session?.user);
@@ -152,7 +160,7 @@ export default function StockDetailScreen() {
               color: t.fgStrong,
             }}
           >
-            {fmt.price(stock.price)}
+            {fmt.price(price)}
             <Text style={{ fontSize: 16, fontWeight: "600", color: t.fgMuted }}>
               {" "}
               원
@@ -169,22 +177,19 @@ export default function StockDetailScreen() {
             <View
               style={{ flexDirection: "row", alignItems: "center", gap: 2 }}
             >
-              {up ? (
-                <Icon.arrowUp color={changeColor(stock.change, t)} size={14} />
-              ) : (
-                <Icon.arrowDown
-                  color={changeColor(stock.change, t)}
-                  size={14}
-                />
-              )}
+              {/*{up ? (*/}
+              {/*  <Icon.arrowUp color={changeColor(change, t)} size={14} />*/}
+              {/*) : (*/}
+              {/*  <Icon.arrowDown color={changeColor(change, t)} size={14} />*/}
+              {/*)}*/}
               <Text
                 style={{
                   fontSize: 14,
                   fontWeight: "700",
-                  color: changeColor(stock.change, t),
+                  color: changeColor(change, t),
                 }}
               >
-                {fmt.signedNum(stock.change)} ({fmt.pct(stock.changePct)})
+                {fmt.signedNum(change)} ({fmt.pct(changePct)})
               </Text>
             </View>
             <Text

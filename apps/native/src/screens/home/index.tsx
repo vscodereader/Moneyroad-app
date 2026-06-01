@@ -146,6 +146,11 @@ export default function HomeScreen() {
   const watched = watchlistQuery.data ?? [];
   const watchedPreview = watched.slice(0, 4);
   // 시세 구독은 WatchRow가 코드별로 store에 직접 register하므로 여기선 없음.
+  // 미읽음 알림이 있을 때만 종 아이콘에 dot 표시.
+  const unreadCountQuery = useQuery(
+    orpc.notification.unreadCount.queryOptions({ enabled: isLoggedIn })
+  );
+  const hasUnreadAlerts = (unreadCountQuery.data ?? 0) > 0;
 
   return (
     <MrScreen>
@@ -155,7 +160,7 @@ export default function HomeScreen() {
             <IconButton onPress={nav.openSearch}>
               <Icon.search color={t.fgStrong} size={22} />
             </IconButton>
-            <IconButton dot onPress={nav.openAlerts}>
+            <IconButton dot={hasUnreadAlerts} onPress={nav.openAlerts}>
               <Icon.bell color={t.fgStrong} size={22} />
             </IconButton>
           </>

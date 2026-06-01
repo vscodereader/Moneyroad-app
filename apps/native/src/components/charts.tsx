@@ -155,9 +155,21 @@ export function IndexIntradayChart({
       />
       {linePath ? (
         <Path
+          clipPath={`url(#${id}up)`}
           d={linePath}
           fill="none"
-          stroke={lineColor}
+          stroke={t.upStrong}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={1.5}
+        />
+      ) : null}
+      {linePath ? (
+        <Path
+          clipPath={`url(#${id}down)`}
+          d={linePath}
+          fill="none"
+          stroke={t.downStrong}
           strokeLinecap="round"
           strokeLinejoin="round"
           strokeWidth={1.5}

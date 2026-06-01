@@ -15,6 +15,8 @@ import {
 import { Icon } from "@/components/icons";
 import { BackButton, MrHeader, MrScreen } from "@/components/ui";
 import { useMrTheme } from "@/hooks/use-mr-theme";
+import { type LiveQuote, useQuoteStream } from "@/hooks/use-quote-stream";
+import { changeColor, fmt } from "@/utils/format";
 import { nav } from "@/utils/nav";
 import { orpc } from "@/utils/orpc";
 import type { MrTokens } from "@/utils/theme";
@@ -190,6 +192,10 @@ export default function WatchlistScreen() {
   }, [searching]);
 
   const items = list.data ?? [];
+  // Live quotes for the full watchlist; off-screen rows still subscribe so all
+  // rows update consistently as the user scrolls. The hook short-circuits on
+  // empty list / signed-out user.
+  const quotes = useQuoteStream(items.map((i) => i.code));
 
   return (
     <MrScreen>
@@ -238,6 +244,7 @@ export default function WatchlistScreen() {
             isLoading={list.isLoading}
             items={items}
             onRemove={removeEntry}
+            quotes={quotes}
             t={t}
           />
         )}
@@ -314,15 +321,36 @@ function SearchResults({
   );
 }
 
+function PriceBlock({ quote, t }: { quote: LiveQuote; t: MrTokens }) {
+  return (
+    <View style={{ alignItems: "flex-end", gap: 2 }}>
+      <Text style={{ color: t.fgStrong, fontSize: 14, fontWeight: "800" }}>
+        {fmt.price(quote.price)}
+      </Text>
+      <Text
+        style={{
+          color: changeColor(quote.change, t),
+          fontSize: 11,
+          fontWeight: "700",
+        }}
+      >
+        {fmt.pct(quote.changeRate)}
+      </Text>
+    </View>
+  );
+}
+
 function MyList({
   items,
   isLoading,
   onRemove,
+  quotes,
   t,
 }: {
   items: StockEntry[];
   isLoading: boolean;
   onRemove: (code: string) => void;
+  quotes: Record<string, LiveQuote>;
   t: MrTokens;
 }) {
   if (isLoading) {
@@ -344,30 +372,38 @@ function MyList({
   }
   return (
     <View>
-      {items.map((s) => (
-        <EntryRow
-          entry={s}
-          key={s.code}
-          onPress={() => nav.openStock(s.code)}
-          right={
-            <Pressable
-              hitSlop={8}
-              onPress={() => onRemove(s.code)}
-              style={{
-                width: 32,
-                height: 32,
-                borderRadius: 999,
-                alignItems: "center",
-                justifyContent: "center",
-                backgroundColor: t.bgSubtle,
-              }}
-            >
-              <Icon.close color={t.fgMuted} size={16} />
-            </Pressable>
-          }
-          t={t}
-        />
-      ))}
+      {items.map((s) => {
+        const quote = quotes[s.code];
+        return (
+          <EntryRow
+            entry={s}
+            key={s.code}
+            onPress={() => nav.openStock(s.code)}
+            right={
+              <View
+                style={{ alignItems: "center", flexDirection: "row", gap: 10 }}
+              >
+                {quote ? <PriceBlock quote={quote} t={t} /> : null}
+                <Pressable
+                  hitSlop={8}
+                  onPress={() => onRemove(s.code)}
+                  style={{
+                    width: 32,
+                    height: 32,
+                    borderRadius: 999,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    backgroundColor: t.bgSubtle,
+                  }}
+                >
+                  <Icon.close color={t.fgMuted} size={16} />
+                </Pressable>
+              </View>
+            }
+            t={t}
+          />
+        );
+      })}
     </View>
   );
 }

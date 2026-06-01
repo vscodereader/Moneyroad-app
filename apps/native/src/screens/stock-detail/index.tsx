@@ -17,8 +17,8 @@ import {
   MrScreen,
   SectionHead,
 } from "@/components/ui";
+import { useLiveQuote } from "@/hooks/use-live-quotes";
 import { useMrTheme } from "@/hooks/use-mr-theme";
-import { useQuoteStream } from "@/hooks/use-quote-stream";
 import {
   STOCK_CHART_RANGES,
   type StockChartRange,
@@ -79,8 +79,7 @@ export default function StockDetailScreen() {
 
   // Show 0 until a live tick arrives — the static stock metadata is seed data
   // and would be mistaken for a real price otherwise.
-  const quotes = useQuoteStream([stock.code]);
-  const live = quotes[stock.code];
+  const live = useLiveQuote(stock.code);
   const price = live?.price ?? 0;
   const change = live?.change ?? 0;
   const changePct = live?.changeRate ?? 0;

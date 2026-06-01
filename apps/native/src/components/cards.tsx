@@ -5,8 +5,8 @@ import { Gradient, IndexIntradayChart, Sparkline } from "@/components/charts";
 import { Icon, SIGNAL_ACTION_ICON } from "@/components/icons";
 import { ScorePill, Skeleton, StockLogo, StrengthBar } from "@/components/ui";
 import { type LiveIndex, SESSION_MINUTES } from "@/hooks/use-index-stream";
+import { useLiveQuote } from "@/hooks/use-live-quotes";
 import { useMrTheme } from "@/hooks/use-mr-theme";
-import type { LiveQuote } from "@/hooks/use-quote-stream";
 import type { NewsItem, Signal, Stock } from "@/utils/data";
 import { findStock } from "@/utils/data";
 import { changeColor, fmt } from "@/utils/format";
@@ -147,17 +147,18 @@ export function StockRow({
   );
 }
 
-// ── Watchlist row (real watchlist; live quote optional) ───────
+// ── Watchlist row (real watchlist; live quote via store) ──────
 export function WatchRow({
   entry,
   onPress,
-  quote,
 }: {
   entry: { code: string; market: string; name: string };
   onPress?: () => void;
-  quote?: LiveQuote;
 }) {
   const { t } = useMrTheme();
+  // Row-level subscription: this row only re-renders when ITS symbol ticks,
+  // not when other rows in the list tick.
+  const quote = useLiveQuote(entry.code);
   return (
     <Pressable
       android_ripple={{ color: t.bgSubtle }}

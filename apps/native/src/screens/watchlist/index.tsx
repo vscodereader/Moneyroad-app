@@ -14,8 +14,9 @@ import {
 
 import { Icon } from "@/components/icons";
 import { BackButton, MrHeader, MrScreen } from "@/components/ui";
+import { useLiveQuote } from "@/hooks/use-live-quotes";
 import { useMrTheme } from "@/hooks/use-mr-theme";
-import { type LiveQuote, useQuoteStream } from "@/hooks/use-quote-stream";
+import type { LiveQuote } from "@/stores/quotes-store";
 import { changeColor, fmt } from "@/utils/format";
 import { nav } from "@/utils/nav";
 import { orpc } from "@/utils/orpc";
@@ -192,10 +193,6 @@ export default function WatchlistScreen() {
   }, [searching]);
 
   const items = list.data ?? [];
-  // Live quotes for the full watchlist; off-screen rows still subscribe so all
-  // rows update consistently as the user scrolls. The hook short-circuits on
-  // empty list / signed-out user.
-  const quotes = useQuoteStream(items.map((i) => i.code));
 
   return (
     <MrScreen>
@@ -244,7 +241,6 @@ export default function WatchlistScreen() {
             isLoading={list.isLoading}
             items={items}
             onRemove={removeEntry}
-            quotes={quotes}
             t={t}
           />
         )}
@@ -340,17 +336,55 @@ function PriceBlock({ quote, t }: { quote: LiveQuote; t: MrTokens }) {
   );
 }
 
+// Row-level subscription: 각 행은 자기 종목 코드로 store에 직접 register하므로
+// 한 종목 틱이 다른 행을 리렌더하지 않는다.
+function MyListRow({
+  entry,
+  onRemove,
+  t,
+}: {
+  entry: StockEntry;
+  onRemove: (code: string) => void;
+  t: MrTokens;
+}) {
+  const quote = useLiveQuote(entry.code);
+  return (
+    <EntryRow
+      entry={entry}
+      onPress={() => nav.openStock(entry.code)}
+      right={
+        <View style={{ alignItems: "center", flexDirection: "row", gap: 10 }}>
+          {quote ? <PriceBlock quote={quote} t={t} /> : null}
+          <Pressable
+            hitSlop={8}
+            onPress={() => onRemove(entry.code)}
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: 999,
+              alignItems: "center",
+              justifyContent: "center",
+              backgroundColor: t.bgSubtle,
+            }}
+          >
+            <Icon.close color={t.fgMuted} size={16} />
+          </Pressable>
+        </View>
+      }
+      t={t}
+    />
+  );
+}
+
 function MyList({
   items,
   isLoading,
   onRemove,
-  quotes,
   t,
 }: {
   items: StockEntry[];
   isLoading: boolean;
   onRemove: (code: string) => void;
-  quotes: Record<string, LiveQuote>;
   t: MrTokens;
 }) {
   if (isLoading) {
@@ -372,38 +406,9 @@ function MyList({
   }
   return (
     <View>
-      {items.map((s) => {
-        const quote = quotes[s.code];
-        return (
-          <EntryRow
-            entry={s}
-            key={s.code}
-            onPress={() => nav.openStock(s.code)}
-            right={
-              <View
-                style={{ alignItems: "center", flexDirection: "row", gap: 10 }}
-              >
-                {quote ? <PriceBlock quote={quote} t={t} /> : null}
-                <Pressable
-                  hitSlop={8}
-                  onPress={() => onRemove(s.code)}
-                  style={{
-                    width: 32,
-                    height: 32,
-                    borderRadius: 999,
-                    alignItems: "center",
-                    justifyContent: "center",
-                    backgroundColor: t.bgSubtle,
-                  }}
-                >
-                  <Icon.close color={t.fgMuted} size={16} />
-                </Pressable>
-              </View>
-            }
-            t={t}
-          />
-        );
-      })}
+      {items.map((s) => (
+        <MyListRow entry={s} key={s.code} onRemove={onRemove} t={t} />
+      ))}
     </View>
   );
 }

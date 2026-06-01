@@ -21,7 +21,6 @@ import { Icon } from "@/components/icons";
 import { IconButton, MrHeader, MrScreen, SectionHead } from "@/components/ui";
 import { useIndexStream } from "@/hooks/use-index-stream";
 import { useMrTheme } from "@/hooks/use-mr-theme";
-import { type LiveQuote, useQuoteStream } from "@/hooks/use-quote-stream";
 import { authClient } from "@/lib/auth-client";
 import { indices as fallbackIndices } from "@/utils/data";
 import { nav } from "@/utils/nav";
@@ -88,12 +87,10 @@ function EmptyHint({
 function WatchlistPreview({
   items,
   isLoading,
-  quotes,
   t,
 }: {
   items: { code: string; market: string; name: string }[];
   isLoading: boolean;
-  quotes: Record<string, LiveQuote>;
   t: MrTokens;
 }) {
   if (isLoading) {
@@ -121,7 +118,6 @@ function WatchlistPreview({
           entry={entry}
           key={entry.code}
           onPress={() => nav.openStock(entry.code)}
-          quote={quotes[entry.code]}
         />
       ))}
     </>
@@ -149,10 +145,7 @@ export default function HomeScreen() {
   );
   const watched = watchlistQuery.data ?? [];
   const watchedPreview = watched.slice(0, 4);
-  // Subscribe to live quotes only for the symbols actually rendered in the
-  // preview; the full watchlist screen will subscribe to its own slice.
-  const previewCodes = watchedPreview.map((w) => w.code);
-  const previewQuotes = useQuoteStream(previewCodes);
+  // 시세 구독은 WatchRow가 코드별로 store에 직접 register하므로 여기선 없음.
 
   return (
     <MrScreen>
@@ -241,7 +234,6 @@ export default function HomeScreen() {
             <WatchlistPreview
               isLoading={watchlistQuery.isLoading}
               items={watchedPreview}
-              quotes={previewQuotes}
               t={t}
             />
           ) : (

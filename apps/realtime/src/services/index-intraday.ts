@@ -3,6 +3,7 @@ import { env } from "@moneyroad-app/env/realtime";
 import { eq } from "drizzle-orm";
 import { createError, log } from "evlog";
 
+import { throttledKisCall } from "@/services/kis-throttle";
 import { getDb, isNewsDbConfigured } from "@/services/news/db";
 
 // KIS REST 베이스 URL (체결 WS와 동일 호스트, REST는 https).
@@ -169,13 +170,7 @@ interface ChartRow {
   stck_cntg_hour?: string;
 }
 
-/**
- * Fetches today's intraday index series (10-min candles) for one 업종 code via
- * the KIS REST chart API. Returns the previous close (for the baseline) and the
- * session points oldest-first. Returns null on any failure so the caller can
- * fall back to live-tick accumulation (e.g. when paper/VTS blocks the endpoint).
- */
-export async function fetchIndexIntraday(
+async function fetchIndexIntradayOnce(
   code: string
 ): Promise<IndexIntraday | null> {
   if (!(env.KIS_APP_KEY && env.KIS_APP_SECRET)) {
@@ -190,18 +185,33 @@ export async function fetchIndexIntraday(
       FID_INPUT_HOUR_1: CHART_INTERVAL,
       FID_PW_DATA_INCU_YN: "N",
     });
-    const res = await fetch(`${REST_URL[env.KIS_ENV]}${CHART_API}?${params}`, {
-      headers: {
-        authorization: `Bearer ${token}`,
-        appkey: env.KIS_APP_KEY,
-        appsecret: env.KIS_APP_SECRET,
-        tr_id: TR_INDEX_CHART,
-        custtype: "P",
-      },
-    });
+    const res = await throttledKisCall(() =>
+      fetch(`${REST_URL[env.KIS_ENV]}${CHART_API}?${params}`, {
+        headers: {
+          authorization: `Bearer ${token}`,
+          appkey: env.KIS_APP_KEY,
+          appsecret: env.KIS_APP_SECRET,
+          tr_id: TR_INDEX_CHART,
+          custtype: "P",
+        },
+      })
+    );
     if (!res.ok) {
+      // KIS는 5xx에 msg_cd/msg1을 본문에 담아 보내므로 원인 파악에 필요.
+      let errorBody = "";
+      try {
+        errorBody = (await res.text()).slice(0, 300);
+      } catch {
+        // 본문 읽기 실패는 무시 — status만으로도 가치 있음.
+      }
       log.warn({
-        kis: { event: "intraday", code, status: res.status, ok: false },
+        kis: {
+          body: errorBody,
+          code,
+          event: "intraday",
+          ok: false,
+          status: res.status,
+        },
       });
       return null;
     }
@@ -232,4 +242,22 @@ export async function fetchIndexIntraday(
     log.warn({ kis: { event: "intraday", code, ok: false }, error });
     return null;
   }
+}
+
+/**
+ * Fetches today's intraday index series (10-min candles) for one 업종 code via
+ * the KIS REST chart API. Returns the previous close (for the baseline) and the
+ * session points oldest-first. Retries once after a short delay on KIS's
+ * occasional rate-limit/5xx replies, then returns null so the caller can fall
+ * back to live-tick accumulation.
+ */
+export async function fetchIndexIntraday(
+  code: string
+): Promise<IndexIntraday | null> {
+  const first = await fetchIndexIntradayOnce(code);
+  if (first) {
+    return first;
+  }
+  await new Promise((resolve) => setTimeout(resolve, 1000));
+  return fetchIndexIntradayOnce(code);
 }

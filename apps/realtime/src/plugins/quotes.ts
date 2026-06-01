@@ -82,12 +82,19 @@ export function registerQuotesPlugin(app: FastifyInstance) {
         return;
       }
       const result: Record<string, IndexIntraday> = {};
-      // Sequential: KIS (esp. VTS) rate-limits parallel quotation calls, which
-      // can intermittently drop one symbol. Two cached calls are cheap.
-      for (const code of symbols) {
+      // Sequential + throttle: KIS paper의 초당 호출 한도(EGW00201)를 피하려고
+      // 호출 간격을 둔다. 캐시 hit이면 함수 자체가 빨라 무의미한 지연 X.
+      for (let i = 0; i < symbols.length; i += 1) {
+        const code = symbols[i];
+        if (!code) {
+          continue;
+        }
         const data = await getIntraday(code);
         if (data) {
           result[code] = data;
+        }
+        if (i + 1 < symbols.length) {
+          await new Promise((resolve) => setTimeout(resolve, 250));
         }
       }
       reply.send(result);

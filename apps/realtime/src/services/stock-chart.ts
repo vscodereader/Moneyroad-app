@@ -2,6 +2,7 @@ import { env } from "@moneyroad-app/env/realtime";
 import { log } from "evlog";
 
 import { getAccessToken } from "@/services/index-intraday";
+import { throttledKisCall } from "@/services/kis-throttle";
 
 const REST_URL = {
   prod: "https://openapi.koreainvestment.com:9443",
@@ -144,15 +145,17 @@ async function fetchMinutePage(
     FID_PW_DATA_INCU_YN: "N",
     FID_FAKE_TICK_INCU_YN: "",
   });
-  const res = await fetch(`${REST_URL[env.KIS_ENV]}${MINUTE_API}?${params}`, {
-    headers: {
-      authorization: `Bearer ${token}`,
-      appkey: env.KIS_APP_KEY,
-      appsecret: env.KIS_APP_SECRET,
-      tr_id: TR_MINUTE,
-      custtype: "P",
-    },
-  });
+  const res = await throttledKisCall(() =>
+    fetch(`${REST_URL[env.KIS_ENV]}${MINUTE_API}?${params}`, {
+      headers: {
+        authorization: `Bearer ${token}`,
+        appkey: env.KIS_APP_KEY,
+        appsecret: env.KIS_APP_SECRET,
+        tr_id: TR_MINUTE,
+        custtype: "P",
+      },
+    })
+  );
   if (!res.ok) {
     log.warn({
       kis: {
@@ -300,15 +303,17 @@ async function fetchDailySeries(
       FID_PERIOD_DIV_CODE: plan.period,
       FID_ORG_ADJ_PRC: "0",
     });
-    const res = await fetch(`${REST_URL[env.KIS_ENV]}${DAILY_API}?${params}`, {
-      headers: {
-        authorization: `Bearer ${token}`,
-        appkey: env.KIS_APP_KEY,
-        appsecret: env.KIS_APP_SECRET,
-        tr_id: TR_DAILY,
-        custtype: "P",
-      },
-    });
+    const res = await throttledKisCall(() =>
+      fetch(`${REST_URL[env.KIS_ENV]}${DAILY_API}?${params}`, {
+        headers: {
+          authorization: `Bearer ${token}`,
+          appkey: env.KIS_APP_KEY,
+          appsecret: env.KIS_APP_SECRET,
+          tr_id: TR_DAILY,
+          custtype: "P",
+        },
+      })
+    );
     if (!res.ok) {
       log.warn({
         kis: {

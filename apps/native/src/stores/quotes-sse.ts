@@ -38,10 +38,13 @@ function closeSource(): void {
 async function fetchSeed(
   baseUrl: string,
   symbolsKey: string,
-  token: string
+  token: string | null
 ): Promise<Record<string, LiveQuote>> {
   try {
-    const params = new URLSearchParams({ symbols: symbolsKey, token });
+    const params = new URLSearchParams({ symbols: symbolsKey });
+    if (token) {
+      params.set("token", token);
+    }
     const res = await fetch(`${baseUrl}/quote/snapshot?${params}`);
     if (!res.ok) {
       return {};
@@ -75,13 +78,12 @@ function onQuote(data: string | null): void {
 
 async function connect(symbolsKey: string): Promise<void> {
   const baseUrl = env.EXPO_PUBLIC_REALTIME_URL;
-  if (!(baseUrl && userId && symbolsKey)) {
+  if (!(baseUrl && symbolsKey)) {
     return;
   }
-  const token = await fetchStreamToken();
-  if (!token) {
-    return;
-  }
+  // 토큰은 로그인 시에만 발급됨. 비로그인은 토큰 없이 연결 — 서버가 public
+  // 허용 셋(인덱스 + 시그널 종목)으로 필터링해 응답한다.
+  const token = userId ? await fetchStreamToken() : null;
   // 연결 시도 도중 activeSymbols가 바뀌었으면 이번 시도는 폐기.
   if (symbolsKey !== activeSymbols.join(",")) {
     return;
@@ -92,7 +94,10 @@ async function connect(symbolsKey: string): Promise<void> {
       useQuotesStore.getState().applySeed(seed);
     }
   });
-  const params = new URLSearchParams({ symbols: symbolsKey, token });
+  const params = new URLSearchParams({ symbols: symbolsKey });
+  if (token) {
+    params.set("token", token);
+  }
   const next = new EventSource<"quote">(
     `${baseUrl}/stream/quotes?${params.toString()}`,
     { pollingInterval: 0 }
@@ -149,7 +154,8 @@ function handleActiveChange(next: string[], prev: string[]): void {
  * Starts the singleton SSE pipeline backing the Zustand quotes store. Idempotent
  * — call once on app mount. When `activeSymbols` changes (register/unregister
  * via the store) the connection is re-established with the new symbol set.
- * Without a signed-in user the manager stays idle.
+ * 비로그인 상태에서도 연결 — 서버가 public 허용 셋(인덱스/시그널 종목)으로
+ * 필터링한다. 로그인 시 토큰이 붙어 모든 종목이 흘러온다.
  */
 export function startQuotesManager(getUserId: () => string | null): () => void {
   if (started) {
@@ -161,7 +167,7 @@ export function startQuotesManager(getUserId: () => string | null): () => void {
   unsubStore = useQuotesStore.subscribe((state, prev) => {
     handleActiveChange(state.activeSymbols, prev.activeSymbols);
   });
-  if (userId && activeSymbols.length > 0) {
+  if (activeSymbols.length > 0) {
     triggerReconnect();
   }
   return () => {
@@ -182,9 +188,9 @@ export function startQuotesManager(getUserId: () => string | null): () => void {
 }
 
 /**
- * Updates the user the manager is operating as. Pass null when signed out to
- * close the SSE and stop trying to reconnect; pass a user id to (re)start with
- * the current active symbol set.
+ * Updates the user the manager is operating as. 로그아웃 시 토큰이 없어지므로
+ * private 종목은 더 이상 흘러오지 않지만, public 종목(인덱스/시그널)은 계속
+ * 받기 위해 연결을 끊지 않고 토큰만 떨어뜨려 재연결한다.
  */
 export function setQuotesManagerUser(next: string | null): void {
   if (userId === next) {
@@ -192,9 +198,8 @@ export function setQuotesManagerUser(next: string | null): void {
   }
   userId = next;
   if (!next) {
-    closeSource();
+    // 로그아웃 — 토큰이 만료될 것이므로 store는 비우고 public 종목 재연결.
     useQuotesStore.getState().clear();
-    return;
   }
   triggerReconnect();
 }

@@ -4,11 +4,11 @@ import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
-  ScrollView,
   Text,
   TextInput,
   View,
 } from "react-native";
+import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Icon } from "@/components/icons";
@@ -154,7 +154,8 @@ export default function CreateSignalScreen() {
         </Text>
       </View>
 
-      <ScrollView
+      <KeyboardAwareScrollView
+        bottomOffset={20}
         contentContainerStyle={{ paddingBottom: 32 + insets.bottom }}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
@@ -401,7 +402,7 @@ export default function CreateSignalScreen() {
             </Text>
           ) : null}
         </View>
-      </ScrollView>
+      </KeyboardAwareScrollView>
     </MrScreen>
   );
 }

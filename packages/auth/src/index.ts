@@ -1,10 +1,14 @@
 import { expo } from "@better-auth/expo";
+import { i18n } from "@better-auth/i18n";
 import { createDb } from "@moneyroad-app/db";
 import * as schema from "@moneyroad-app/db/schema/auth";
 import { env } from "@moneyroad-app/env/server";
 import { type BetterAuthOptions, betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { admin } from "better-auth/plugins/admin";
+import { username } from "better-auth/plugins/username";
+
+import { KO_ERROR_TRANSLATIONS } from "./i18n-ko";
 
 // Built-in social providers. Each activates only when its keys are set, so the
 // server runs with email-only login until credentials are provided.
@@ -76,7 +80,16 @@ export function createAuth() {
         httpOnly: true,
       },
     },
-    plugins: [expo(), admin()],
+    plugins: [
+      expo(),
+      admin(),
+      username(),
+      i18n({
+        translations: { ko: KO_ERROR_TRANSLATIONS },
+        defaultLocale: "ko",
+        detection: ["header"],
+      }),
+    ],
   });
 }
 

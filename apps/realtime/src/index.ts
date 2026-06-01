@@ -2,11 +2,8 @@ import { env } from "@moneyroad-app/env/realtime";
 import { buildServer } from "./server";
 import { startNews, stopNews } from "./services/news";
 import { isCollectorEnabled } from "./services/news/collector";
+import { startPinnedPoller, stopPinnedPoller } from "./services/pinned-poller";
 import { startQuotes, stopQuotes } from "./services/quotes";
-import {
-  startWatchlistPoller,
-  stopWatchlistPoller,
-} from "./services/watchlist-poller";
 
 const app = buildServer();
 
@@ -27,16 +24,16 @@ app.listen({ port: env.PORT, host: "0.0.0.0" }, (err) => {
       `news collector started (interval=${env.NEWS_FETCH_INTERVAL_MS}ms)`
     );
   }
-  // Pin the union of all users' watchlist symbols so they stay subscribed
+  // Pin the union of (관심 종목) + (관리자 시그널 종목) so they stay subscribed
   // upstream even when no SSE client is connected (alarm evaluator depends on
   // continuous ticks). No-op without DATABASE_URL.
-  startWatchlistPoller();
+  startPinnedPoller();
 });
 
 function shutdown() {
   stopQuotes();
   stopNews();
-  stopWatchlistPoller();
+  stopPinnedPoller();
   app.close();
 }
 

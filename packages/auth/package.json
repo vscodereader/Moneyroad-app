@@ -12,6 +12,7 @@
   "scripts": {},
   "dependencies": {
     "@better-auth/expo": "catalog:",
+    "@better-auth/i18n": "catalog:",
     "@moneyroad-app/db": "workspace:*",
     "@moneyroad-app/env": "workspace:*",
     "better-auth": "catalog:",

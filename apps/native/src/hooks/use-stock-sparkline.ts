@@ -11,17 +11,21 @@ interface SparklineResponse {
   points?: number[];
 }
 
-async function fetchSparkline(code: string): Promise<number[]> {
+async function fetchSparkline(
+  code: string,
+  signedIn: boolean
+): Promise<number[]> {
   const baseUrl = env.EXPO_PUBLIC_REALTIME_URL;
   if (!(baseUrl && code)) {
     return [];
   }
-  const token = await fetchStreamToken();
-  if (!token) {
-    return [];
-  }
+  // 비로그인은 토큰 없이 시도 — 서버가 public 시그널 종목에 한해 허용.
+  const token = signedIn ? await fetchStreamToken() : null;
   try {
-    const params = new URLSearchParams({ code, token });
+    const params = new URLSearchParams({ code });
+    if (token) {
+      params.set("token", token);
+    }
     const res = await fetch(`${baseUrl}/quote/sparkline?${params}`);
     if (!res.ok) {
       return [];
@@ -41,12 +45,12 @@ async function fetchSparkline(code: string): Promise<number[]> {
  */
 export function useStockSparkline(code: string): number[] {
   const { data: session } = authClient.useSession();
-  const userId = session?.user?.id;
+  const signedIn = !!session?.user?.id;
 
   const { data } = useQuery({
-    queryKey: ["stock-sparkline", code],
-    queryFn: () => fetchSparkline(code),
-    enabled: !!(userId && code),
+    queryKey: ["stock-sparkline", code, signedIn],
+    queryFn: () => fetchSparkline(code, signedIn),
+    enabled: !!code,
     staleTime: SPARKLINE_STALE_MS,
     gcTime: SPARKLINE_STALE_MS,
   });

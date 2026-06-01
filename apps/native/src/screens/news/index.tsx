@@ -1,6 +1,6 @@
 import { BottomTabBarHeightContext } from "@react-navigation/bottom-tabs";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
-import { useContext, useRef, useState } from "react";
+import { useContext, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -24,6 +24,7 @@ import {
 } from "@/components/ui";
 import { useMrTheme } from "@/hooks/use-mr-theme";
 import { type NewsTab, useNewsStream } from "@/hooks/use-news-stream";
+import { authClient } from "@/lib/auth-client";
 import { findStock, type NewsItem } from "@/utils/data";
 import { changeColor, fmt } from "@/utils/format";
 import { orpc } from "@/utils/orpc";
@@ -237,6 +238,40 @@ function NewsSheet({ item, onClose }: { item: NewsItem; onClose: () => void }) {
 
 const PAGE_SIZE = 5;
 
+function EmptyState({ body, title }: { body: string; title: string }) {
+  const { t } = useMrTheme();
+  return (
+    <View
+      style={{
+        paddingVertical: 64,
+        paddingHorizontal: 24,
+        alignItems: "center",
+      }}
+    >
+      <Text
+        style={{
+          fontSize: 14,
+          fontWeight: "700",
+          color: t.fgStrong,
+          marginBottom: 6,
+        }}
+      >
+        {title}
+      </Text>
+      <Text
+        style={{
+          fontSize: 12,
+          color: t.fgMuted,
+          textAlign: "center",
+          lineHeight: 18,
+        }}
+      >
+        {body}
+      </Text>
+    </View>
+  );
+}
+
 function NewsTabs({
   tab,
   onChange,
@@ -268,8 +303,24 @@ function NewsTabs({
 
 export default function NewsScreen() {
   const { t } = useMrTheme();
-  const [tab, setTab] = useState<NewsTab>("watch");
+  const { data: session } = authClient.useSession();
+  const isLoggedIn = !!session?.user;
+  // 기본 탭: 로그인 상태면 관심 종목, 비로그인이면 전체. 세션이 처음 resolve될 때
+  // 한 번만 시드해, 이후 사용자가 직접 탭을 바꾸면 그 선택을 유지한다.
+  const [tab, setTab] = useState<NewsTab>("all");
+  const seededRef = useRef(false);
+  useEffect(() => {
+    if (seededRef.current || !session) {
+      return;
+    }
+    if (isLoggedIn) {
+      setTab("watch");
+    }
+    seededRef.current = true;
+  }, [session, isLoggedIn]);
   const [openNews, setOpenNews] = useState<NewsItem | null>(null);
+  // 비로그인 + watch 탭이면 페치 차단 — ListEmptyComponent로 안내만 표시.
+  const guestWatch = tab === "watch" && !isLoggedIn;
   const feed = useInfiniteQuery(
     orpc.news.feed.infiniteOptions({
       input: (cursor: string | undefined) => ({
@@ -279,6 +330,7 @@ export default function NewsScreen() {
       }),
       initialPageParam: undefined as string | undefined,
       getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
+      enabled: !guestWatch,
     })
   );
   const items = feed.data?.pages.flatMap((p) => p.items) ?? [];
@@ -317,12 +369,23 @@ export default function NewsScreen() {
       <FlatList
         data={items}
         keyExtractor={(n) => n.id}
-        ListEmptyComponent={
-          feed.isLoading ? (
-            <View style={{ paddingVertical: 48, alignItems: "center" }}>
-              <ActivityIndicator color={t.primary} />
-            </View>
-          ) : (
+        ListEmptyComponent={(() => {
+          if (guestWatch) {
+            return (
+              <EmptyState
+                body="로그인하면 관심 종목 뉴스를 모아 봅니다."
+                title="로그인이 필요합니다"
+              />
+            );
+          }
+          if (feed.isLoading) {
+            return (
+              <View style={{ paddingVertical: 48, alignItems: "center" }}>
+                <ActivityIndicator color={t.primary} />
+              </View>
+            );
+          }
+          return (
             <View style={{ paddingVertical: 48, alignItems: "center" }}>
               <Text style={{ fontSize: 13, color: t.fgSubtle }}>
                 {tab === "watch"
@@ -330,8 +393,8 @@ export default function NewsScreen() {
                   : "표시할 뉴스가 없어요."}
               </Text>
             </View>
-          )
-        }
+          );
+        })()}
         ListFooterComponent={
           // Spacer so the last card clears the tab bar (+ floating button).
           <View

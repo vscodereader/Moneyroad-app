@@ -2,14 +2,13 @@ import { type Href, router } from "expo-router";
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
-  ScrollView,
   Text,
   TextInput,
   View,
 } from "react-native";
+import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
+import { z } from "zod";
 
 import { Icon, type IconProps } from "@/components/icons";
 import { BackButton, MrHeader, MrScreen } from "@/components/ui";
@@ -93,13 +92,40 @@ function Field({
   );
 }
 
+// 아이디 정규식: better-auth username plugin 기본값(영문/숫자/_/.)을 클라이언트에서도 미리 점검.
+const USERNAME_REGEX = /^[a-zA-Z0-9_.]+$/;
+const USERNAME_MIN = 3;
+const USERNAME_MAX = 30;
+const PASSWORD_MIN = 8;
+
+const signupSchema = z
+  .object({
+    username: z
+      .string()
+      .min(USERNAME_MIN, `아이디는 ${USERNAME_MIN}자 이상이어야 해요.`)
+      .max(USERNAME_MAX, `아이디는 ${USERNAME_MAX}자 이하여야 해요.`)
+      .regex(USERNAME_REGEX, "아이디는 영문/숫자/_/.만 사용할 수 있어요."),
+    email: z.email("이메일 형식이 올바르지 않아요."),
+    password: z
+      .string()
+      .min(PASSWORD_MIN, `비밀번호는 ${PASSWORD_MIN}자 이상이어야 해요.`),
+    passwordConfirm: z.string(),
+    name: z.string().optional(),
+  })
+  .refine((d) => d.password === d.passwordConfirm, {
+    message: "비밀번호가 일치하지 않아요.",
+    path: ["passwordConfirm"],
+  });
+
 export default function LoginScreen() {
   const { t } = useMrTheme();
   const { data: session } = authClient.useSession();
   const [mode, setMode] = useState<Mode>("signin");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [passwordConfirm, setPasswordConfirm] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [socialLoading, setSocialLoading] = useState<Provider | null>(null);
@@ -113,7 +139,7 @@ export default function LoginScreen() {
 
   const isSignup = mode === "signup";
 
-  const submitEmail = async () => {
+  const submitCredentials = async () => {
     if (loading) {
       return;
     }
@@ -125,19 +151,44 @@ export default function LoginScreen() {
     };
     try {
       if (isSignup) {
+        const parsed = signupSchema.safeParse({
+          username: username.trim(),
+          email: email.trim(),
+          password,
+          passwordConfirm,
+          name: name.trim() || undefined,
+        });
+        if (!parsed.success) {
+          setError(
+            parsed.error.issues[0]?.message ?? "입력값을 확인해 주세요."
+          );
+          return;
+        }
+        const data = parsed.data;
+        // 이름은 옵션이지만 DB는 NOT NULL이라 비어있으면 아이디로 폴백.
         await authClient.signUp.email(
           {
-            email: email.trim(),
-            password,
-            name: name.trim() || email.trim(),
+            email: data.email,
+            password: data.password,
+            name: data.name ?? data.username,
+            username: data.username,
           },
           handlers
         );
       } else {
-        await authClient.signIn.email(
-          { email: email.trim(), password },
-          handlers
-        );
+        // 입력값에 @가 있으면 이메일 로그인, 아니면 아이디 로그인.
+        const identifier = username.trim();
+        if (identifier.includes("@")) {
+          await authClient.signIn.email(
+            { email: identifier, password },
+            handlers
+          );
+        } else {
+          await authClient.signIn.username(
+            { username: identifier, password },
+            handlers
+          );
+        }
       }
     } finally {
       setLoading(false);
@@ -163,7 +214,15 @@ export default function LoginScreen() {
     }
   };
 
-  const emailValid = email.includes("@") && password.length >= 8;
+  // 버튼 활성화는 비어있지 않으면 OK — 상세 검증은 submit 시 zod로 처리.
+  const trimmedUsername = username.trim();
+  const signupReady =
+    trimmedUsername.length > 0 &&
+    email.trim().length > 0 &&
+    password.length > 0 &&
+    passwordConfirm.length > 0;
+  const signinReady = trimmedUsername.length > 0 && password.length > 0;
+  const canSubmit = isSignup ? signupReady : signinReady;
 
   return (
     <MrScreen>
@@ -171,36 +230,37 @@ export default function LoginScreen() {
         left={<BackButton onPress={nav.back} />}
         title={isSignup ? "회원가입" : "로그인"}
       />
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+      <KeyboardAwareScrollView
+        bottomOffset={20}
+        contentContainerStyle={{ padding: 20, gap: 14 }}
+        keyboardShouldPersistTaps="handled"
         style={{ flex: 1 }}
       >
-        <ScrollView
-          contentContainerStyle={{ padding: 20, gap: 14 }}
-          keyboardShouldPersistTaps="handled"
+        <Text
+          style={{
+            fontSize: 20,
+            fontWeight: "800",
+            color: t.fgStrong,
+            marginTop: 4,
+          }}
         >
-          <Text
-            style={{
-              fontSize: 20,
-              fontWeight: "800",
-              color: t.fgStrong,
-              marginTop: 4,
-            }}
-          >
-            {isSignup ? "이메일로 가입하기" : "이메일로 로그인"}
-          </Text>
+          {isSignup ? "이메일로 가입하기" : "로그인"}
+        </Text>
 
-          {isSignup ? (
-            <Field
-              autoCapitalize="none"
-              label="이름"
-              onChangeText={setName}
-              placeholder="머니로드"
-              t={t}
-              value={name}
-            />
-          ) : null}
-
+        <Field
+          autoCapitalize="none"
+          autoCorrect={false}
+          label={
+            isSignup
+              ? `아이디 (${USERNAME_MIN}~${USERNAME_MAX}자, 영문/숫자/_/.)`
+              : "이메일 또는 아이디"
+          }
+          onChangeText={setUsername}
+          placeholder={isSignup ? "moneyroad_user" : "you@moneyroad.ai.kr"}
+          t={t}
+          value={username}
+        />
+        {isSignup ? (
           <Field
             autoCapitalize="none"
             autoComplete="email"
@@ -211,114 +271,135 @@ export default function LoginScreen() {
             t={t}
             value={email}
           />
-          <Field
-            autoCapitalize="none"
-            label="비밀번호 (8자 이상)"
-            onChangeText={setPassword}
-            placeholder="••••••••"
-            secureTextEntry
-            t={t}
-            value={password}
-          />
+        ) : null}
+        <Field
+          autoCapitalize="none"
+          label={`비밀번호 (${PASSWORD_MIN}자 이상)`}
+          onChangeText={setPassword}
+          placeholder="••••••••"
+          secureTextEntry
+          t={t}
+          value={password}
+        />
+        {isSignup ? (
+          <>
+            <Field
+              autoCapitalize="none"
+              label="비밀번호 확인"
+              onChangeText={setPasswordConfirm}
+              placeholder="••••••••"
+              secureTextEntry
+              t={t}
+              value={passwordConfirm}
+            />
+            <Field
+              autoCapitalize="none"
+              label="이름 (선택)"
+              onChangeText={setName}
+              placeholder="홍길동"
+              t={t}
+              value={name}
+            />
+          </>
+        ) : null}
 
-          {error ? (
-            <Text style={{ fontSize: 13, color: t.downStrong }}>{error}</Text>
-          ) : null}
+        {error ? (
+          <Text style={{ fontSize: 13, color: t.downStrong }}>{error}</Text>
+        ) : null}
 
-          <Pressable
-            disabled={!emailValid || loading}
-            onPress={submitEmail}
-            style={{
-              height: 50,
-              borderRadius: 12,
-              alignItems: "center",
-              justifyContent: "center",
-              backgroundColor: emailValid ? t.primary : t.borderStrong,
-            }}
-          >
-            {loading ? (
-              <ActivityIndicator color={t.primaryOn} />
-            ) : (
-              <Text
-                style={{ fontSize: 15, fontWeight: "800", color: t.primaryOn }}
-              >
-                {isSignup ? "회원가입" : "로그인"}
-              </Text>
-            )}
-          </Pressable>
-
-          <Pressable
-            hitSlop={8}
-            onPress={() => {
-              setMode(isSignup ? "signin" : "signup");
-              setError(null);
-            }}
-            style={{
-              alignSelf: "center",
-              flexDirection: "row",
-              gap: 5,
-              paddingVertical: 10,
-            }}
-          >
-            <Text style={{ fontSize: 13, color: t.fgMuted }}>
-              {isSignup ? "이미 계정이 있으신가요?" : "계정이 없으신가요?"}
-            </Text>
+        <Pressable
+          disabled={!canSubmit || loading}
+          onPress={submitCredentials}
+          style={{
+            height: 50,
+            borderRadius: 12,
+            alignItems: "center",
+            justifyContent: "center",
+            backgroundColor: canSubmit ? t.primary : t.borderStrong,
+          }}
+        >
+          {loading ? (
+            <ActivityIndicator color={t.primaryOn} />
+          ) : (
             <Text
-              style={{
-                fontSize: 13,
-                fontWeight: "800",
-                color: t.primary,
-                textDecorationLine: "underline",
-              }}
+              style={{ fontSize: 15, fontWeight: "800", color: t.primaryOn }}
             >
-              {isSignup ? "로그인" : "회원가입"}
+              {isSignup ? "회원가입" : "로그인"}
             </Text>
-          </Pressable>
+          )}
+        </Pressable>
 
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-            <View style={{ flex: 1, height: 1, backgroundColor: t.border }} />
-            <Text style={{ fontSize: 12, color: t.fgSubtle }}>또는</Text>
-            <View style={{ flex: 1, height: 1, backgroundColor: t.border }} />
-          </View>
+        <Pressable
+          hitSlop={8}
+          onPress={() => {
+            setMode(isSignup ? "signin" : "signup");
+            setError(null);
+          }}
+          style={{
+            alignSelf: "center",
+            flexDirection: "row",
+            gap: 5,
+            paddingVertical: 10,
+          }}
+        >
+          <Text style={{ fontSize: 13, color: t.fgMuted }}>
+            {isSignup ? "이미 계정이 있으신가요?" : "계정이 없으신가요?"}
+          </Text>
+          <Text
+            style={{
+              fontSize: 13,
+              fontWeight: "800",
+              color: t.primary,
+              textDecorationLine: "underline",
+            }}
+          >
+            {isSignup ? "로그인" : "회원가입"}
+          </Text>
+        </Pressable>
 
-          <View style={{ gap: 10 }}>
-            {SOCIALS.map((s) => {
-              const Logo = s.icon;
-              return (
-                <Pressable
-                  disabled={socialLoading !== null}
-                  key={s.provider}
-                  onPress={() => submitSocial(s.provider)}
-                  style={{
-                    height: 50,
-                    borderRadius: 12,
-                    flexDirection: "row",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    gap: 8,
-                    backgroundColor: s.bg,
-                    borderWidth: s.border ? 1 : 0,
-                    borderColor: s.border,
-                  }}
-                >
-                  {socialLoading === s.provider ? (
-                    <ActivityIndicator color={s.fg} />
-                  ) : (
-                    <>
-                      <Logo color={s.fg} size={18} />
-                      <Text
-                        style={{ fontSize: 15, fontWeight: "700", color: s.fg }}
-                      >
-                        {s.label}
-                      </Text>
-                    </>
-                  )}
-                </Pressable>
-              );
-            })}
-          </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+          <View style={{ flex: 1, height: 1, backgroundColor: t.border }} />
+          {/*<Text style={{ fontSize: 12, color: t.fgSubtle }}>또는</Text>*/}
+          {/*<View style={{ flex: 1, height: 1, backgroundColor: t.border }} />*/}
+        </View>
+
+        {/*<View style={{ gap: 10 }}>*/}
+        {/*  {SOCIALS.map((s) => {*/}
+        {/*    const Logo = s.icon;*/}
+        {/*    return (*/}
+        {/*      <Pressable*/}
+        {/*        disabled={socialLoading !== null}*/}
+        {/*        key={s.provider}*/}
+        {/*        onPress={() => submitSocial(s.provider)}*/}
+        {/*        style={{*/}
+        {/*          height: 50,*/}
+        {/*          borderRadius: 12,*/}
+        {/*          flexDirection: "row",*/}
+        {/*          alignItems: "center",*/}
+        {/*          justifyContent: "center",*/}
+        {/*          gap: 8,*/}
+        {/*          backgroundColor: s.bg,*/}
+        {/*          borderWidth: s.border ? 1 : 0,*/}
+        {/*          borderColor: s.border,*/}
+        {/*        }}*/}
+        {/*      >*/}
+        {/*        {socialLoading === s.provider ? (*/}
+        {/*          <ActivityIndicator color={s.fg} />*/}
+        {/*        ) : (*/}
+        {/*          <>*/}
+        {/*            <Logo color={s.fg} size={18} />*/}
+        {/*            <Text*/}
+        {/*              style={{ fontSize: 15, fontWeight: "700", color: s.fg }}*/}
+        {/*            >*/}
+        {/*              {s.label}*/}
+        {/*            </Text>*/}
+        {/*          </>*/}
+        {/*        )}*/}
+        {/*      </Pressable>*/}
+        {/*    );*/}
+        {/*  })}*/}
+        {/*</View>*/}
+      </KeyboardAwareScrollView>
     </MrScreen>
   );
 }

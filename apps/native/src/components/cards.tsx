@@ -265,6 +265,61 @@ export function WatchRowSkeleton() {
   );
 }
 
+// Expanded 시그널 카드 안의 종목 미니카드. 별도 컴포넌트로 둬서 카드가 접혀
+// 있는 동안엔 useLiveQuote가 호출되지 않아 SSE에 쓸데없이 가입하지 않는다.
+function SignalStockRow({
+  stock,
+  onPress,
+  t,
+}: {
+  stock: Stock;
+  onPress?: () => void;
+  t: MrTokens;
+}) {
+  const live = useLiveQuote(stock.code);
+  const price = live?.price ?? stock.price;
+  const change = live?.change ?? stock.change;
+  const changePct = live?.changeRate ?? stock.changePct;
+  return (
+    <Pressable
+      android_ripple={onPress ? { color: t.bgMuted } : undefined}
+      disabled={!onPress}
+      onPress={onPress}
+      style={({ pressed }) => ({
+        marginTop: 12,
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 10,
+        paddingVertical: 10,
+        paddingHorizontal: 12,
+        backgroundColor: pressed && onPress ? t.bgMuted : t.bgSubtle,
+        borderRadius: 10,
+      })}
+    >
+      <StockLogo radius={8} size={32} stock={stock} />
+      <View style={{ flex: 1 }}>
+        <Text style={{ fontSize: 13, fontWeight: "700", color: t.fgStrong }}>
+          {stock.name}
+        </Text>
+        <Text style={{ fontSize: 11, color: t.fgMuted }}>
+          {fmt.price(price)}원 ·{" "}
+          <Text style={{ color: changeColor(change, t) }}>
+            {fmt.pct(changePct)}
+          </Text>
+        </Text>
+      </View>
+      <Sparkline
+        data={stock.spark}
+        height={22}
+        positive={change > 0}
+        t={t}
+        width={56}
+      />
+      {onPress ? <Icon.chevRight color={t.fgSubtle} size={18} /> : null}
+    </Pressable>
+  );
+}
+
 // ── Signal card (expandable) ──────────────────────────────────
 export function SignalCard({
   signal,
@@ -398,47 +453,7 @@ export function SignalCard({
             {signal.body}
           </Text>
           {stock ? (
-            <Pressable
-              android_ripple={onStockPress ? { color: t.bgMuted } : undefined}
-              disabled={!onStockPress}
-              onPress={onStockPress}
-              style={({ pressed }) => ({
-                marginTop: 12,
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 10,
-                paddingVertical: 10,
-                paddingHorizontal: 12,
-                backgroundColor:
-                  pressed && onStockPress ? t.bgMuted : t.bgSubtle,
-                borderRadius: 10,
-              })}
-            >
-              <StockLogo radius={8} size={32} stock={stock} />
-              <View style={{ flex: 1 }}>
-                <Text
-                  style={{ fontSize: 13, fontWeight: "700", color: t.fgStrong }}
-                >
-                  {stock.name}
-                </Text>
-                <Text style={{ fontSize: 11, color: t.fgMuted }}>
-                  {fmt.price(stock.price)}원 ·{" "}
-                  <Text style={{ color: changeColor(stock.change, t) }}>
-                    {fmt.pct(stock.changePct)}
-                  </Text>
-                </Text>
-              </View>
-              <Sparkline
-                data={stock.spark}
-                height={22}
-                positive={stock.change > 0}
-                t={t}
-                width={56}
-              />
-              {onStockPress ? (
-                <Icon.chevRight color={t.fgSubtle} size={18} />
-              ) : null}
-            </Pressable>
+            <SignalStockRow onPress={onStockPress} stock={stock} t={t} />
           ) : null}
           <Text style={{ marginTop: 10, fontSize: 11, color: t.fgSubtle }}>
             ⓘ 매매 권유가 아니며 정보 제공 목적입니다.

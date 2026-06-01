@@ -6,6 +6,7 @@ import {
   Alert,
   Pressable,
   ScrollView,
+  StyleSheet,
   Text,
   TextInput,
   View,
@@ -526,23 +527,52 @@ function Composer({
   );
 }
 
-function GuestCta({ t, bottomInset }: { t: MrTokens; bottomInset: number }) {
+// 비로그인 시 메시지 리스트 위에 반투명 레이어를 깔아 텍스트는 못 읽지만
+// 말풍선의 흐름은 어렴풋이 보이게 한다(대화 활성도는 짐작 가능).
+function GuestOverlay({ t }: { t: MrTokens }) {
   return (
     <Pressable
-      onPress={() => nav.goTab("mypage")}
-      style={{
-        paddingVertical: 14,
-        paddingBottom: bottomInset + 14,
-        paddingHorizontal: 16,
-        backgroundColor: t.bg,
-        borderTopWidth: 1,
-        borderTopColor: t.border,
-        alignItems: "center",
-      }}
+      onPress={nav.openLogin}
+      style={[
+        StyleSheet.absoluteFillObject,
+        {
+          alignItems: "center",
+          justifyContent: "center",
+          paddingHorizontal: 24,
+          backgroundColor: `${t.bg}E6`,
+        },
+      ]}
     >
-      <Text style={{ fontSize: 13, fontWeight: "700", color: t.primary }}>
-        로그인하고 의견 남기기
-      </Text>
+      <View
+        style={{
+          alignItems: "center",
+          backgroundColor: t.bg,
+          borderRadius: 16,
+          borderWidth: 1,
+          borderColor: t.border,
+          paddingHorizontal: 20,
+          paddingVertical: 18,
+          gap: 6,
+        }}
+      >
+        <Text
+          style={{
+            fontSize: 15,
+            fontWeight: "800",
+            color: t.fgStrong,
+          }}
+        >
+          로그인하면 대화를 볼 수 있어요
+        </Text>
+        <Text
+          style={{
+            fontSize: 12,
+            color: t.fgMuted,
+          }}
+        >
+          탭하면 로그인 화면으로 이동해요.
+        </Text>
+      </View>
     </Pressable>
   );
 }
@@ -831,16 +861,19 @@ export default function DiscussionRoomScreen() {
         keyboardVerticalOffset={0}
         style={{ flex: 1 }}
       >
-        <MessageList
-          currentUserId={currentUserId}
-          hostUserId={room.createdBy?.id ?? null}
-          isEmpty={messagesQuery.isSuccess && messages.length === 0}
-          isPending={messagesQuery.isPending}
-          messages={messages}
-          onLongPress={handleLongPress}
-          scrollRef={scrollRef}
-          t={t}
-        />
+        <View style={{ flex: 1 }}>
+          <MessageList
+            currentUserId={currentUserId}
+            hostUserId={room.createdBy?.id ?? null}
+            isEmpty={messagesQuery.isSuccess && messages.length === 0}
+            isPending={messagesQuery.isPending}
+            messages={messages}
+            onLongPress={handleLongPress}
+            scrollRef={scrollRef}
+            t={t}
+          />
+          {isLoggedIn ? null : <GuestOverlay t={t} />}
+        </View>
         {isLoggedIn ? (
           <Composer
             bottomInset={insets.bottom}
@@ -850,9 +883,7 @@ export default function DiscussionRoomScreen() {
             setDraft={setDraft}
             t={t}
           />
-        ) : (
-          <GuestCta bottomInset={insets.bottom} t={t} />
-        )}
+        ) : null}
       </KeyboardAvoidingView>
     </MrScreen>
   );

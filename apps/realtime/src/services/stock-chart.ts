@@ -20,7 +20,7 @@ const TR_DAILY = "FHKST03010100";
 const DAILY_API =
   "/uapi/domestic-stock/v1/quotations/inquire-daily-itemchartprice";
 
-export const CHART_RANGES = ["1D", "1W", "1M", "3M", "1Y"] as const;
+export const CHART_RANGES = ["1D", "3M", "1Y", "3Y"] as const;
 export type ChartRange = (typeof CHART_RANGES)[number];
 
 const VALID_RANGES: ReadonlySet<string> = new Set(CHART_RANGES);
@@ -56,15 +56,17 @@ const MINUTE_CONCURRENCY = 5;
 const MINUTE_RETRY_DELAY_MS = 300;
 
 interface DailyPlan {
-  period: "D" | "W";
+  period: "D" | "M" | "W";
   spanDays: number;
 }
 
 const DAILY_PLAN: Record<Exclude<ChartRange, "1D">, DailyPlan> = {
-  "1W": { spanDays: 14, period: "D" },
-  "1M": { spanDays: 35, period: "D" },
+  // 3개월: 일봉(D), ~66 거래일. 100건 한도 내.
   "3M": { spanDays: 100, period: "D" },
+  // 1년: 주봉(W), ~52주. 일봉으론 ~252개라 100건 한도 초과.
   "1Y": { spanDays: 380, period: "W" },
+  // 3년: 월봉(M), ~36개월. 주봉으론 ~156개라 한도 초과.
+  "3Y": { spanDays: 1200, period: "M" },
 };
 
 interface CacheEntry {

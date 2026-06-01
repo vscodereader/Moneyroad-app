@@ -4,8 +4,15 @@ import { useEffect, useState } from "react";
 import { authClient } from "@/lib/auth-client";
 import { fetchStreamToken } from "@/lib/stream-token";
 
-export const STOCK_CHART_RANGES = ["1D", "1W", "1M", "3M", "1Y"] as const;
+export const STOCK_CHART_RANGES = ["1D", "3M", "1Y", "3Y"] as const;
 export type StockChartRange = (typeof STOCK_CHART_RANGES)[number];
+
+export const STOCK_CHART_RANGE_LABELS: Record<StockChartRange, string> = {
+  "1D": "1일",
+  "3M": "3개월",
+  "1Y": "1년",
+  "3Y": "3년",
+};
 
 // 정규장 09:00~15:30 — 1D 차트 X축 상한.
 export const SESSION_MINUTES = 6 * 60 + 30;

@@ -20,6 +20,7 @@ import {
 import { useLiveQuote } from "@/hooks/use-live-quotes";
 import { useMrTheme } from "@/hooks/use-mr-theme";
 import {
+  STOCK_CHART_RANGE_LABELS,
   STOCK_CHART_RANGES,
   type StockChartRange,
   useStockChart,
@@ -252,7 +253,7 @@ export default function StockDetailScreen() {
                     color: active ? t.fgStrong : t.fgMuted,
                   }}
                 >
-                  {r}
+                  {STOCK_CHART_RANGE_LABELS[r]}
                 </Text>
               </Pressable>
             );

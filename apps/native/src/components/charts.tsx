@@ -170,18 +170,16 @@ export function IndexIntradayChart({
   );
 }
 
-// ── Stock chart (price + volume, grid, prev-close baseline) ───
-// Layout: 가격 영역(상단 ~74%) + 거래량 영역(하단 ~26%), 좌측에 Y축 라벨 컬럼.
-// 1D는 X축을 09:00~15:30(SESSION_MINUTES)로 고정해 우측 빈 공간이 자연스럽게
-// 남도록 하고, 그 외 range는 0..points.length-1을 가득 채운다.
+// ── Stock chart (price line + grid + prev-close baseline) ────
+// Layout: 좌측에 Y축 가격 라벨, 우측은 라인+면 차트. 1D는 X축을 09:00~15:30
+// (SESSION_MINUTES)로 고정해 우측 빈 공간이 자연스럽게 남도록 하고, 그 외
+// range는 0..points.length-1을 가득 채운다.
 const TICK_TARGET = 5;
-const PRICE_AREA_FRAC = 0.74;
 const PAD_LEFT = 48;
 const PAD_RIGHT = 8;
 const PAD_TOP = 8;
 const PAD_BOTTOM = 22;
 const AXIS_LABEL_FONT = 10;
-const VOLUME_GAP = 4;
 
 function niceStep(span: number): number {
   if (span <= 0) {
@@ -251,6 +249,88 @@ function buildScale(
   };
 }
 
+// 면 + 라인을 baseline 분할 여부에 따라 그리는 작은 보조 컴포넌트. StockChart의
+// JSX 분기 수를 줄여(ultracite 인지 복잡도 한도) 가독성을 유지하기 위해 분리.
+function StockChartLayers({
+  areaPath,
+  linePath,
+  ptsLength,
+  splitByBaseline,
+  id,
+  t,
+  lineColor,
+  areaColor,
+}: {
+  areaPath: string | null;
+  linePath: string;
+  ptsLength: number;
+  splitByBaseline: boolean;
+  id: string;
+  t: MrTokens;
+  lineColor: string;
+  areaColor: string;
+}) {
+  if (splitByBaseline) {
+    return (
+      <>
+        {areaPath ? (
+          <Path
+            clipPath={`url(#${id}up)`}
+            d={areaPath}
+            fill={t.upBg}
+            opacity={0.6}
+          />
+        ) : null}
+        {areaPath ? (
+          <Path
+            clipPath={`url(#${id}down)`}
+            d={areaPath}
+            fill={t.downBg}
+            opacity={0.6}
+          />
+        ) : null}
+        {ptsLength > 1 ? (
+          <Path
+            clipPath={`url(#${id}up)`}
+            d={linePath}
+            fill="none"
+            stroke={t.upStrong}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={1.5}
+          />
+        ) : null}
+        {ptsLength > 1 ? (
+          <Path
+            clipPath={`url(#${id}down)`}
+            d={linePath}
+            fill="none"
+            stroke={t.downStrong}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={1.5}
+          />
+        ) : null}
+      </>
+    );
+  }
+  return (
+    <>
+      {areaPath ? <Path d={areaPath} fill={areaColor} opacity={0.55} /> : null}
+      {ptsLength > 1 ? (
+        <Path
+          d={linePath}
+          fill="none"
+          stroke={lineColor}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={1.5}
+        />
+      ) : null}
+    </>
+  );
+}
+
 export function StockChart({
   series,
   range,
@@ -266,14 +346,11 @@ export function StockChart({
   width?: number;
   t: MrTokens;
 }) {
+  const rawId = useId();
+  const id = `sc${rawId.replace(SAFE_ID, "")}`;
   const { points, prevClose } = series;
-  const priceH = (height - PAD_TOP - PAD_BOTTOM) * PRICE_AREA_FRAC;
-  const volH =
-    (height - PAD_TOP - PAD_BOTTOM) * (1 - PRICE_AREA_FRAC) - VOLUME_GAP;
   const priceTop = PAD_TOP;
-  const priceBottom = PAD_TOP + priceH;
-  const volTop = priceBottom + VOLUME_GAP;
-  const volBottom = volTop + volH;
+  const priceBottom = height - PAD_BOTTOM;
   const left = PAD_LEFT;
   const right = width - PAD_RIGHT;
 
@@ -309,14 +386,34 @@ export function StockChart({
 
   const lineColor = positive ? t.upStrong : t.downStrong;
   const areaColor = positive ? t.upBg : t.downBg;
-  const volMax = points.reduce((m, p) => (p.vol > m ? p.vol : m), 0) || 1;
-  const barW = Math.max(
-    1,
-    ((right - left) / Math.max(1, scale.xMax - scale.xMin)) * 0.7
-  );
+  // 1D + prevClose가 있으면 baseline을 기준으로 위/아래를 빨강/파랑으로 분할.
+  // 그 외 range는 단일 색을 유지(prevClose가 차트 범위 밖일 수 있어 의미 약함).
+  const baselineY = prevClose > 0 ? scale.toY(prevClose) : null;
+  const splitByBaseline = range === "1D" && baselineY != null;
 
   return (
     <Svg height={height} viewBox={`0 0 ${width} ${height}`} width={width}>
+      {splitByBaseline && baselineY != null ? (
+        <Defs>
+          <ClipPath id={`${id}up`}>
+            <Rect
+              height={baselineY - priceTop}
+              width={width}
+              x={0}
+              y={priceTop}
+            />
+          </ClipPath>
+          <ClipPath id={`${id}down`}>
+            <Rect
+              height={priceBottom - baselineY}
+              width={width}
+              x={0}
+              y={baselineY}
+            />
+          </ClipPath>
+        </Defs>
+      ) : null}
+
       {/* 가로 그리드 + Y축 가격 라벨 */}
       {ticks.map((tick) => {
         const y = scale.toY(tick);
@@ -356,18 +453,16 @@ export function StockChart({
         />
       ) : null}
 
-      {/* 면 + 라인 + 마지막 마커 */}
-      {areaPath ? <Path d={areaPath} fill={areaColor} opacity={0.55} /> : null}
-      {pts.length > 1 ? (
-        <Path
-          d={linePath}
-          fill="none"
-          stroke={lineColor}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={1.5}
-        />
-      ) : null}
+      <StockChartLayers
+        areaColor={areaColor}
+        areaPath={areaPath}
+        id={id}
+        lineColor={lineColor}
+        linePath={linePath}
+        ptsLength={pts.length}
+        splitByBaseline={splitByBaseline}
+        t={t}
+      />
       {lastPt ? (
         <>
           <Circle
@@ -380,43 +475,6 @@ export function StockChart({
           <Circle cx={lastPt[0]} cy={lastPt[1]} fill={lineColor} r={3} />
         </>
       ) : null}
-
-      {/* 가격/거래량 영역 구분선 */}
-      <Line
-        stroke={t.border}
-        strokeWidth={1}
-        x1={left}
-        x2={right}
-        y1={priceBottom}
-        y2={priceBottom}
-      />
-
-      {/* 거래량 바 */}
-      {points.map((p) => {
-        const x = scale.toX(p.t);
-        const h = volH * (p.vol / volMax) * 0.9;
-        return (
-          <Rect
-            fill={t.fgSubtle}
-            height={h}
-            key={`vol-${p.t}`}
-            opacity={0.55}
-            width={barW}
-            x={x - barW / 2}
-            y={volBottom - h}
-          />
-        );
-      })}
-
-      {/* 거래량 영역 바닥선 */}
-      <Line
-        stroke={t.border}
-        strokeWidth={1}
-        x1={left}
-        x2={right}
-        y1={volBottom}
-        y2={volBottom}
-      />
 
       {/* X축 라벨 (1D만 시간) */}
       {range === "1D"

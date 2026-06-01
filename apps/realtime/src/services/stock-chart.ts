@@ -81,11 +81,66 @@ function ttlFor(range: ChartRange): number {
   return range === "1D" ? MINUTE_TTL_MS : DAILY_TTL_MS;
 }
 
+// Asia/Seoul은 DST 없음 → UTC + 9h 로 KST 추출. 서버 타임존(UTC/KST/etc)에
+// 관계없이 항상 KST 기준으로 날짜·시각을 판단한다.
+const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
+
+interface KstParts {
+  d: number;
+  hour: number;
+  m: number;
+  minute: number;
+  weekday: number;
+  y: number;
+}
+
+function kstParts(now: Date = new Date()): KstParts {
+  const k = new Date(now.getTime() + KST_OFFSET_MS);
+  return {
+    y: k.getUTCFullYear(),
+    m: k.getUTCMonth(),
+    d: k.getUTCDate(),
+    hour: k.getUTCHours(),
+    minute: k.getUTCMinutes(),
+    weekday: k.getUTCDay(),
+  };
+}
+
+function formatYYYYMMDDParts(y: number, m: number, d: number): string {
+  return `${y}${String(m + 1).padStart(2, "0")}${String(d).padStart(2, "0")}`;
+}
+
 function formatYYYYMMDD(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}${m}${day}`;
+  const k = kstParts(d);
+  return formatYYYYMMDDParts(k.y, k.m, k.d);
+}
+
+// 가장 최근 거래 세션(평일)의 YYYYMMDD와 차트 종료 시각(분).
+// 장중이면 오늘·현재시각, 장 마감 후면 오늘·15:30, 장 시작 전·주말이면 직전 평일·15:30.
+function targetTradingSession(): { yyyymmdd: string; endMin: number } {
+  const k = kstParts();
+  const nowMin = k.hour * 60 + k.minute;
+  const isWeekday = k.weekday >= 1 && k.weekday <= 5;
+  if (isWeekday && nowMin >= SESSION_OPEN_MIN) {
+    return {
+      yyyymmdd: formatYYYYMMDDParts(k.y, k.m, k.d),
+      endMin: Math.min(nowMin, SESSION_CLOSE_MIN),
+    };
+  }
+  // 장 시작 전 또는 주말 — 직전 평일로 backtrack.
+  const back = new Date(Date.UTC(k.y, k.m, k.d));
+  back.setUTCDate(back.getUTCDate() - 1);
+  while (back.getUTCDay() === 0 || back.getUTCDay() === 6) {
+    back.setUTCDate(back.getUTCDate() - 1);
+  }
+  return {
+    yyyymmdd: formatYYYYMMDDParts(
+      back.getUTCFullYear(),
+      back.getUTCMonth(),
+      back.getUTCDate()
+    ),
+    endMin: SESSION_CLOSE_MIN,
+  };
 }
 
 function parseHourToMinute(hhmmss: string | undefined): number | null {
@@ -252,18 +307,15 @@ async function fetchMinuteSeries(code: string): Promise<ChartSeries> {
   if (!(env.KIS_APP_KEY && env.KIS_APP_SECRET)) {
     return EMPTY;
   }
-  const now = new Date();
-  const nowMin = now.getHours() * 60 + now.getMinutes();
-  if (nowMin < SESSION_OPEN_MIN) {
-    return EMPTY;
-  }
+  // KST 기준 가장 최근 거래 세션. 장중이면 오늘·현재시각, 장 마감/주말이면
+  // 직전 평일·15:30 — 장 외 시간에도 마지막 1D 차트를 보여줄 수 있게 한다.
+  const session = targetTradingSession();
   try {
     const token = await getAccessToken();
-    const marks = minuteEndMarks(nowMin);
+    const marks = minuteEndMarks(session.endMin);
     // 페이지들은 서로 독립적이라 병렬로 묶지만, KIS가 같은 토큰의 과도한 동시
     // 호출을 500으로 거부하는 경향이 있어 chunked + per-page retry로 안정화한다.
-    const today = formatYYYYMMDD(now);
-    const pages = await fetchMinutePages(code, marks, today, token);
+    const pages = await fetchMinutePages(code, marks, session.yyyymmdd, token);
     const seen = new Map<number, ChartPoint>();
     let prevClose = 0;
     for (const page of pages) {

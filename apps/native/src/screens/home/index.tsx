@@ -226,6 +226,30 @@ export default function HomeScreen() {
         {/*</View>*/}
 
         <SectionHead
+          more={
+            isLoggedIn && watched.length > 0
+              ? `전체보기 (${watched.length}) →`
+              : undefined
+          }
+          onMore={
+            isLoggedIn && watched.length > 0 ? nav.openWatchlist : undefined
+          }
+          title="내 관심 종목"
+        />
+        <View style={{ paddingBottom: 8 }}>
+          {isLoggedIn ? (
+            <WatchlistPreview
+              isLoading={watchlistQuery.isLoading}
+              items={watchedPreview}
+              quotes={previewQuotes}
+              t={t}
+            />
+          ) : (
+            <EmptyHint label="로그인하고 관심 종목을 추가해 보세요." t={t} />
+          )}
+        </View>
+
+        <SectionHead
           more="전체보기 →"
           onMore={() => nav.goTab("signals")}
           title="오늘의 시그널"
@@ -279,30 +303,6 @@ export default function HomeScreen() {
           }
           return topNews.map((n) => <NewsCard key={n.id} news={n} />);
         })()}
-
-        <SectionHead
-          more={
-            isLoggedIn && watched.length > 0
-              ? `전체보기 (${watched.length}) →`
-              : undefined
-          }
-          onMore={
-            isLoggedIn && watched.length > 0 ? nav.openWatchlist : undefined
-          }
-          title="내 관심 종목"
-        />
-        <View style={{ paddingBottom: 8 }}>
-          {isLoggedIn ? (
-            <WatchlistPreview
-              isLoading={watchlistQuery.isLoading}
-              items={watchedPreview}
-              quotes={previewQuotes}
-              t={t}
-            />
-          ) : (
-            <EmptyHint label="로그인하고 관심 종목을 추가해 보세요." t={t} />
-          )}
-        </View>
 
         <View style={{ height: 24 }} />
       </ScrollView>

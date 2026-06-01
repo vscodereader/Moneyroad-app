@@ -16,6 +16,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Icon } from "@/components/icons";
 import { IconButton, MrScreen, StockLogo } from "@/components/ui";
+import { useLiveQuote } from "@/hooks/use-live-quotes";
 import { useMrTheme } from "@/hooks/use-mr-theme";
 import { authClient } from "@/lib/auth-client";
 import { findStock, type Stock } from "@/utils/data";
@@ -281,6 +282,7 @@ function RoomHeader({
   t: MrTokens;
   topInset: number;
 }) {
+  const live = useLiveQuote(room.stockCode ?? "");
   return (
     <View
       style={{
@@ -317,15 +319,15 @@ function RoomHeader({
             >
               {stockLabel ?? room.name}
             </Text>
-            {mockStock ? (
+            {live ? (
               <Text
                 style={{
                   fontSize: 11,
                   fontWeight: "700",
-                  color: changeColor(mockStock.change, t),
+                  color: changeColor(live.change, t),
                 }}
               >
-                {fmt.pct(mockStock.changePct)}
+                {fmt.pct(live.changeRate)}
               </Text>
             ) : null}
           </View>

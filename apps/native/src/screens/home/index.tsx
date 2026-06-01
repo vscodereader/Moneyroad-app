@@ -157,9 +157,10 @@ export default function HomeScreen() {
       <MrHeader
         right={
           <>
-            <IconButton onPress={nav.openSearch}>
-              <Icon.search color={t.fgStrong} size={22} />
-            </IconButton>
+            {/*TODO: 나중에 기능 추가 개발 필요 데이터 수집 한계 초과 가능할시 .. kis 는 40개 제한이라..*/}
+            {/*<IconButton onPress={nav.openSearch}>*/}
+            {/*  <Icon.search color={t.fgStrong} size={22} />*/}
+            {/*</IconButton>*/}
             <IconButton dot={hasUnreadAlerts} onPress={nav.openAlerts}>
               <Icon.bell color={t.fgStrong} size={22} />
             </IconButton>

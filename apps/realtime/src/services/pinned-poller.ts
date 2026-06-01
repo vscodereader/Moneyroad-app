@@ -8,6 +8,12 @@ import { quoteHub } from "@/services/quotes";
 let timer: ReturnType<typeof setInterval> | null = null;
 let running = false;
 
+// 관리자 등록 시그널 종목 — anonymous(비로그인) 클라이언트도 시세 구독을 허용하는
+// 화이트리스트. 홈에서 노출되는 limited 시그널은 비로그인도 시세를 볼 수 있어야
+// 하므로 quotes.ts 플러그인이 이 셋을 보고 authorize 한다. pinned-poller가 매
+// 주기마다 갱신한다.
+export const publicSignalSymbols = new Set<string>();
+
 async function pollOnce(): Promise<void> {
   // GROUP BY 로 distinct stock_code 추출. SELECT DISTINCT 도 동등하지만
   // drizzle 버전 의존성을 피해 명시적 그룹핑을 쓴다.
@@ -27,11 +33,14 @@ async function pollOnce(): Promise<void> {
         .from(signal)
         .groupBy(signal.stockCode),
     ]);
+    const signalCodes = signalRows.map((r) => r.stockCode);
+    // 화이트리스트 동기화: 비로그인도 시세를 볼 수 있는 시그널 종목.
+    publicSignalSymbols.clear();
+    for (const code of signalCodes) {
+      publicSignalSymbols.add(code);
+    }
     const symbols = Array.from(
-      new Set([
-        ...watchlistRows.map((r) => r.stockCode),
-        ...signalRows.map((r) => r.stockCode),
-      ])
+      new Set([...watchlistRows.map((r) => r.stockCode), ...signalCodes])
     );
     const { added, removed } = quoteHub.setPins(symbols);
     if (added > 0 || removed > 0) {

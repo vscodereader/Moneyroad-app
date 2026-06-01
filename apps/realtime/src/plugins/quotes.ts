@@ -6,6 +6,7 @@ import {
   fetchIndexIntraday,
   type IndexIntraday,
 } from "@/services/index-intraday";
+import { publicSignalSymbols } from "@/services/pinned-poller";
 import { quoteHub, streamQuotes } from "@/services/quotes";
 import {
   type ChartRange,
@@ -17,9 +18,14 @@ import { fetchStockSnapshots } from "@/services/stock-price";
 
 const MAX_SYMBOLS = 40;
 
-// Symbols anyone may stream without a token (market indices: KOSPI/KOSDAQ).
-// Everything else requires a valid stream token.
-const PUBLIC_SYMBOLS = new Set(["0001", "1001"]);
+// Symbols anyone may stream without a token: 시장 인덱스(0001/1001) +
+// 관리자가 등록한 시그널 종목(publicSignalSymbols). 비로그인 사용자도 홈에
+// 노출되는 시그널 종목 시세를 볼 수 있어야 한다.
+const PUBLIC_INDEX_SYMBOLS = new Set(["0001", "1001"]);
+
+function isPublic(symbol: string): boolean {
+  return PUBLIC_INDEX_SYMBOLS.has(symbol) || publicSignalSymbols.has(symbol);
+}
 
 // 분봉 시드는 분 단위로만 갱신되므로 짧게 캐시해 KIS REST 호출을 줄인다.
 const INTRADAY_TTL_MS = 30_000;
@@ -53,9 +59,10 @@ function parseSymbols(raw: string | undefined): string[] {
 }
 
 // A valid token authorizes any symbol; anonymous requests are limited to the
-// public allowlist. Returns the subset the caller is allowed to receive.
+// public allowlist (indices + admin signal stocks). Returns the subset the
+// caller is allowed to receive.
 function authorizeSymbols(symbols: string[], authed: boolean): string[] {
-  return authed ? symbols : symbols.filter((s) => PUBLIC_SYMBOLS.has(s));
+  return authed ? symbols : symbols.filter(isPublic);
 }
 
 export function registerQuotesPlugin(app: FastifyInstance) {
@@ -132,22 +139,23 @@ export function registerQuotesPlugin(app: FastifyInstance) {
 
   // Sparkline series — recent ~30 daily closes for a small inline chart.
   //   GET /quote/sparkline?code=000660&token=<stream token>
-  // Single KIS REST call (1h cached). Token required (private symbol).
+  // 인증 토큰이 있으면 모든 종목, 없으면 publicSignalSymbols(관리자 등록
+  // 시그널 종목)에 한해 anonymous 허용. 단일 KIS REST 호출(1h 캐시).
   app.get<{ Querystring: { code?: string; token?: string } }>(
     "/quote/sparkline",
     async (request, reply) => {
       const payload = request.query.token
         ? verifyStreamToken(request.query.token, env.STREAM_TOKEN_SECRET)
         : null;
-      if (!payload) {
-        reply
-          .code(401)
-          .send({ error: "Unauthorized", code: "INVALID_STREAM_TOKEN" });
-        return;
-      }
       const code = request.query.code?.trim();
       if (!code) {
         reply.code(400).send({ error: "code query parameter is required" });
+        return;
+      }
+      if (!(payload || isPublic(code))) {
+        reply
+          .code(401)
+          .send({ error: "Unauthorized", code: "INVALID_STREAM_TOKEN" });
         return;
       }
       const points = await fetchStockSparkline(code);

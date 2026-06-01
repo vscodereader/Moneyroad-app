@@ -242,7 +242,11 @@ export default function HomeScreen() {
               t={t}
             />
           ) : (
-            <EmptyHint label="로그인하고 관심 종목을 추가해 보세요." t={t} />
+            <EmptyHint
+              label="로그인하고 관심 종목을 추가해 보세요."
+              onPress={nav.openLogin}
+              t={t}
+            />
           )}
         </View>
 

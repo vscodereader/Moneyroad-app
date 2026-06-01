@@ -15,6 +15,7 @@ export const nav = {
   openSearch: () => router.push(`${BASE}/search` as Href),
   openAlerts: () => router.push(`${BASE}/alerts` as Href),
   openWatchlist: () => router.push(`${BASE}/watchlist` as Href),
+  openLogin: () => router.push(`${BASE}/login` as Href),
   openDiscussionRoom: (id: number | string) =>
     router.push(`${BASE}/discussion-room/${id}` as Href),
   openCreateDiscussionRoom: () =>

@@ -93,12 +93,18 @@ function Field({
   );
 }
 
+// 아이디 정규식: better-auth username plugin 기본값(영문/숫자/_/.)을 클라이언트에서도 미리 점검.
+const USERNAME_REGEX = /^[a-zA-Z0-9_.]+$/;
+const USERNAME_MIN = 3;
+const USERNAME_MAX = 30;
+
 export default function LoginScreen() {
   const { t } = useMrTheme();
   const { data: session } = authClient.useSession();
   const [mode, setMode] = useState<Mode>("signin");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -113,7 +119,7 @@ export default function LoginScreen() {
 
   const isSignup = mode === "signup";
 
-  const submitEmail = async () => {
+  const submitCredentials = async () => {
     if (loading) {
       return;
     }
@@ -125,19 +131,35 @@ export default function LoginScreen() {
     };
     try {
       if (isSignup) {
+        const trimmedName = name.trim();
+        const trimmedUsername = username.trim();
+        if (!USERNAME_REGEX.test(trimmedUsername)) {
+          setError("아이디는 영문/숫자/_/.만 사용할 수 있어요.");
+          return;
+        }
         await authClient.signUp.email(
           {
             email: email.trim(),
             password,
-            name: name.trim() || email.trim(),
+            name: trimmedName,
+            username: trimmedUsername,
           },
           handlers
         );
       } else {
-        await authClient.signIn.email(
-          { email: email.trim(), password },
-          handlers
-        );
+        // 입력값에 @가 있으면 이메일 로그인, 아니면 아이디 로그인.
+        const identifier = username.trim();
+        if (identifier.includes("@")) {
+          await authClient.signIn.email(
+            { email: identifier, password },
+            handlers
+          );
+        } else {
+          await authClient.signIn.username(
+            { username: identifier, password },
+            handlers
+          );
+        }
       }
     } finally {
       setLoading(false);
@@ -163,7 +185,19 @@ export default function LoginScreen() {
     }
   };
 
-  const emailValid = email.includes("@") && password.length >= 8;
+  const trimmedUsername = username.trim();
+  const usernameLength = trimmedUsername.length;
+  const usernameValid =
+    usernameLength >= USERNAME_MIN && usernameLength <= USERNAME_MAX;
+  const passwordValid = password.length >= 8;
+  const signupValid =
+    usernameValid &&
+    passwordValid &&
+    email.includes("@") &&
+    name.trim().length > 0;
+  // 로그인은 이메일도 허용하므로 길이 제한(>=1)만 확인.
+  const signinValid = trimmedUsername.length > 0 && passwordValid;
+  const canSubmit = isSignup ? signupValid : signinValid;
 
   return (
     <MrScreen>
@@ -187,29 +221,44 @@ export default function LoginScreen() {
               marginTop: 4,
             }}
           >
-            {isSignup ? "이메일로 가입하기" : "이메일로 로그인"}
+            {isSignup ? "이메일로 가입하기" : "로그인"}
           </Text>
 
           {isSignup ? (
-            <Field
-              autoCapitalize="none"
-              label="이름"
-              onChangeText={setName}
-              placeholder="머니로드"
-              t={t}
-              value={name}
-            />
+            <>
+              <Field
+                autoCapitalize="none"
+                autoComplete="email"
+                inputMode="email"
+                label="이메일"
+                onChangeText={setEmail}
+                placeholder="you@moneyroad.ai.kr"
+                t={t}
+                value={email}
+              />
+              <Field
+                autoCapitalize="none"
+                label="이름"
+                onChangeText={setName}
+                placeholder="홍길동"
+                t={t}
+                value={name}
+              />
+            </>
           ) : null}
 
           <Field
             autoCapitalize="none"
-            autoComplete="email"
-            inputMode="email"
-            label="이메일"
-            onChangeText={setEmail}
-            placeholder="you@moneyroad.ai.kr"
+            autoCorrect={false}
+            label={
+              isSignup
+                ? `아이디 (${USERNAME_MIN}~${USERNAME_MAX}자, 영문/숫자/_/.)`
+                : "이메일 또는 아이디"
+            }
+            onChangeText={setUsername}
+            placeholder={isSignup ? "moneyroad_user" : "you@moneyroad.ai.kr"}
             t={t}
-            value={email}
+            value={username}
           />
           <Field
             autoCapitalize="none"
@@ -226,14 +275,14 @@ export default function LoginScreen() {
           ) : null}
 
           <Pressable
-            disabled={!emailValid || loading}
-            onPress={submitEmail}
+            disabled={!canSubmit || loading}
+            onPress={submitCredentials}
             style={{
               height: 50,
               borderRadius: 12,
               alignItems: "center",
               justifyContent: "center",
-              backgroundColor: emailValid ? t.primary : t.borderStrong,
+              backgroundColor: canSubmit ? t.primary : t.borderStrong,
             }}
           >
             {loading ? (
@@ -277,46 +326,46 @@ export default function LoginScreen() {
 
           <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
             <View style={{ flex: 1, height: 1, backgroundColor: t.border }} />
-            <Text style={{ fontSize: 12, color: t.fgSubtle }}>또는</Text>
-            <View style={{ flex: 1, height: 1, backgroundColor: t.border }} />
+            {/*<Text style={{ fontSize: 12, color: t.fgSubtle }}>또는</Text>*/}
+            {/*<View style={{ flex: 1, height: 1, backgroundColor: t.border }} />*/}
           </View>
 
-          <View style={{ gap: 10 }}>
-            {SOCIALS.map((s) => {
-              const Logo = s.icon;
-              return (
-                <Pressable
-                  disabled={socialLoading !== null}
-                  key={s.provider}
-                  onPress={() => submitSocial(s.provider)}
-                  style={{
-                    height: 50,
-                    borderRadius: 12,
-                    flexDirection: "row",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    gap: 8,
-                    backgroundColor: s.bg,
-                    borderWidth: s.border ? 1 : 0,
-                    borderColor: s.border,
-                  }}
-                >
-                  {socialLoading === s.provider ? (
-                    <ActivityIndicator color={s.fg} />
-                  ) : (
-                    <>
-                      <Logo color={s.fg} size={18} />
-                      <Text
-                        style={{ fontSize: 15, fontWeight: "700", color: s.fg }}
-                      >
-                        {s.label}
-                      </Text>
-                    </>
-                  )}
-                </Pressable>
-              );
-            })}
-          </View>
+          {/*<View style={{ gap: 10 }}>*/}
+          {/*  {SOCIALS.map((s) => {*/}
+          {/*    const Logo = s.icon;*/}
+          {/*    return (*/}
+          {/*      <Pressable*/}
+          {/*        disabled={socialLoading !== null}*/}
+          {/*        key={s.provider}*/}
+          {/*        onPress={() => submitSocial(s.provider)}*/}
+          {/*        style={{*/}
+          {/*          height: 50,*/}
+          {/*          borderRadius: 12,*/}
+          {/*          flexDirection: "row",*/}
+          {/*          alignItems: "center",*/}
+          {/*          justifyContent: "center",*/}
+          {/*          gap: 8,*/}
+          {/*          backgroundColor: s.bg,*/}
+          {/*          borderWidth: s.border ? 1 : 0,*/}
+          {/*          borderColor: s.border,*/}
+          {/*        }}*/}
+          {/*      >*/}
+          {/*        {socialLoading === s.provider ? (*/}
+          {/*          <ActivityIndicator color={s.fg} />*/}
+          {/*        ) : (*/}
+          {/*          <>*/}
+          {/*            <Logo color={s.fg} size={18} />*/}
+          {/*            <Text*/}
+          {/*              style={{ fontSize: 15, fontWeight: "700", color: s.fg }}*/}
+          {/*            >*/}
+          {/*              {s.label}*/}
+          {/*            </Text>*/}
+          {/*          </>*/}
+          {/*        )}*/}
+          {/*      </Pressable>*/}
+          {/*    );*/}
+          {/*  })}*/}
+          {/*</View>*/}
         </ScrollView>
       </KeyboardAvoidingView>
     </MrScreen>

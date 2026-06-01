@@ -1,0 +1,67 @@
+// Better Auth 한국어 번역. BASE_ERROR_CODES(@better-auth/core/error/codes) 키 기준.
+// 새 키가 추가되면 추후 i18n 플러그인이 fallback으로 영어 원문을 그대로 노출한다.
+export const KO_ERROR_TRANSLATIONS: Record<string, string> = {
+  USER_NOT_FOUND: "사용자를 찾을 수 없어요.",
+  FAILED_TO_CREATE_USER: "회원 생성에 실패했어요.",
+  FAILED_TO_CREATE_SESSION: "세션 생성에 실패했어요.",
+  FAILED_TO_UPDATE_USER: "회원 정보를 업데이트하지 못했어요.",
+  FAILED_TO_GET_SESSION: "세션 정보를 가져오지 못했어요.",
+  INVALID_PASSWORD: "비밀번호가 올바르지 않아요.",
+  INVALID_EMAIL: "이메일 형식이 올바르지 않아요.",
+  INVALID_EMAIL_OR_PASSWORD: "이메일 또는 비밀번호가 올바르지 않아요.",
+  INVALID_USER: "유효하지 않은 사용자예요.",
+  SOCIAL_ACCOUNT_ALREADY_LINKED: "이미 다른 계정에 연결된 소셜 계정이에요.",
+  PROVIDER_NOT_FOUND: "지원하지 않는 로그인 방식이에요.",
+  INVALID_TOKEN: "유효하지 않은 토큰이에요.",
+  TOKEN_EXPIRED: "토큰이 만료됐어요.",
+  ID_TOKEN_NOT_SUPPORTED: "이 로그인 방식은 ID 토큰을 지원하지 않아요.",
+  FAILED_TO_GET_USER_INFO: "사용자 정보를 가져오지 못했어요.",
+  USER_EMAIL_NOT_FOUND: "사용자의 이메일을 찾을 수 없어요.",
+  EMAIL_NOT_VERIFIED: "이메일 인증이 필요해요.",
+  PASSWORD_TOO_SHORT: "비밀번호가 너무 짧아요.",
+  PASSWORD_TOO_LONG: "비밀번호가 너무 길어요.",
+  USER_ALREADY_EXISTS: "이미 가입된 계정이에요.",
+  USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL:
+    "이미 가입된 계정이에요. 다른 이메일을 사용해 주세요.",
+  EMAIL_CAN_NOT_BE_UPDATED: "이메일은 변경할 수 없어요.",
+  CREDENTIAL_ACCOUNT_NOT_FOUND:
+    "이메일/비밀번호로 가입된 계정을 찾을 수 없어요.",
+  SESSION_EXPIRED: "세션이 만료됐어요. 다시 로그인해 주세요.",
+  FAILED_TO_UNLINK_LAST_ACCOUNT: "마지막으로 남은 계정은 해제할 수 없어요.",
+  ACCOUNT_NOT_FOUND: "계정을 찾을 수 없어요.",
+  USER_ALREADY_HAS_PASSWORD:
+    "이미 비밀번호가 설정된 계정이에요. 비밀번호를 입력해 계정을 삭제해 주세요.",
+  CROSS_SITE_NAVIGATION_LOGIN_BLOCKED:
+    "교차 사이트 로그인 요청이 차단됐어요. 다시 시도해 주세요.",
+  VERIFICATION_EMAIL_NOT_ENABLED: "이메일 인증이 활성화돼 있지 않아요.",
+  EMAIL_ALREADY_VERIFIED: "이미 인증이 완료된 이메일이에요.",
+  EMAIL_MISMATCH: "이메일이 일치하지 않아요.",
+  SESSION_NOT_FRESH: "보안을 위해 다시 로그인이 필요해요.",
+  LINKED_ACCOUNT_ALREADY_EXISTS: "이미 연결된 계정이 있어요.",
+  INVALID_ORIGIN: "허용되지 않은 요청 출처예요.",
+  INVALID_CALLBACK_URL: "callbackURL이 올바르지 않아요.",
+  INVALID_REDIRECT_URL: "redirectURL이 올바르지 않아요.",
+  INVALID_ERROR_CALLBACK_URL: "errorCallbackURL이 올바르지 않아요.",
+  INVALID_NEW_USER_CALLBACK_URL: "newUserCallbackURL이 올바르지 않아요.",
+  MISSING_OR_NULL_ORIGIN: "Origin 헤더가 비어 있어요.",
+  CALLBACK_URL_REQUIRED: "callbackURL이 필요해요.",
+  FAILED_TO_CREATE_VERIFICATION: "인증 정보를 생성하지 못했어요.",
+  FIELD_NOT_ALLOWED: "수정할 수 없는 필드예요.",
+  ASYNC_VALIDATION_NOT_SUPPORTED: "비동기 검증은 지원하지 않아요.",
+  VALIDATION_ERROR: "입력값을 다시 확인해 주세요.",
+  MISSING_FIELD: "필수 입력 항목이 누락됐어요.",
+  METHOD_NOT_ALLOWED_DEFER_SESSION_REQUIRED:
+    "세션 설정에서 deferSessionRefresh가 활성화돼야 해요.",
+  BODY_MUST_BE_AN_OBJECT: "요청 본문 형식이 올바르지 않아요.",
+  PASSWORD_ALREADY_SET: "이미 비밀번호가 설정돼 있어요.",
+  // @better-auth/plugins/username
+  INVALID_USERNAME_OR_PASSWORD: "아이디 또는 비밀번호가 올바르지 않아요.",
+  UNEXPECTED_ERROR: "예상치 못한 오류가 발생했어요.",
+  USERNAME_IS_ALREADY_TAKEN:
+    "이미 사용 중인 아이디예요. 다른 아이디를 입력해 주세요.",
+  USERNAME_TOO_SHORT: "아이디가 너무 짧아요.",
+  USERNAME_TOO_LONG: "아이디가 너무 길어요.",
+  INVALID_USERNAME:
+    "아이디 형식이 올바르지 않아요. 영문/숫자/_/.만 사용 가능해요.",
+  INVALID_DISPLAY_USERNAME: "표시용 아이디 형식이 올바르지 않아요.",
+};

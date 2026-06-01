@@ -2,14 +2,12 @@ import { type Href, router } from "expo-router";
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
-  ScrollView,
   Text,
   TextInput,
   View,
 } from "react-native";
+import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { z } from "zod";
 
 import { Icon, type IconProps } from "@/components/icons";
@@ -232,179 +230,176 @@ export default function LoginScreen() {
         left={<BackButton onPress={nav.back} />}
         title={isSignup ? "회원가입" : "로그인"}
       />
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+      <KeyboardAwareScrollView
+        bottomOffset={20}
+        contentContainerStyle={{ padding: 20, gap: 14 }}
+        keyboardShouldPersistTaps="handled"
         style={{ flex: 1 }}
       >
-        <ScrollView
-          contentContainerStyle={{ padding: 20, gap: 14 }}
-          keyboardShouldPersistTaps="handled"
+        <Text
+          style={{
+            fontSize: 20,
+            fontWeight: "800",
+            color: t.fgStrong,
+            marginTop: 4,
+          }}
         >
-          <Text
-            style={{
-              fontSize: 20,
-              fontWeight: "800",
-              color: t.fgStrong,
-              marginTop: 4,
-            }}
-          >
-            {isSignup ? "이메일로 가입하기" : "로그인"}
-          </Text>
+          {isSignup ? "이메일로 가입하기" : "로그인"}
+        </Text>
 
+        <Field
+          autoCapitalize="none"
+          autoCorrect={false}
+          label={
+            isSignup
+              ? `아이디 (${USERNAME_MIN}~${USERNAME_MAX}자, 영문/숫자/_/.)`
+              : "이메일 또는 아이디"
+          }
+          onChangeText={setUsername}
+          placeholder={isSignup ? "moneyroad_user" : "you@moneyroad.ai.kr"}
+          t={t}
+          value={username}
+        />
+        {isSignup ? (
           <Field
             autoCapitalize="none"
-            autoCorrect={false}
-            label={
-              isSignup
-                ? `아이디 (${USERNAME_MIN}~${USERNAME_MAX}자, 영문/숫자/_/.)`
-                : "이메일 또는 아이디"
-            }
-            onChangeText={setUsername}
-            placeholder={isSignup ? "moneyroad_user" : "you@moneyroad.ai.kr"}
+            autoComplete="email"
+            inputMode="email"
+            label="이메일"
+            onChangeText={setEmail}
+            placeholder="you@moneyroad.ai.kr"
             t={t}
-            value={username}
+            value={email}
           />
-          {isSignup ? (
+        ) : null}
+        <Field
+          autoCapitalize="none"
+          label={`비밀번호 (${PASSWORD_MIN}자 이상)`}
+          onChangeText={setPassword}
+          placeholder="••••••••"
+          secureTextEntry
+          t={t}
+          value={password}
+        />
+        {isSignup ? (
+          <>
             <Field
               autoCapitalize="none"
-              autoComplete="email"
-              inputMode="email"
-              label="이메일"
-              onChangeText={setEmail}
-              placeholder="you@moneyroad.ai.kr"
+              label="비밀번호 확인"
+              onChangeText={setPasswordConfirm}
+              placeholder="••••••••"
+              secureTextEntry
               t={t}
-              value={email}
+              value={passwordConfirm}
             />
-          ) : null}
-          <Field
-            autoCapitalize="none"
-            label={`비밀번호 (${PASSWORD_MIN}자 이상)`}
-            onChangeText={setPassword}
-            placeholder="••••••••"
-            secureTextEntry
-            t={t}
-            value={password}
-          />
-          {isSignup ? (
-            <>
-              <Field
-                autoCapitalize="none"
-                label="비밀번호 확인"
-                onChangeText={setPasswordConfirm}
-                placeholder="••••••••"
-                secureTextEntry
-                t={t}
-                value={passwordConfirm}
-              />
-              <Field
-                autoCapitalize="none"
-                label="이름 (선택)"
-                onChangeText={setName}
-                placeholder="홍길동"
-                t={t}
-                value={name}
-              />
-            </>
-          ) : null}
+            <Field
+              autoCapitalize="none"
+              label="이름 (선택)"
+              onChangeText={setName}
+              placeholder="홍길동"
+              t={t}
+              value={name}
+            />
+          </>
+        ) : null}
 
-          {error ? (
-            <Text style={{ fontSize: 13, color: t.downStrong }}>{error}</Text>
-          ) : null}
+        {error ? (
+          <Text style={{ fontSize: 13, color: t.downStrong }}>{error}</Text>
+        ) : null}
 
-          <Pressable
-            disabled={!canSubmit || loading}
-            onPress={submitCredentials}
-            style={{
-              height: 50,
-              borderRadius: 12,
-              alignItems: "center",
-              justifyContent: "center",
-              backgroundColor: canSubmit ? t.primary : t.borderStrong,
-            }}
-          >
-            {loading ? (
-              <ActivityIndicator color={t.primaryOn} />
-            ) : (
-              <Text
-                style={{ fontSize: 15, fontWeight: "800", color: t.primaryOn }}
-              >
-                {isSignup ? "회원가입" : "로그인"}
-              </Text>
-            )}
-          </Pressable>
-
-          <Pressable
-            hitSlop={8}
-            onPress={() => {
-              setMode(isSignup ? "signin" : "signup");
-              setError(null);
-            }}
-            style={{
-              alignSelf: "center",
-              flexDirection: "row",
-              gap: 5,
-              paddingVertical: 10,
-            }}
-          >
-            <Text style={{ fontSize: 13, color: t.fgMuted }}>
-              {isSignup ? "이미 계정이 있으신가요?" : "계정이 없으신가요?"}
-            </Text>
+        <Pressable
+          disabled={!canSubmit || loading}
+          onPress={submitCredentials}
+          style={{
+            height: 50,
+            borderRadius: 12,
+            alignItems: "center",
+            justifyContent: "center",
+            backgroundColor: canSubmit ? t.primary : t.borderStrong,
+          }}
+        >
+          {loading ? (
+            <ActivityIndicator color={t.primaryOn} />
+          ) : (
             <Text
-              style={{
-                fontSize: 13,
-                fontWeight: "800",
-                color: t.primary,
-                textDecorationLine: "underline",
-              }}
+              style={{ fontSize: 15, fontWeight: "800", color: t.primaryOn }}
             >
-              {isSignup ? "로그인" : "회원가입"}
+              {isSignup ? "회원가입" : "로그인"}
             </Text>
-          </Pressable>
+          )}
+        </Pressable>
 
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-            <View style={{ flex: 1, height: 1, backgroundColor: t.border }} />
-            {/*<Text style={{ fontSize: 12, color: t.fgSubtle }}>또는</Text>*/}
-            {/*<View style={{ flex: 1, height: 1, backgroundColor: t.border }} />*/}
-          </View>
+        <Pressable
+          hitSlop={8}
+          onPress={() => {
+            setMode(isSignup ? "signin" : "signup");
+            setError(null);
+          }}
+          style={{
+            alignSelf: "center",
+            flexDirection: "row",
+            gap: 5,
+            paddingVertical: 10,
+          }}
+        >
+          <Text style={{ fontSize: 13, color: t.fgMuted }}>
+            {isSignup ? "이미 계정이 있으신가요?" : "계정이 없으신가요?"}
+          </Text>
+          <Text
+            style={{
+              fontSize: 13,
+              fontWeight: "800",
+              color: t.primary,
+              textDecorationLine: "underline",
+            }}
+          >
+            {isSignup ? "로그인" : "회원가입"}
+          </Text>
+        </Pressable>
 
-          {/*<View style={{ gap: 10 }}>*/}
-          {/*  {SOCIALS.map((s) => {*/}
-          {/*    const Logo = s.icon;*/}
-          {/*    return (*/}
-          {/*      <Pressable*/}
-          {/*        disabled={socialLoading !== null}*/}
-          {/*        key={s.provider}*/}
-          {/*        onPress={() => submitSocial(s.provider)}*/}
-          {/*        style={{*/}
-          {/*          height: 50,*/}
-          {/*          borderRadius: 12,*/}
-          {/*          flexDirection: "row",*/}
-          {/*          alignItems: "center",*/}
-          {/*          justifyContent: "center",*/}
-          {/*          gap: 8,*/}
-          {/*          backgroundColor: s.bg,*/}
-          {/*          borderWidth: s.border ? 1 : 0,*/}
-          {/*          borderColor: s.border,*/}
-          {/*        }}*/}
-          {/*      >*/}
-          {/*        {socialLoading === s.provider ? (*/}
-          {/*          <ActivityIndicator color={s.fg} />*/}
-          {/*        ) : (*/}
-          {/*          <>*/}
-          {/*            <Logo color={s.fg} size={18} />*/}
-          {/*            <Text*/}
-          {/*              style={{ fontSize: 15, fontWeight: "700", color: s.fg }}*/}
-          {/*            >*/}
-          {/*              {s.label}*/}
-          {/*            </Text>*/}
-          {/*          </>*/}
-          {/*        )}*/}
-          {/*      </Pressable>*/}
-          {/*    );*/}
-          {/*  })}*/}
-          {/*</View>*/}
-        </ScrollView>
-      </KeyboardAvoidingView>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+          <View style={{ flex: 1, height: 1, backgroundColor: t.border }} />
+          {/*<Text style={{ fontSize: 12, color: t.fgSubtle }}>또는</Text>*/}
+          {/*<View style={{ flex: 1, height: 1, backgroundColor: t.border }} />*/}
+        </View>
+
+        {/*<View style={{ gap: 10 }}>*/}
+        {/*  {SOCIALS.map((s) => {*/}
+        {/*    const Logo = s.icon;*/}
+        {/*    return (*/}
+        {/*      <Pressable*/}
+        {/*        disabled={socialLoading !== null}*/}
+        {/*        key={s.provider}*/}
+        {/*        onPress={() => submitSocial(s.provider)}*/}
+        {/*        style={{*/}
+        {/*          height: 50,*/}
+        {/*          borderRadius: 12,*/}
+        {/*          flexDirection: "row",*/}
+        {/*          alignItems: "center",*/}
+        {/*          justifyContent: "center",*/}
+        {/*          gap: 8,*/}
+        {/*          backgroundColor: s.bg,*/}
+        {/*          borderWidth: s.border ? 1 : 0,*/}
+        {/*          borderColor: s.border,*/}
+        {/*        }}*/}
+        {/*      >*/}
+        {/*        {socialLoading === s.provider ? (*/}
+        {/*          <ActivityIndicator color={s.fg} />*/}
+        {/*        ) : (*/}
+        {/*          <>*/}
+        {/*            <Logo color={s.fg} size={18} />*/}
+        {/*            <Text*/}
+        {/*              style={{ fontSize: 15, fontWeight: "700", color: s.fg }}*/}
+        {/*            >*/}
+        {/*              {s.label}*/}
+        {/*            </Text>*/}
+        {/*          </>*/}
+        {/*        )}*/}
+        {/*      </Pressable>*/}
+        {/*    );*/}
+        {/*  })}*/}
+        {/*</View>*/}
+      </KeyboardAwareScrollView>
     </MrScreen>
   );
 }

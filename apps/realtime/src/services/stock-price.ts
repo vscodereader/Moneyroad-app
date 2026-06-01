@@ -60,7 +60,9 @@ async function fetchPriceOnce(
   code: string,
   token: string
 ): Promise<PriceSnapshot | null> {
-  if (!(env.KIS_APP_KEY && env.KIS_APP_SECRET)) {
+  const appkey = env.KIS_APP_KEY;
+  const appsecret = env.KIS_APP_SECRET;
+  if (!(appkey && appsecret)) {
     return null;
   }
   const params = new URLSearchParams({
@@ -71,8 +73,8 @@ async function fetchPriceOnce(
     fetch(`${REST_URL[env.KIS_ENV]}${PRICE_API}?${params}`, {
       headers: {
         authorization: `Bearer ${token}`,
-        appkey: env.KIS_APP_KEY,
-        appsecret: env.KIS_APP_SECRET,
+        appkey,
+        appsecret,
         tr_id: TR_PRICE,
         custtype: "P",
       },

@@ -173,7 +173,9 @@ interface ChartRow {
 async function fetchIndexIntradayOnce(
   code: string
 ): Promise<IndexIntraday | null> {
-  if (!(env.KIS_APP_KEY && env.KIS_APP_SECRET)) {
+  const appkey = env.KIS_APP_KEY;
+  const appsecret = env.KIS_APP_SECRET;
+  if (!(appkey && appsecret)) {
     return null;
   }
   try {
@@ -189,8 +191,8 @@ async function fetchIndexIntradayOnce(
       fetch(`${REST_URL[env.KIS_ENV]}${CHART_API}?${params}`, {
         headers: {
           authorization: `Bearer ${token}`,
-          appkey: env.KIS_APP_KEY,
-          appsecret: env.KIS_APP_SECRET,
+          appkey,
+          appsecret,
           tr_id: TR_INDEX_CHART,
           custtype: "P",
         },

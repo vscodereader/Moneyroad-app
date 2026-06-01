@@ -191,7 +191,9 @@ async function fetchMinutePage(
   yyyymmdd: string,
   token: string
 ): Promise<MinutePage | null> {
-  if (!(env.KIS_APP_KEY && env.KIS_APP_SECRET)) {
+  const appkey = env.KIS_APP_KEY;
+  const appsecret = env.KIS_APP_SECRET;
+  if (!(appkey && appsecret)) {
     return null;
   }
   const params = new URLSearchParams({
@@ -206,8 +208,8 @@ async function fetchMinutePage(
     fetch(`${REST_URL[env.KIS_ENV]}${MINUTE_API}?${params}`, {
       headers: {
         authorization: `Bearer ${token}`,
-        appkey: env.KIS_APP_KEY,
-        appsecret: env.KIS_APP_SECRET,
+        appkey,
+        appsecret,
         tr_id: TR_MINUTE,
         custtype: "P",
       },
@@ -341,7 +343,9 @@ async function fetchDailySeries(
   code: string,
   range: Exclude<ChartRange, "1D">
 ): Promise<ChartSeries> {
-  if (!(env.KIS_APP_KEY && env.KIS_APP_SECRET)) {
+  const appkey = env.KIS_APP_KEY;
+  const appsecret = env.KIS_APP_SECRET;
+  if (!(appkey && appsecret)) {
     return EMPTY;
   }
   const plan = DAILY_PLAN[range];
@@ -361,8 +365,8 @@ async function fetchDailySeries(
       fetch(`${REST_URL[env.KIS_ENV]}${DAILY_API}?${params}`, {
         headers: {
           authorization: `Bearer ${token}`,
-          appkey: env.KIS_APP_KEY,
-          appsecret: env.KIS_APP_SECRET,
+          appkey,
+          appsecret,
           tr_id: TR_DAILY,
           custtype: "P",
         },
@@ -447,7 +451,9 @@ export async function fetchStockSparkline(code: string): Promise<number[]> {
   if (hit && Date.now() - hit.at < SPARKLINE_TTL_MS) {
     return hit.points;
   }
-  if (!(env.KIS_APP_KEY && env.KIS_APP_SECRET)) {
+  const appkey = env.KIS_APP_KEY;
+  const appsecret = env.KIS_APP_SECRET;
+  if (!(appkey && appsecret)) {
     return [];
   }
   try {
@@ -468,8 +474,8 @@ export async function fetchStockSparkline(code: string): Promise<number[]> {
       fetch(`${REST_URL[env.KIS_ENV]}${DAILY_API}?${params}`, {
         headers: {
           authorization: `Bearer ${token}`,
-          appkey: env.KIS_APP_KEY,
-          appsecret: env.KIS_APP_SECRET,
+          appkey,
+          appsecret,
           tr_id: TR_DAILY,
           custtype: "P",
         },

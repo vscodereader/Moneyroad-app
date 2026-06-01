@@ -10,6 +10,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { z } from "zod";
 
 import { Icon, type IconProps } from "@/components/icons";
 import { BackButton, MrHeader, MrScreen } from "@/components/ui";
@@ -97,6 +98,26 @@ function Field({
 const USERNAME_REGEX = /^[a-zA-Z0-9_.]+$/;
 const USERNAME_MIN = 3;
 const USERNAME_MAX = 30;
+const PASSWORD_MIN = 8;
+
+const signupSchema = z
+  .object({
+    username: z
+      .string()
+      .min(USERNAME_MIN, `아이디는 ${USERNAME_MIN}자 이상이어야 해요.`)
+      .max(USERNAME_MAX, `아이디는 ${USERNAME_MAX}자 이하여야 해요.`)
+      .regex(USERNAME_REGEX, "아이디는 영문/숫자/_/.만 사용할 수 있어요."),
+    email: z.email("이메일 형식이 올바르지 않아요."),
+    password: z
+      .string()
+      .min(PASSWORD_MIN, `비밀번호는 ${PASSWORD_MIN}자 이상이어야 해요.`),
+    passwordConfirm: z.string(),
+    name: z.string().optional(),
+  })
+  .refine((d) => d.password === d.passwordConfirm, {
+    message: "비밀번호가 일치하지 않아요.",
+    path: ["passwordConfirm"],
+  });
 
 export default function LoginScreen() {
   const { t } = useMrTheme();
@@ -106,6 +127,7 @@ export default function LoginScreen() {
   const [email, setEmail] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [passwordConfirm, setPasswordConfirm] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [socialLoading, setSocialLoading] = useState<Provider | null>(null);
@@ -131,18 +153,27 @@ export default function LoginScreen() {
     };
     try {
       if (isSignup) {
-        const trimmedName = name.trim();
-        const trimmedUsername = username.trim();
-        if (!USERNAME_REGEX.test(trimmedUsername)) {
-          setError("아이디는 영문/숫자/_/.만 사용할 수 있어요.");
+        const parsed = signupSchema.safeParse({
+          username: username.trim(),
+          email: email.trim(),
+          password,
+          passwordConfirm,
+          name: name.trim() || undefined,
+        });
+        if (!parsed.success) {
+          setError(
+            parsed.error.issues[0]?.message ?? "입력값을 확인해 주세요."
+          );
           return;
         }
+        const data = parsed.data;
+        // 이름은 옵션이지만 DB는 NOT NULL이라 비어있으면 아이디로 폴백.
         await authClient.signUp.email(
           {
-            email: email.trim(),
-            password,
-            name: trimmedName,
-            username: trimmedUsername,
+            email: data.email,
+            password: data.password,
+            name: data.name ?? data.username,
+            username: data.username,
           },
           handlers
         );
@@ -185,19 +216,15 @@ export default function LoginScreen() {
     }
   };
 
+  // 버튼 활성화는 비어있지 않으면 OK — 상세 검증은 submit 시 zod로 처리.
   const trimmedUsername = username.trim();
-  const usernameLength = trimmedUsername.length;
-  const usernameValid =
-    usernameLength >= USERNAME_MIN && usernameLength <= USERNAME_MAX;
-  const passwordValid = password.length >= 8;
-  const signupValid =
-    usernameValid &&
-    passwordValid &&
-    email.includes("@") &&
-    name.trim().length > 0;
-  // 로그인은 이메일도 허용하므로 길이 제한(>=1)만 확인.
-  const signinValid = trimmedUsername.length > 0 && passwordValid;
-  const canSubmit = isSignup ? signupValid : signinValid;
+  const signupReady =
+    trimmedUsername.length > 0 &&
+    email.trim().length > 0 &&
+    password.length > 0 &&
+    passwordConfirm.length > 0;
+  const signinReady = trimmedUsername.length > 0 && password.length > 0;
+  const canSubmit = isSignup ? signupReady : signinReady;
 
   return (
     <MrScreen>
@@ -224,29 +251,6 @@ export default function LoginScreen() {
             {isSignup ? "이메일로 가입하기" : "로그인"}
           </Text>
 
-          {isSignup ? (
-            <>
-              <Field
-                autoCapitalize="none"
-                autoComplete="email"
-                inputMode="email"
-                label="이메일"
-                onChangeText={setEmail}
-                placeholder="you@moneyroad.ai.kr"
-                t={t}
-                value={email}
-              />
-              <Field
-                autoCapitalize="none"
-                label="이름"
-                onChangeText={setName}
-                placeholder="홍길동"
-                t={t}
-                value={name}
-              />
-            </>
-          ) : null}
-
           <Field
             autoCapitalize="none"
             autoCorrect={false}
@@ -260,15 +264,48 @@ export default function LoginScreen() {
             t={t}
             value={username}
           />
+          {isSignup ? (
+            <Field
+              autoCapitalize="none"
+              autoComplete="email"
+              inputMode="email"
+              label="이메일"
+              onChangeText={setEmail}
+              placeholder="you@moneyroad.ai.kr"
+              t={t}
+              value={email}
+            />
+          ) : null}
           <Field
             autoCapitalize="none"
-            label="비밀번호 (8자 이상)"
+            label={`비밀번호 (${PASSWORD_MIN}자 이상)`}
             onChangeText={setPassword}
             placeholder="••••••••"
             secureTextEntry
             t={t}
             value={password}
           />
+          {isSignup ? (
+            <>
+              <Field
+                autoCapitalize="none"
+                label="비밀번호 확인"
+                onChangeText={setPasswordConfirm}
+                placeholder="••••••••"
+                secureTextEntry
+                t={t}
+                value={passwordConfirm}
+              />
+              <Field
+                autoCapitalize="none"
+                label="이름 (선택)"
+                onChangeText={setName}
+                placeholder="홍길동"
+                t={t}
+                value={name}
+              />
+            </>
+          ) : null}
 
           {error ? (
             <Text style={{ fontSize: 13, color: t.downStrong }}>{error}</Text>

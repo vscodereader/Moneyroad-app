@@ -10,6 +10,7 @@ import { quoteHub, streamQuotes } from "@/services/quotes";
 import {
   type ChartRange,
   fetchStockChart,
+  fetchStockSparkline,
   isChartRange,
 } from "@/services/stock-chart";
 import { fetchStockSnapshots } from "@/services/stock-price";
@@ -126,6 +127,31 @@ export function registerQuotesPlugin(app: FastifyInstance) {
       }
       const snapshots = await fetchStockSnapshots(symbols);
       reply.send(snapshots);
+    }
+  );
+
+  // Sparkline series — recent ~30 daily closes for a small inline chart.
+  //   GET /quote/sparkline?code=000660&token=<stream token>
+  // Single KIS REST call (1h cached). Token required (private symbol).
+  app.get<{ Querystring: { code?: string; token?: string } }>(
+    "/quote/sparkline",
+    async (request, reply) => {
+      const payload = request.query.token
+        ? verifyStreamToken(request.query.token, env.STREAM_TOKEN_SECRET)
+        : null;
+      if (!payload) {
+        reply
+          .code(401)
+          .send({ error: "Unauthorized", code: "INVALID_STREAM_TOKEN" });
+        return;
+      }
+      const code = request.query.code?.trim();
+      if (!code) {
+        reply.code(400).send({ error: "code query parameter is required" });
+        return;
+      }
+      const points = await fetchStockSparkline(code);
+      reply.send({ points });
     }
   );
 

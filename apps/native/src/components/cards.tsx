@@ -7,6 +7,7 @@ import { ScorePill, Skeleton, StockLogo, StrengthBar } from "@/components/ui";
 import { type LiveIndex, SESSION_MINUTES } from "@/hooks/use-index-stream";
 import { useLiveQuote } from "@/hooks/use-live-quotes";
 import { useMrTheme } from "@/hooks/use-mr-theme";
+import { useStockSparkline } from "@/hooks/use-stock-sparkline";
 import type { NewsItem, Signal, Stock } from "@/utils/data";
 import { findStock } from "@/utils/data";
 import { changeColor, fmt } from "@/utils/format";
@@ -77,6 +78,8 @@ export function StockRow({
 }) {
   const { t } = useMrTheme();
   const up = stock.change > 0;
+  const spark = useStockSparkline(stock.code);
+  const sparkData = spark.length > 1 ? spark : stock.spark;
   return (
     <Pressable
       android_ripple={{ color: t.bgSubtle }}
@@ -124,7 +127,7 @@ export function StockRow({
       </View>
       <View style={{ alignItems: "flex-end", gap: 4 }}>
         <Sparkline
-          data={stock.spark}
+          data={sparkData}
           height={22}
           positive={up}
           t={t}
@@ -280,6 +283,8 @@ function SignalStockRow({
   const price = live?.price ?? stock.price;
   const change = live?.change ?? stock.change;
   const changePct = live?.changeRate ?? stock.changePct;
+  const spark = useStockSparkline(stock.code);
+  const sparkData = spark.length > 1 ? spark : stock.spark;
   return (
     <Pressable
       android_ripple={onPress ? { color: t.bgMuted } : undefined}
@@ -309,7 +314,7 @@ function SignalStockRow({
         </Text>
       </View>
       <Sparkline
-        data={stock.spark}
+        data={sparkData}
         height={22}
         positive={change > 0}
         t={t}

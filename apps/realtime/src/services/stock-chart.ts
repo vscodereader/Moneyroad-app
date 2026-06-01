@@ -378,3 +378,75 @@ export async function fetchStockChart(
   cache.set(key, { at: Date.now(), series });
   return series;
 }
+
+// 최근 N 거래일 종가만 number[]로 — Sparkline용 가벼운 응답. 1회 호출로 충분.
+const SPARKLINE_TTL_MS = 60 * 60_000;
+const SPARKLINE_SPAN_DAYS = 45;
+const sparklineCache = new Map<string, { at: number; points: number[] }>();
+
+/**
+ * Fetches the recent close-price series for use as a sparkline (small inline
+ * chart). Single KIS REST call for the last ~30 trading days, then cached for
+ * an hour. Returns oldest→newest closes; empty on any upstream failure so the
+ * caller can render a blank sparkline gracefully.
+ */
+export async function fetchStockSparkline(code: string): Promise<number[]> {
+  const hit = sparklineCache.get(code);
+  if (hit && Date.now() - hit.at < SPARKLINE_TTL_MS) {
+    return hit.points;
+  }
+  if (!(env.KIS_APP_KEY && env.KIS_APP_SECRET)) {
+    return [];
+  }
+  try {
+    const token = await getAccessToken();
+    const now = new Date();
+    const from = new Date(
+      now.getTime() - SPARKLINE_SPAN_DAYS * 24 * 60 * 60_000
+    );
+    const params = new URLSearchParams({
+      FID_COND_MRKT_DIV_CODE: "J",
+      FID_INPUT_ISCD: code,
+      FID_INPUT_DATE_1: formatYYYYMMDD(from),
+      FID_INPUT_DATE_2: formatYYYYMMDD(now),
+      FID_PERIOD_DIV_CODE: "D",
+      FID_ORG_ADJ_PRC: "0",
+    });
+    const res = await throttledKisCall(() =>
+      fetch(`${REST_URL[env.KIS_ENV]}${DAILY_API}?${params}`, {
+        headers: {
+          authorization: `Bearer ${token}`,
+          appkey: env.KIS_APP_KEY,
+          appsecret: env.KIS_APP_SECRET,
+          tr_id: TR_DAILY,
+          custtype: "P",
+        },
+      })
+    );
+    if (!res.ok) {
+      log.warn({
+        kis: { event: "sparkline", code, status: res.status, ok: false },
+      });
+      return [];
+    }
+    const body = (await res.json()) as {
+      output2?: DailyRow[];
+      rt_cd?: string;
+    };
+    if (body.rt_cd !== "0" || !body.output2) {
+      return [];
+    }
+    const points: number[] = [];
+    for (let i = body.output2.length - 1; i >= 0; i -= 1) {
+      const v = Number(body.output2[i]?.stck_clpr);
+      if (!Number.isNaN(v) && v > 0) {
+        points.push(v);
+      }
+    }
+    sparklineCache.set(code, { at: Date.now(), points });
+    return points;
+  } catch (error) {
+    log.warn({ kis: { event: "sparkline", code, ok: false }, error });
+    return [];
+  }
+}

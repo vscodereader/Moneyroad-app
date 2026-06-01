@@ -366,18 +366,18 @@ export function SignalCard({
           gap: 12,
         }}
       >
-        <View
-          style={{
-            width: 36,
-            height: 36,
-            borderRadius: 10,
-            backgroundColor: meta.bg,
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <TypeIcon color={meta.color} size={20} />
-        </View>
+        {/*<View*/}
+        {/*  style={{*/}
+        {/*    width: 36,*/}
+        {/*    height: 36,*/}
+        {/*    borderRadius: 10,*/}
+        {/*    backgroundColor: meta.bg,*/}
+        {/*    alignItems: "center",*/}
+        {/*    justifyContent: "center",*/}
+        {/*  }}*/}
+        {/*>*/}
+        {/*  <TypeIcon color={meta.color} size={20} />*/}
+        {/*</View>*/}
         <View style={{ flex: 1, minWidth: 0 }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
             <Text

@@ -94,6 +94,17 @@ export const Icon = {
       <Line x1="5" x2="19" y1="12" y2="12" {...stroke(color)} />
     </Base>
   ),
+  trash: ({ size = DEFAULT_SIZE, color = DEFAULT_COLOR }: IconProps) => (
+    <Base size={size}>
+      <Polyline points="3 6 5 6 21 6" {...stroke(color)} />
+      <Path
+        d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
+        {...stroke(color)}
+      />
+      <Line x1="10" x2="10" y1="11" y2="17" {...stroke(color)} />
+      <Line x1="14" x2="14" y1="11" y2="17" {...stroke(color)} />
+    </Base>
+  ),
   check: ({ size = DEFAULT_SIZE, color = DEFAULT_COLOR }: IconProps) => (
     <Base size={size}>
       <Polyline points="20 6 9 17 4 12" {...stroke(color, 3)} />

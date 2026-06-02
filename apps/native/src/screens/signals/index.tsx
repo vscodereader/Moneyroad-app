@@ -40,13 +40,13 @@ export default function SignalsScreen() {
   const isAdmin = session?.user.role === "admin";
 
   const counts = useQuery(
-    orpc.signal.counts.queryOptions({ input: { window: "24h" } })
+    orpc.signal.counts.queryOptions({ input: { window: "all" } })
   );
   const feed = useInfiniteQuery(
     orpc.signal.feed.infiniteOptions({
       input: (cursor: string | undefined) => ({
         action: filter === "all" ? undefined : filter,
-        window: "24h" as const,
+        window: "all" as const,
         cursor,
         limit: PAGE_SIZE,
       }),
@@ -90,7 +90,7 @@ export default function SignalsScreen() {
                 style={{ color: t.fgSubtle, fontSize: 13, textAlign: "center" }}
               >
                 {filter === "all"
-                  ? "최근 24시간 시그널이 아직 없어요."
+                  ? "등록된 시그널이 아직 없어요."
                   : `${FILTER_LABELS[filter]} 시그널이 아직 없어요.`}
               </Text>
             </View>
@@ -122,7 +122,7 @@ export default function SignalsScreen() {
                   letterSpacing: 0.3,
                 }}
               >
-                최근 24시간
+                등록된 시그널
               </Text>
               <View
                 style={{
@@ -184,27 +184,52 @@ export default function SignalsScreen() {
       />
 
       {isAdmin ? (
-        <Pressable
-          onPress={nav.openCreateSignal}
-          style={{
-            position: "absolute",
-            right: 16,
-            bottom: 24,
-            width: 52,
-            height: 52,
-            borderRadius: 999,
-            backgroundColor: t.primary,
-            alignItems: "center",
-            justifyContent: "center",
-            shadowColor: t.primary,
-            shadowOffset: { width: 0, height: 8 },
-            shadowOpacity: 0.5,
-            shadowRadius: 12,
-            elevation: 6,
-          }}
-        >
-          <Icon.plus color="#fff" size={24} />
-        </Pressable>
+        <>
+          <Pressable
+            onPress={nav.openManageSignal}
+            style={{
+              position: "absolute",
+              right: 16,
+              bottom: 24 + 52 + 12,
+              width: 52,
+              height: 52,
+              borderRadius: 999,
+              backgroundColor: t.bgElev,
+              borderWidth: 1,
+              borderColor: t.border,
+              alignItems: "center",
+              justifyContent: "center",
+              shadowColor: "#000",
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.15,
+              shadowRadius: 8,
+              elevation: 4,
+            }}
+          >
+            <Icon.trash color={t.fgStrong} size={22} />
+          </Pressable>
+          <Pressable
+            onPress={nav.openCreateSignal}
+            style={{
+              position: "absolute",
+              right: 16,
+              bottom: 24,
+              width: 52,
+              height: 52,
+              borderRadius: 999,
+              backgroundColor: t.primary,
+              alignItems: "center",
+              justifyContent: "center",
+              shadowColor: t.primary,
+              shadowOffset: { width: 0, height: 8 },
+              shadowOpacity: 0.5,
+              shadowRadius: 12,
+              elevation: 6,
+            }}
+          >
+            <Icon.plus color="#fff" size={24} />
+          </Pressable>
+        </>
       ) : null}
     </MrScreen>
   );

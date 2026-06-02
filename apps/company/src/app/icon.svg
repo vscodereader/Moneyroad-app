@@ -1,0 +1,7 @@
+<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="머니게이트">
+  <rect width="32" height="32" rx="8" fill="#256EF4" />
+  <g transform="translate(6 6) scale(0.833333)" fill="none" stroke="#ffffff" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round">
+    <polyline points="3 17 9 11 13 15 21 7" />
+    <polyline points="14 7 21 7 21 14" />
+  </g>
+</svg>

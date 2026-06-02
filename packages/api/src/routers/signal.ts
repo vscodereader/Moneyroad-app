@@ -4,6 +4,7 @@ import { and, count, desc, eq, gte, inArray, lt, type SQL } from "drizzle-orm";
 import z from "zod";
 
 import { adminProcedure, protectedProcedure, publicProcedure } from "../index";
+import { refreshRealtimePins } from "../lib/realtime-trigger";
 
 const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 50;
@@ -180,6 +181,8 @@ export const signalRouter = {
       if (!row) {
         throw new Error("시그널 생성 실패");
       }
+      // New signal stock → tell realtime to pin/whitelist it now (not in ~10s).
+      refreshRealtimePins("signal.create");
       return { id: row.id };
     }),
 
@@ -189,6 +192,8 @@ export const signalRouter = {
     .input(z.object({ id: z.string().min(1) }))
     .handler(async ({ input }) => {
       await db.delete(signal).where(eq(signal.id, input.id));
+      // Stock may no longer be referenced → let realtime drop the pin promptly.
+      refreshRealtimePins("signal.remove");
       return { ok: true };
     }),
 

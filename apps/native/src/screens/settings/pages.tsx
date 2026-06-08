@@ -600,53 +600,36 @@ export function DisplaySettings() {
 }
 
 // ── 6. 내가 쓴 글·답글 ────────────────────────────────────────
+// 토론방은 관리자가 생성하므로 사용자의 "글"은 본인이 참여(메시지 작성)한 토론방을,
+// "답글"은 본인이 작성한 개별 메시지를 의미한다. 둘 다 실데이터(discussion).
 export function MyPosts() {
   const { t } = useMrTheme();
   const [tab, setTab] = useState<"posts" | "replies">("posts");
-  const myPosts = [
-    {
-      id: "t1",
-      title: "하이닉스 22만원 돌파, 25만원까지 보시는 분?",
-      time: "5분 전",
-      replies: 38,
-      likes: 124,
-      code: "000660",
-    },
-    {
-      id: "mp1",
-      title: "삼성전자 단기 80,000원 저항 돌파 어떻게 보시나요",
-      time: "어제",
-      replies: 12,
-      likes: 27,
-      code: "005930",
-    },
-  ];
-  const myReplies = [
-    {
-      id: "r1",
-      threadId: "t2",
-      threadTitle: "체코 원전 본계약! 드디어 결실",
-      text: "축하드립니다. 추가 수주 모멘텀 이어지길.",
-      time: "20분 전",
-      code: "034020",
-    },
-    {
-      id: "r2",
-      threadId: "t3",
-      threadTitle: "카카오 규제 이슈, 어디까지 빠질까요",
-      text: "발표 전까지 비중 줄여놓는게 안전할 듯합니다.",
-      time: "1시간 전",
-      code: "035720",
-    },
-    {
-      id: "r3",
-      threadId: "t5",
-      threadTitle: "LG엔솔 IRA 추가 보조금 확정",
-      text: "GM 합작공장 가동률 회복 데이터 어디서 확인할 수 있나요?",
-      time: "3시간 전",
-      code: "373220",
-    },
-  ];
+  const roomsQuery = useQuery(orpc.discussion.myRooms.queryOptions());
+  const repliesQuery = useQuery(orpc.discussion.myReplies.queryOptions());
+  const myRooms = roomsQuery.data ?? [];
+  const myReplies = repliesQuery.data ?? [];
+  const activeQuery = tab === "posts" ? roomsQuery : repliesQuery;
+
+  const stockChip = (name: string | null) => {
+    if (!name) {
+      return null;
+    }
+    return (
+      <View
+        style={{
+          paddingHorizontal: 6,
+          paddingVertical: 2,
+          backgroundColor: t.bgSubtle,
+          borderRadius: 4,
+        }}
+      >
+        <Text style={{ fontSize: 10, fontWeight: "700", color: t.fgMuted }}>
+          {name}
+        </Text>
+      </View>
+    );
+  };
 
   const tabChip = (key: "posts" | "replies", label: string) => {
     const active = tab === key;
@@ -677,6 +660,11 @@ export function MyPosts() {
     );
   };
 
+  const emptyText =
+    tab === "posts"
+      ? "참여한 토론방이 없어요.\n관심 종목 토론방에 의견을 남겨보세요."
+      : "작성한 답글이 없어요.\n토론방에서 첫 의견을 남겨보세요.";
+
   return (
     <SettingsScreen title="내가 쓴 글·답글">
       <View
@@ -687,169 +675,155 @@ export function MyPosts() {
           paddingVertical: 10,
         }}
       >
-        {tabChip("posts", `내 글 ${myPosts.length}`)}
+        {tabChip("posts", `내 글 ${myRooms.length}`)}
         {tabChip("replies", `답글 ${myReplies.length}`)}
       </View>
 
+      {activeQuery.isPending ? (
+        <View style={{ paddingVertical: 40, alignItems: "center" }}>
+          <ActivityIndicator color={t.primary} />
+        </View>
+      ) : null}
+
+      {activeQuery.isSuccess &&
+      (tab === "posts" ? myRooms.length === 0 : myReplies.length === 0) ? (
+        <View
+          style={{
+            paddingVertical: 48,
+            paddingHorizontal: 24,
+            alignItems: "center",
+            gap: 8,
+          }}
+        >
+          <Icon.navDiscuss color={t.fgSubtle} size={28} />
+          <Text
+            style={{
+              fontSize: 13,
+              color: t.fgMuted,
+              textAlign: "center",
+              lineHeight: 19,
+            }}
+          >
+            {emptyText}
+          </Text>
+        </View>
+      ) : null}
+
       {tab === "posts"
-        ? myPosts.map((p) => {
-            const stock = findStock(p.code);
-            return (
-              <Pressable
-                key={p.id}
-                onPress={() => nav.openDiscussionRoom(p.id)}
+        ? myRooms.map((p) => (
+            <Pressable
+              key={p.id}
+              onPress={() => nav.openDiscussionRoom(p.id)}
+              style={{
+                paddingVertical: 14,
+                paddingHorizontal: 16,
+                backgroundColor: t.bg,
+                borderBottomWidth: 1,
+                borderBottomColor: t.border,
+              }}
+            >
+              <View
+                style={{ flexDirection: "row", gap: 6, alignItems: "center" }}
+              >
+                {stockChip(p.stockName ?? p.stockCode)}
+                <Text style={{ fontSize: 11, color: t.fgSubtle }}>
+                  {p.time}
+                </Text>
+              </View>
+              <Text
                 style={{
-                  paddingVertical: 14,
-                  paddingHorizontal: 16,
-                  backgroundColor: t.bg,
-                  borderBottomWidth: 1,
-                  borderBottomColor: t.border,
+                  fontSize: 14,
+                  fontWeight: "700",
+                  color: t.fgStrong,
+                  marginTop: 6,
+                  lineHeight: 20,
                 }}
               >
+                {p.name}
+              </Text>
+              <View style={{ flexDirection: "row", gap: 14, marginTop: 8 }}>
                 <View
-                  style={{ flexDirection: "row", gap: 6, alignItems: "center" }}
-                >
-                  {stock ? (
-                    <View
-                      style={{
-                        paddingHorizontal: 6,
-                        paddingVertical: 2,
-                        backgroundColor: t.bgSubtle,
-                        borderRadius: 4,
-                      }}
-                    >
-                      <Text
-                        style={{
-                          fontSize: 10,
-                          fontWeight: "700",
-                          color: t.fgMuted,
-                        }}
-                      >
-                        {stock.name}
-                      </Text>
-                    </View>
-                  ) : null}
-                  <Text style={{ fontSize: 11, color: t.fgSubtle }}>
-                    {p.time}
-                  </Text>
-                </View>
-                <Text
                   style={{
-                    fontSize: 14,
-                    fontWeight: "700",
-                    color: t.fgStrong,
-                    marginTop: 6,
-                    lineHeight: 20,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 3,
                   }}
                 >
-                  {p.title}
-                </Text>
-                <View style={{ flexDirection: "row", gap: 14, marginTop: 8 }}>
-                  <View
+                  <Icon.thumbsUp color={t.fgMuted} size={13} />
+                  <Text
                     style={{
-                      flexDirection: "row",
-                      alignItems: "center",
-                      gap: 3,
+                      fontSize: 12,
+                      fontWeight: "600",
+                      color: t.fgMuted,
                     }}
                   >
-                    <Icon.thumbsUp color={t.fgMuted} size={13} />
-                    <Text
-                      style={{
-                        fontSize: 12,
-                        fontWeight: "600",
-                        color: t.fgMuted,
-                      }}
-                    >
-                      {p.likes}
-                    </Text>
-                  </View>
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      alignItems: "center",
-                      gap: 3,
-                    }}
-                  >
-                    <Icon.reply color={t.fgMuted} size={13} />
-                    <Text
-                      style={{
-                        fontSize: 12,
-                        fontWeight: "600",
-                        color: t.fgMuted,
-                      }}
-                    >
-                      {p.replies}
-                    </Text>
-                  </View>
+                    {p.likesCount}
+                  </Text>
                 </View>
-              </Pressable>
-            );
-          })
-        : myReplies.map((r) => {
-            const stock = findStock(r.code);
-            return (
-              <Pressable
-                key={r.id}
-                onPress={() => nav.openDiscussionRoom(r.threadId)}
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 3,
+                  }}
+                >
+                  <Icon.reply color={t.fgMuted} size={13} />
+                  <Text
+                    style={{
+                      fontSize: 12,
+                      fontWeight: "600",
+                      color: t.fgMuted,
+                    }}
+                  >
+                    {p.repliesCount}
+                  </Text>
+                </View>
+              </View>
+            </Pressable>
+          ))
+        : myReplies.map((r) => (
+            <Pressable
+              key={r.id}
+              onPress={() => nav.openDiscussionRoom(r.roomId)}
+              style={{
+                paddingVertical: 14,
+                paddingHorizontal: 16,
+                backgroundColor: t.bg,
+                borderBottomWidth: 1,
+                borderBottomColor: t.border,
+              }}
+            >
+              <View
+                style={{ flexDirection: "row", gap: 6, alignItems: "center" }}
+              >
+                {stockChip(r.stockName ?? r.stockCode)}
+                <Text style={{ fontSize: 11, color: t.fgSubtle }}>
+                  {r.time}
+                </Text>
+              </View>
+              <Text
                 style={{
-                  paddingVertical: 14,
-                  paddingHorizontal: 16,
-                  backgroundColor: t.bg,
-                  borderBottomWidth: 1,
-                  borderBottomColor: t.border,
+                  fontSize: 12,
+                  fontWeight: "700",
+                  color: t.fgMuted,
+                  marginTop: 6,
+                  lineHeight: 18,
                 }}
               >
-                <View
-                  style={{ flexDirection: "row", gap: 6, alignItems: "center" }}
-                >
-                  {stock ? (
-                    <View
-                      style={{
-                        paddingHorizontal: 6,
-                        paddingVertical: 2,
-                        backgroundColor: t.bgSubtle,
-                        borderRadius: 4,
-                      }}
-                    >
-                      <Text
-                        style={{
-                          fontSize: 10,
-                          fontWeight: "700",
-                          color: t.fgMuted,
-                        }}
-                      >
-                        {stock.name}
-                      </Text>
-                    </View>
-                  ) : null}
-                  <Text style={{ fontSize: 11, color: t.fgSubtle }}>
-                    {r.time}
-                  </Text>
-                </View>
-                <Text
-                  style={{
-                    fontSize: 12,
-                    fontWeight: "700",
-                    color: t.fgMuted,
-                    marginTop: 6,
-                    lineHeight: 18,
-                  }}
-                >
-                  ↳ {r.threadTitle}
-                </Text>
-                <Text
-                  style={{
-                    fontSize: 13,
-                    color: t.fgStrong,
-                    marginTop: 4,
-                    lineHeight: 20,
-                  }}
-                >
-                  {r.text}
-                </Text>
-              </Pressable>
-            );
-          })}
+                ↳ {r.roomName}
+              </Text>
+              <Text
+                style={{
+                  fontSize: 13,
+                  color: t.fgStrong,
+                  marginTop: 4,
+                  lineHeight: 20,
+                }}
+              >
+                {r.content}
+              </Text>
+            </Pressable>
+          ))}
       <View style={{ height: 16 }} />
     </SettingsScreen>
   );

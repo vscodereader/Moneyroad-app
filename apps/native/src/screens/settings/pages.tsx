@@ -1,20 +1,25 @@
 // MoneyRoad — MyPage settings sub-screens (8)
 
+import type { NoticeItem } from "@moneyroad-app/api/routers/notice";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import {
   ActivityIndicator,
   Linking,
+  Modal,
   Pressable,
+  ScrollView,
   Text,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Gradient } from "@/components/charts";
 import { Icon } from "@/components/icons";
 import { SegmentedControl, StockLogo, Switch } from "@/components/ui";
 import { useMrTheme } from "@/hooks/use-mr-theme";
 import { useNotificationSettings } from "@/hooks/use-notification-settings";
+import { authClient } from "@/lib/auth-client";
 import InquiryFormScreen from "@/screens/settings/inquiry";
 import { PrivacyPolicy, TermsOfService } from "@/screens/settings/legal";
 import PriceAlertNewScreen from "@/screens/settings/price-alert-new";
@@ -30,6 +35,7 @@ import { fmt } from "@/utils/format";
 import { nav } from "@/utils/nav";
 import { orpc } from "@/utils/orpc";
 import {
+  type MrTokens,
   SIGNAL_TYPE_KEYS,
   type SignalTypeKey,
   signalMeta,
@@ -1018,37 +1024,219 @@ export function Invite() {
   );
 }
 
+// 공지 분류(enum) → 한글 라벨 / 색상.
+const NOTICE_CATEGORY_LABEL: Record<NoticeItem["category"], string> = {
+  notice: "공지",
+  update: "업데이트",
+  event: "이벤트",
+};
+
+function noticeTagStyle(
+  t: MrTokens,
+  category: NoticeItem["category"]
+): { bg: string; color: string } {
+  if (category === "update") {
+    return { bg: t.successBg, color: t.success };
+  }
+  if (category === "event") {
+    return { bg: t.warningBg, color: t.warning };
+  }
+  return { bg: t.primarySubtle, color: t.primary };
+}
+
+// 상세에서 보여줄 정확한 등록 일시(KST).
+const noticeDateFmt = new Intl.DateTimeFormat("ko-KR", {
+  timeZone: "Asia/Seoul",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: false,
+});
+
+// 공지 상세 Drawer(슬라이드업 바텀시트). 관리자는 핀 토글·삭제도 가능.
+function NoticeSheet({
+  item,
+  onClose,
+}: {
+  item: NoticeItem;
+  onClose: () => void;
+}) {
+  const { t } = useMrTheme();
+  const insets = useSafeAreaInsets();
+  const queryClient = useQueryClient();
+  const { data: session } = authClient.useSession();
+  const isAdmin = session?.user.role === "admin";
+  const ts = noticeTagStyle(t, item.category);
+  const invalidate = () =>
+    queryClient.invalidateQueries({ queryKey: orpc.notice.list.key() });
+  const setPinned = useMutation(
+    orpc.notice.setPinned.mutationOptions({ onSuccess: invalidate })
+  );
+  const remove = useMutation(
+    orpc.notice.remove.mutationOptions({
+      onSuccess: () => {
+        invalidate();
+        onClose();
+      },
+    })
+  );
+
+  return (
+    <Modal animationType="slide" onRequestClose={onClose} transparent visible>
+      <Pressable
+        onPress={onClose}
+        style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.45)" }}
+      />
+      <View
+        style={{
+          backgroundColor: t.bg,
+          borderTopLeftRadius: 18,
+          borderTopRightRadius: 18,
+          maxHeight: "82%",
+          paddingBottom: insets.bottom,
+        }}
+      >
+        <View
+          style={{
+            width: 36,
+            height: 4,
+            borderRadius: 999,
+            backgroundColor: t.borderStrong,
+            alignSelf: "center",
+            marginTop: 10,
+          }}
+        />
+        <ScrollView
+          contentContainerStyle={{
+            paddingHorizontal: 20,
+            paddingTop: 12,
+            paddingBottom: 24,
+          }}
+        >
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 6,
+              marginTop: 8,
+            }}
+          >
+            {item.pinned ? <Text style={{ fontSize: 12 }}>📌</Text> : null}
+            <View
+              style={{
+                paddingHorizontal: 8,
+                paddingVertical: 2,
+                borderRadius: 999,
+                backgroundColor: ts.bg,
+              }}
+            >
+              <Text
+                style={{ fontSize: 11, fontWeight: "800", color: ts.color }}
+              >
+                {NOTICE_CATEGORY_LABEL[item.category]}
+              </Text>
+            </View>
+            <Pressable
+              hitSlop={8}
+              onPress={onClose}
+              style={{ marginLeft: "auto" }}
+            >
+              <Icon.close color={t.fgStrong} size={18} />
+            </Pressable>
+          </View>
+
+          <Text
+            style={{
+              fontSize: 18,
+              fontWeight: "800",
+              color: t.fgStrong,
+              marginTop: 10,
+              lineHeight: 25,
+            }}
+          >
+            {item.title}
+          </Text>
+          <Text style={{ fontSize: 12, color: t.fgSubtle, marginTop: 4 }}>
+            {noticeDateFmt.format(new Date(item.createdAt))}
+          </Text>
+
+          <Text
+            style={{
+              fontSize: 14,
+              lineHeight: 22,
+              color: t.fgStrong,
+              marginTop: 16,
+            }}
+          >
+            {item.body}
+          </Text>
+
+          {isAdmin ? (
+            <View style={{ flexDirection: "row", gap: 10, marginTop: 24 }}>
+              <Pressable
+                disabled={setPinned.isPending}
+                onPress={() =>
+                  setPinned.mutate({ id: item.id, pinned: !item.pinned })
+                }
+                style={{
+                  flex: 1,
+                  height: 44,
+                  borderRadius: 10,
+                  borderWidth: 1,
+                  borderColor: t.borderStrong,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 6,
+                }}
+              >
+                <Icon.pin color={t.fgStrong} size={16} />
+                <Text
+                  style={{ fontSize: 13, fontWeight: "700", color: t.fgStrong }}
+                >
+                  {item.pinned ? "고정 해제" : "최상단 고정"}
+                </Text>
+              </Pressable>
+              <Pressable
+                disabled={remove.isPending}
+                onPress={() => remove.mutate({ id: item.id })}
+                style={{
+                  flex: 1,
+                  height: 44,
+                  borderRadius: 10,
+                  backgroundColor: t.downStrong,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 6,
+                }}
+              >
+                <Icon.trash color="#fff" size={16} />
+                <Text
+                  style={{ fontSize: 13, fontWeight: "700", color: "#fff" }}
+                >
+                  삭제
+                </Text>
+              </Pressable>
+            </View>
+          ) : null}
+        </ScrollView>
+      </View>
+    </Modal>
+  );
+}
+
 // ── 8. 공지사항 및 고객 지원 ──────────────────────────────────
 export function Support() {
   const { t } = useMrTheme();
   const [openFaq, setOpenFaq] = useState<number | null>(0);
-  const notices = [
-    {
-      id: "n1",
-      tag: "공지",
-      title: "5월 20일 시스템 점검 안내 (01:00~03:00)",
-      time: "1일 전",
-      pinned: true,
-    },
-    {
-      id: "n2",
-      tag: "업데이트",
-      title: "v1.4.2 업데이트 — 토론방 채팅 기능 추가",
-      time: "3일 전",
-    },
-    {
-      id: "n3",
-      tag: "공지",
-      title: "AI 시그널 알고리즘 v3.0 적용 안내",
-      time: "1주일 전",
-    },
-    {
-      id: "n4",
-      tag: "이벤트",
-      title: "친구 초대 이벤트, 적립 기간 2배 (~5/31)",
-      time: "2주일 전",
-    },
-  ];
+  const [selectedNotice, setSelectedNotice] = useState<NoticeItem | null>(null);
+  const { data: session } = authClient.useSession();
+  const isAdmin = session?.user.role === "admin";
+  const noticesQuery = useQuery(orpc.notice.list.queryOptions());
+  const notices = noticesQuery.data ?? [];
   const faqs: { q: string; a?: string }[] = [
     {
       q: "시그널 점수는 어떻게 계산되나요?",
@@ -1059,24 +1247,63 @@ export function Support() {
     { q: "AI 데일리 브리프는 언제 업데이트되나요?" },
   ];
 
-  const tagStyle = (tag: string): { bg: string; color: string } => {
-    if (tag === "공지") {
-      return { bg: t.primarySubtle, color: t.primary };
-    }
-    if (tag === "업데이트") {
-      return { bg: t.successBg, color: t.success };
-    }
-    return { bg: t.warningBg, color: t.warning };
-  };
-
   return (
-    <SettingsScreen title="공지사항 및 고객 지원">
+    <SettingsScreen
+      right={
+        isAdmin ? (
+          <Pressable
+            hitSlop={6}
+            onPress={nav.openCreateNotice}
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 2,
+              paddingHorizontal: 8,
+            }}
+          >
+            <Icon.plus color={t.primary} size={16} />
+            <Text style={{ fontSize: 13, fontWeight: "700", color: t.primary }}>
+              등록
+            </Text>
+          </Pressable>
+        ) : undefined
+      }
+      title="공지사항 및 고객 지원"
+    >
       <SettingsGroup label="공지사항">
+        {noticesQuery.isPending ? (
+          <View style={{ paddingVertical: 32, alignItems: "center" }}>
+            <ActivityIndicator color={t.primary} />
+          </View>
+        ) : null}
+
+        {noticesQuery.isSuccess && notices.length === 0 ? (
+          <View
+            style={{
+              paddingVertical: 36,
+              paddingHorizontal: 24,
+              alignItems: "center",
+            }}
+          >
+            <Text
+              style={{
+                fontSize: 13,
+                color: t.fgMuted,
+                textAlign: "center",
+                lineHeight: 19,
+              }}
+            >
+              등록된 공지사항이 없습니다.
+            </Text>
+          </View>
+        ) : null}
+
         {notices.map((n) => {
-          const ts = tagStyle(n.tag);
+          const ts = noticeTagStyle(t, n.category);
           return (
             <Pressable
               key={n.id}
+              onPress={() => setSelectedNotice(n)}
               style={{
                 paddingVertical: 14,
                 paddingHorizontal: 16,
@@ -1100,7 +1327,7 @@ export function Support() {
                   <Text
                     style={{ fontSize: 10, fontWeight: "800", color: ts.color }}
                   >
-                    {n.tag}
+                    {NOTICE_CATEGORY_LABEL[n.category]}
                   </Text>
                 </View>
                 <Text
@@ -1227,6 +1454,13 @@ export function Support() {
         />
       </SettingsGroup>
       <View style={{ height: 16 }} />
+
+      {selectedNotice ? (
+        <NoticeSheet
+          item={selectedNotice}
+          onClose={() => setSelectedNotice(null)}
+        />
+      ) : null}
     </SettingsScreen>
   );
 }

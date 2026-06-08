@@ -24,6 +24,7 @@ export default function MoneyRoadLayout() {
         <Stack.Screen name="discussion-room/new" />
         <Stack.Screen name="signal/new" />
         <Stack.Screen name="signal/manage" />
+        <Stack.Screen name="notice/new" />
         <Stack.Screen
           name="settings/[page]"
           options={{ presentation: "transparentModal", animation: "fade" }}

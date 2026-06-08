@@ -71,6 +71,13 @@
       "when": 1780320842404,
       "tag": "0009_known_bug",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1780939655295,
+      "tag": "0010_colossal_blink",
+      "breakpoints": true
     }
   ]
 }

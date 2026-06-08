@@ -4,6 +4,7 @@ export * from "./inquiry";
 export * from "./kis-token";
 export * from "./news";
 export * from "./news-subscription";
+export * from "./notice";
 export * from "./notification-history";
 export * from "./signal";
 export * from "./stock-master";

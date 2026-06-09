@@ -2,8 +2,10 @@
 # - 수동 실행 전용(workflow_dispatch). 모바일은 빌드마다 EAS 비용 + 스토어 버전이
 #   생기므로 push 자동 트리거는 두지 않는다.
 # - 실제 빌드는 EAS 서버에서 수행된다. 러너는 eas-cli만 돌린다.
-# - submit=true면 빌드 완료 후 eas.json의 "internal" 제출 프로필로 자동 제출한다
-#   (Android: track=internal 내부 테스트).
+# - submit=true면 빌드 완료 후 eas.json의 submit_track 제출 프로필로 자동 제출한다
+#   (internal=내부 / closed=비공개(Android alpha) / open=공개(Android beta) / production=정식).
+#   iOS는 트랙 개념이 없어 어느 프로필이든 TestFlight 업로드까지만 한다. 외부(공개)
+#   테스트 전환은 App Store Connect 콘솔에서 수동(외부 그룹 + 공개 링크 + 베타 심사).
 #
 # 사전 준비(최초 1회): docs/deploy/native-google-play.md
 #   - GitHub Secret: EXPO_TOKEN
@@ -33,10 +35,20 @@ on:
           - staging
           - preview
       submit:
-        description: "빌드 후 스토어 제출(internal 트랙)"
+        description: "빌드 후 스토어 제출 여부"
         type: boolean
         required: true
         default: true
+      submit_track:
+        description: "제출 트랙 (submit=true일 때)"
+        type: choice
+        required: true
+        default: internal
+        options:
+          - internal
+          - closed
+          - open
+          - production
 
 permissions:
   contents: read
@@ -71,7 +83,7 @@ jobs:
         run: |
           FLAGS="--platform ${{ inputs.platform }} --profile ${{ inputs.profile }} --non-interactive"
           if [ "${{ inputs.submit }}" = "true" ]; then
-            FLAGS="$FLAGS --auto-submit-with-profile internal"
+            FLAGS="$FLAGS --auto-submit-with-profile ${{ inputs.submit_track }}"
           fi
           echo "eas build $FLAGS"
           eas build $FLAGS

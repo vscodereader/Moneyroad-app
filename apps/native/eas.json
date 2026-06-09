@@ -44,6 +44,22 @@
       "android": {
         "track": "internal"
       }
+    },
+    "closed": {
+      "ios": {
+        "ascAppId": "6772923139"
+      },
+      "android": {
+        "track": "alpha"
+      }
+    },
+    "open": {
+      "ios": {
+        "ascAppId": "6772923139"
+      },
+      "android": {
+        "track": "beta"
+      }
     }
   }
 }

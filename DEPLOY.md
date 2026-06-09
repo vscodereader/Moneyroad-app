@@ -79,7 +79,7 @@ cd.yml: paths-filter로 변경 감지          cd.yml: server / realtime / both 
 ```
 [Actions → native build & submit → Run workflow]
    입력: platform(android/ios/all), profile(production/staging/preview),
-         submit(bool), submit_track(internal/open/production)
+         submit(bool), submit_track(internal/closed/open/production)
                     │
                     ▼
    ① pnpm install (app.json 플러그인 평가용 워크스페이스 의존성)
@@ -89,8 +89,8 @@ cd.yml: paths-filter로 변경 감지          cd.yml: server / realtime / both 
                     │
                     ▼
    EAS 서버 빌드(10~20분) → (submit 시) 스토어 <submit_track> 트랙 자동 제출
-        - submit_track: internal(내부) / open(공개 테스트) / production(정식)
-        - Android 트랙 매핑(eas.json submit): internal→internal, open→beta, production→production
+        - submit_track: internal(내부) / closed(비공개) / open(공개) / production(정식)
+        - Android 트랙 매핑(eas.json submit): internal→internal, closed→alpha, open→beta, production→production
         - 버전 코드: eas.json autoIncrement
 ```
 
@@ -98,7 +98,7 @@ cd.yml: paths-filter로 변경 감지          cd.yml: server / realtime / both 
 - 키스토어·Google Play 서비스계정 키 등 **자격증명은 EAS가 보관** → GitHub엔
   `EXPO_TOKEN` 하나만 필요.
 - 빌드 프로필·제출 트랙 정의는 `apps/native/eas.json`.
-- 제출 트랙은 워크플로 입력 `submit_track`으로 고른다(`internal`/`open`/`production`).
+- 제출 트랙은 워크플로 입력 `submit_track`으로 고른다(`internal`/`closed`/`open`/`production`).
 - 상세/최초 설정: `docs/deploy/native-google-play.md`(Android),
   `docs/deploy/native-testflight.md`(iOS).
 
@@ -126,9 +126,11 @@ cd.yml: paths-filter로 변경 감지          cd.yml: server / realtime / both 
   설명·연락처·"테스트할 내용" 메타데이터가 채워져 있어야 심사를 통과한다.
 
 > 참고: Google Play 테스트 단계는 **내부(internal) → 비공개(closed=alpha) →
-> 공개(open=beta) → 프로덕션** 순이다. `eas.json`에는 현재 `internal`/`open`(beta)/
-> `production` 프로필만 있고, 비공개(closed) 트랙이 필요하면 트랙명을 맞춘 프로필을
-> 추가하면 된다.
+> 공개(open=beta) → 프로덕션** 순이며, `eas.json`에 네 단계 제출 프로필이 모두 있다:
+> `internal`(internal)·`closed`(alpha)·`open`(beta)·`production`(production). 따라서
+> 개인 계정의 공개 전 필수 단계인 **비공개 테스트도 `submit_track: closed`로 자동
+> 제출**할 수 있다. 비공개 트랙 ID는 Play 기본값 `alpha`이며, Play Console에서 커스텀
+> 비공개 트랙을 따로 만들었다면 그 트랙 ID로 `submit.closed.android.track`을 맞춘다.
 
 ---
 

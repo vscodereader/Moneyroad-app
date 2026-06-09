@@ -3,7 +3,7 @@
 #   생기므로 push 자동 트리거는 두지 않는다.
 # - 실제 빌드는 EAS 서버에서 수행된다. 러너는 eas-cli만 돌린다.
 # - submit=true면 빌드 완료 후 eas.json의 submit_track 제출 프로필로 자동 제출한다
-#   (internal=내부 테스트 / open=공개 테스트(Android beta 트랙) / production=정식).
+#   (internal=내부 / closed=비공개(Android alpha) / open=공개(Android beta) / production=정식).
 #   iOS는 트랙 개념이 없어 어느 프로필이든 TestFlight 업로드까지만 한다. 외부(공개)
 #   테스트 전환은 App Store Connect 콘솔에서 수동(외부 그룹 + 공개 링크 + 베타 심사).
 #
@@ -46,6 +46,7 @@ on:
         default: internal
         options:
           - internal
+          - closed
           - open
           - production
 

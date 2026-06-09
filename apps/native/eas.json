@@ -44,6 +44,14 @@
       "android": {
         "track": "internal"
       }
+    },
+    "open": {
+      "ios": {
+        "ascAppId": "6772923139"
+      },
+      "android": {
+        "track": "beta"
+      }
     }
   }
 }

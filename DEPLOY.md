@@ -78,17 +78,19 @@ cd.yml: paths-filter로 변경 감지          cd.yml: server / realtime / both 
 
 ```
 [Actions → native build & submit → Run workflow]
-   입력: platform(android/ios/all), profile(production/staging/preview), submit(bool)
+   입력: platform(android/ios/all), profile(production/staging/preview),
+         submit(bool), submit_track(internal/open/production)
                     │
                     ▼
    ① pnpm install (app.json 플러그인 평가용 워크스페이스 의존성)
    ② EXPO_TOKEN으로 EAS 인증
    ③ eas build --platform <p> --profile <p> --non-interactive
-        submit=true 이면 --auto-submit-with-profile internal
+        submit=true 이면 --auto-submit-with-profile <submit_track>
                     │
                     ▼
-   EAS 서버 빌드(10~20분) → (submit 시) 스토어 internal 트랙 자동 제출
-        - Android: track=internal (내부 테스트)
+   EAS 서버 빌드(10~20분) → (submit 시) 스토어 <submit_track> 트랙 자동 제출
+        - submit_track: internal(내부) / open(공개 테스트) / production(정식)
+        - Android 트랙 매핑(eas.json submit): internal→internal, open→beta, production→production
         - 버전 코드: eas.json autoIncrement
 ```
 
@@ -96,8 +98,37 @@ cd.yml: paths-filter로 변경 감지          cd.yml: server / realtime / both 
 - 키스토어·Google Play 서비스계정 키 등 **자격증명은 EAS가 보관** → GitHub엔
   `EXPO_TOKEN` 하나만 필요.
 - 빌드 프로필·제출 트랙 정의는 `apps/native/eas.json`.
+- 제출 트랙은 워크플로 입력 `submit_track`으로 고른다(`internal`/`open`/`production`).
 - 상세/최초 설정: `docs/deploy/native-google-play.md`(Android),
   `docs/deploy/native-testflight.md`(iOS).
+
+### 내부 → 공개 테스트 전환 (submit_track: open)
+
+워크플로 실행 시 `submit_track`을 `open`으로 고르면 공개 테스트로 제출된다.
+**단 플랫폼별로 동작과 사전 요건이 다르다.**
+
+| | 내부 테스트(현재 기본) | 공개 테스트(`submit_track: open`) |
+|---|---|---|
+| **Android** | Play `internal` 트랙 | Play **공개 테스트** = `beta` 트랙 (`eas.json` `submit.open.android.track`) |
+| **iOS** | TestFlight 내부(≤100명, 심사 X) | TestFlight **외부**(공개 링크 ≤10,000명, 베타 심사 1회) |
+
+- **Android는 워크플로만으로 공개 테스트 자동 제출까지 된다.** 단 Google Play에서
+  **공개 테스트(open testing)는 "프로덕션 액세스"가 있어야 열린다.** 2023-11-13 이후
+  만든 **개인(personal) 계정**은 그 전에 **비공개 테스트(closed)에서 12명 이상이 14일
+  연속 옵트인**을 마쳐야 한다(**조직(organization) 계정은 면제**). 또 공개 테스트는
+  스토어에 노출되므로 Play Console의 **앱 콘텐츠**(개인정보처리방침·데이터 보안·콘텐츠
+  등급·타겟 연령) + **스토어 등록정보**(설명·스크린샷·아이콘)가 완료돼 있어야 게시된다.
+- **iOS는 워크플로가 TestFlight 업로드까지만 한다.** iOS엔 트랙 개념이 없어
+  `submit_track`이 `internal`이든 `open`이든 같은 `ascAppId`로 TestFlight에 빌드를
+  올리는 동작은 동일하다. 그 빌드를 **외부(공개) 테스트로 전환하는 작업은 App Store
+  Connect 콘솔에서 수동**으로 한다: TestFlight → **외부 그룹 생성** → 빌드 할당 →
+  **베타 앱 심사 제출**(첫 빌드만, 보통 하루 이내) → **공개 링크 발급**. 베타 앱
+  설명·연락처·"테스트할 내용" 메타데이터가 채워져 있어야 심사를 통과한다.
+
+> 참고: Google Play 테스트 단계는 **내부(internal) → 비공개(closed=alpha) →
+> 공개(open=beta) → 프로덕션** 순이다. `eas.json`에는 현재 `internal`/`open`(beta)/
+> `production` 프로필만 있고, 비공개(closed) 트랙이 필요하면 트랙명을 맞춘 프로필을
+> 추가하면 된다.
 
 ---
 

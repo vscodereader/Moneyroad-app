@@ -10,6 +10,7 @@ import { priceAlertRouter } from "./price-alert";
 import { signalRouter } from "./signal";
 import { stockRouter } from "./stock";
 import { todoRouter } from "./todo";
+import { waitlistRouter } from "./waitlist";
 import { watchlistRouter } from "./watchlist";
 
 export const appRouter = {
@@ -28,6 +29,7 @@ export const appRouter = {
   discussion: discussionRouter,
   inquiry: inquiryRouter,
   priceAlert: priceAlertRouter,
+  waitlist: waitlistRouter,
 };
 export type AppRouter = typeof appRouter;
 export type AppRouterClient = RouterClient<typeof appRouter>;

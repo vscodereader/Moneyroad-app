@@ -13,3 +13,4 @@ export * from "./user-notification-setting";
 export * from "./user-price-alert";
 export * from "./user-push-token";
 export * from "./user-watchlist";
+export * from "./waitlist";

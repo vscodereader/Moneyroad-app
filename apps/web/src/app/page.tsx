@@ -1,36 +1,8 @@
 import Image from "next/image";
+import Link from "next/link";
 
+import { Wordmark } from "@/components/landing/brand";
 import { WaitlistForm } from "@/components/landing/waitlist-form";
-
-// ── Brand mark (우상향 라인차트, native Icon.logo 재현) ──────────────
-function LogoMark({ className }: { className?: string }) {
-  return (
-    <svg
-      aria-hidden="true"
-      className={className}
-      fill="none"
-      stroke="currentColor"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth={2.8}
-      viewBox="0 0 24 24"
-    >
-      <polyline points="3 17 9 11 13 15 21 7" />
-      <polyline points="14 7 21 7 21 14" />
-    </svg>
-  );
-}
-
-function Wordmark() {
-  return (
-    <span className="flex items-center gap-2 font-bold text-[#131416] text-lg tracking-tight">
-      <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#256EF4] text-white">
-        <LogoMark className="h-5 w-5" />
-      </span>
-      머니로드
-    </span>
-  );
-}
 
 // ── 디바이스 목업 프레임 ─────────────────────────────────────────────
 function PhoneFrame({
@@ -368,9 +340,15 @@ export default function Home() {
               모든 투자의 책임은 투자자 본인에게 있습니다.
             </p>
           </div>
-          <p className="mt-6 text-[#8A949E] text-sm">
-            © 2026 머니로드. All rights reserved.
-          </p>
+          <div className="mt-6 flex flex-wrap items-center gap-x-5 gap-y-2 text-[#8A949E] text-sm">
+            <span>© 2026 머니로드. All rights reserved.</span>
+            <Link
+              className="font-medium transition-colors hover:text-[#256EF4]"
+              href="/privacy"
+            >
+              개인정보 처리방침
+            </Link>
+          </div>
         </div>
       </footer>
     </div>

@@ -78,6 +78,13 @@
       "when": 1780939655295,
       "tag": "0010_colossal_blink",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1780988789551,
+      "tag": "0011_white_yellowjacket",
+      "breakpoints": true
     }
   ]
 }

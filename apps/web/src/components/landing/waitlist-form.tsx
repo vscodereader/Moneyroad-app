@@ -2,10 +2,16 @@
 
 import { Button } from "@moneyroad-app/ui/components/button";
 import { Input } from "@moneyroad-app/ui/components/input";
+import { useMutation } from "@tanstack/react-query";
 import { useId, useState } from "react";
 import { toast } from "sonner";
+import z from "zod";
+import { orpc } from "@/utils/orpc";
 
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const emailSchema = z
+  .string()
+  .trim()
+  .email("올바른 이메일 주소를 입력해 주세요.");
 
 type WaitlistFormProps = {
   /** Visual tone: light form on light bg, or inverted form on the dark CTA band. */
@@ -17,20 +23,36 @@ export function WaitlistForm({ variant = "default" }: WaitlistFormProps) {
   const [email, setEmail] = useState("");
   const [submitted, setSubmitted] = useState(false);
 
+  const joinWaitlist = useMutation(
+    orpc.waitlist.join.mutationOptions({
+      onSuccess: () => {
+        toast.success(
+          "사전등록이 완료됐어요. 출시되면 가장 먼저 알려드릴게요!"
+        );
+        setSubmitted(true);
+        setEmail("");
+      },
+      onError: () => {
+        toast.error("등록에 실패했어요. 잠시 후 다시 시도해 주세요.");
+      },
+    })
+  );
+
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!EMAIL_PATTERN.test(email)) {
-      toast.error("올바른 이메일 주소를 입력해 주세요.");
+    const parsed = emailSchema.safeParse(email);
+    if (!parsed.success) {
+      toast.error(
+        parsed.error.issues[0]?.message ?? "올바른 이메일 주소를 입력해 주세요."
+      );
       return;
     }
 
-    // NOTE: 사전등록 저장은 후속 작업. 현재는 프론트 목업으로 성공 처리만 한다.
-    toast.success("사전등록이 완료됐어요. 출시되면 가장 먼저 알려드릴게요!");
-    setSubmitted(true);
-    setEmail("");
+    joinWaitlist.mutate({ email: parsed.data });
   };
 
   const onDark = variant === "onDark";
+  const pending = joinWaitlist.isPending;
 
   if (submitted) {
     return (
@@ -59,6 +81,7 @@ export function WaitlistForm({ variant = "default" }: WaitlistFormProps) {
             ? "border-white/25 bg-white/10 text-white placeholder:text-white/60"
             : "border-[#CDD1D5] bg-white"
         }`}
+        disabled={pending}
         id={emailId}
         inputMode="email"
         onChange={(event) => setEmail(event.target.value)}
@@ -68,9 +91,10 @@ export function WaitlistForm({ variant = "default" }: WaitlistFormProps) {
       />
       <Button
         className="h-12 rounded-xl bg-[#256EF4] px-6 font-semibold text-base text-white hover:bg-[#0B50D0]"
+        disabled={pending}
         type="submit"
       >
-        출시 알림 받기
+        {pending ? "등록 중..." : "출시 알림 받기"}
       </Button>
     </form>
   );

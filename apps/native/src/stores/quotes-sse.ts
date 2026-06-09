@@ -1,4 +1,5 @@
 import { env } from "@moneyroad-app/env/native";
+import { AppState } from "react-native";
 import EventSource from "react-native-sse";
 
 import { fetchStreamToken } from "@/lib/stream-token";
@@ -25,6 +26,7 @@ let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let backoffTimer: ReturnType<typeof setTimeout> | null = null;
 let backoff = RECONNECT_BASE_MS;
 let unsubStore: (() => void) | null = null;
+let appStateSub: ReturnType<typeof AppState.addEventListener> | null = null;
 let started = false;
 
 function closeSource(): void {
@@ -151,6 +153,21 @@ function handleActiveChange(next: string[], prev: string[]): void {
 }
 
 /**
+ * 백그라운드 복귀 시 호출. iOS가 suspend 중 소켓을 끊으면 `error` 이벤트가
+ * 안정적으로 발생하지 않아 좀비 연결로 남는다 — 대기 중인 backoff를 비우고
+ * backoff를 리셋한 뒤 기존 연결을 끊고 즉시 재연결한다.
+ */
+function reconnectNow(): void {
+  if (backoffTimer) {
+    clearTimeout(backoffTimer);
+    backoffTimer = null;
+  }
+  backoff = RECONNECT_BASE_MS;
+  closeSource();
+  triggerReconnect();
+}
+
+/**
  * Starts the singleton SSE pipeline backing the Zustand quotes store. Idempotent
  * — call once on app mount. When `activeSymbols` changes (register/unregister
  * via the store) the connection is re-established with the new symbol set.
@@ -167,6 +184,19 @@ export function startQuotesManager(getUserId: () => string | null): () => void {
   unsubStore = useQuotesStore.subscribe((state, prev) => {
     handleActiveChange(state.activeSymbols, prev.activeSymbols);
   });
+  // 백그라운드 → 포그라운드 복귀 시 좀비 연결을 끊고 재연결. inactive만 거친
+  // 전환(제어센터/앱스위처 미리보기)은 소켓이 유지되므로 건드리지 않는다.
+  let wasBackgrounded = false;
+  appStateSub = AppState.addEventListener("change", (next) => {
+    if (next === "background") {
+      wasBackgrounded = true;
+    } else if (next === "active" && wasBackgrounded) {
+      wasBackgrounded = false;
+      if (activeSymbols.length > 0) {
+        reconnectNow();
+      }
+    }
+  });
   if (activeSymbols.length > 0) {
     triggerReconnect();
   }
@@ -174,6 +204,8 @@ export function startQuotesManager(getUserId: () => string | null): () => void {
     started = false;
     unsubStore?.();
     unsubStore = null;
+    appStateSub?.remove();
+    appStateSub = null;
     closeSource();
     if (reconnectTimer) {
       clearTimeout(reconnectTimer);

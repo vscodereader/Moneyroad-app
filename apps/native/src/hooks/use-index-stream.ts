@@ -1,7 +1,8 @@
 import { env } from "@moneyroad-app/env/native";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import EventSource from "react-native-sse";
 
+import { useAppStateResume } from "@/hooks/use-app-state-resume";
 import { authClient } from "@/lib/auth-client";
 import { fetchStreamToken } from "@/lib/stream-token";
 import type { MarketIndex } from "@/utils/data";
@@ -68,6 +69,10 @@ export function useIndexStream(fallback: MarketIndex[]): LiveIndex[] {
   const userId = session?.user?.id;
 
   const [live, setLive] = useState<Record<string, LiveState>>({});
+
+  // 백그라운드 복귀 시 활성 effect가 등록해 둔 강제 재연결 함수를 호출한다.
+  const forceReconnectRef = useRef<() => void>(() => undefined);
+  useAppStateResume(() => forceReconnectRef.current());
 
   useEffect(() => {
     const baseUrl = env.EXPO_PUBLIC_REALTIME_URL;
@@ -203,10 +208,27 @@ export function useIndexStream(fallback: MarketIndex[]): LiveIndex[] {
       });
     };
 
+    // 백그라운드 복귀 시 좀비 연결을 끊고 새 토큰으로 즉시 재연결한다.
+    forceReconnectRef.current = () => {
+      if (closed) {
+        return;
+      }
+      source?.removeAllEventListeners();
+      source?.close();
+      source = null;
+      if (reconnectTimer) {
+        clearTimeout(reconnectTimer);
+        reconnectTimer = null;
+      }
+      backoff = RECONNECT_BASE_MS;
+      connect();
+    };
+
     connect();
 
     return () => {
       closed = true;
+      forceReconnectRef.current = () => undefined;
       if (reconnectTimer) {
         clearTimeout(reconnectTimer);
       }

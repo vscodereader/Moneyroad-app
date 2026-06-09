@@ -1,8 +1,9 @@
 import { env } from "@moneyroad-app/env/native";
 import { useQueryClient } from "@tanstack/react-query";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import EventSource from "react-native-sse";
 
+import { useAppStateResume } from "@/hooks/use-app-state-resume";
 import { authClient } from "@/lib/auth-client";
 import { fetchStreamToken } from "@/lib/stream-token";
 import { orpc } from "@/utils/orpc";
@@ -40,6 +41,10 @@ export function useNewsStream(tab: NewsTab): void {
   // Anonymous users still get the (public) oRPC feed, just without live updates.
   const { data: session } = authClient.useSession();
   const userId = session?.user?.id;
+
+  // 백그라운드 복귀 시 활성 effect가 등록해 둔 강제 재연결 함수를 호출한다.
+  const forceReconnectRef = useRef<() => void>(() => undefined);
+  useAppStateResume(() => forceReconnectRef.current());
 
   useEffect(() => {
     const baseUrl = env.EXPO_PUBLIC_REALTIME_URL;
@@ -107,10 +112,27 @@ export function useNewsStream(tab: NewsTab): void {
       });
     };
 
+    // 백그라운드 복귀 시 좀비 연결을 끊고 새 토큰으로 즉시 재연결한다.
+    forceReconnectRef.current = () => {
+      if (closed) {
+        return;
+      }
+      source?.removeAllEventListeners();
+      source?.close();
+      source = null;
+      if (reconnectTimer) {
+        clearTimeout(reconnectTimer);
+        reconnectTimer = null;
+      }
+      backoff = RECONNECT_BASE_MS;
+      connect();
+    };
+
     connect();
 
     return () => {
       closed = true;
+      forceReconnectRef.current = () => undefined;
       if (reconnectTimer) {
         clearTimeout(reconnectTimer);
       }

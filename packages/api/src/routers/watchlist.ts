@@ -4,6 +4,7 @@ import { and, desc, eq } from "drizzle-orm";
 import z from "zod";
 
 import { protectedProcedure } from "../index";
+import { refreshRealtimePins } from "../lib/realtime-trigger";
 
 // The app's watchlist powers news features (watch tab + breaking push), so
 // entries are stored as type='news'. A signal-type watch is future work.
@@ -48,6 +49,8 @@ export const watchlistRouter = {
         .insert(userWatchlist)
         .values({ userId, stockCode: input.stockCode, type: WATCH_TYPE })
         .onConflictDoNothing();
+      // Newly watched stock → pin it on realtime now so quotes stream at once.
+      refreshRealtimePins("watchlist.add");
       return { ok: true };
     }),
 
@@ -64,6 +67,8 @@ export const watchlistRouter = {
             eq(userWatchlist.type, WATCH_TYPE)
           )
         );
+      // Possibly the last watcher → let realtime unpin promptly.
+      refreshRealtimePins("watchlist.remove");
       return { ok: true };
     }),
 };

@@ -7,6 +7,10 @@ import { quoteHub } from "@/services/quotes";
 
 let timer: ReturnType<typeof setInterval> | null = null;
 let running = false;
+// A refresh requested while a sync is in flight (e.g. the API trigger landing
+// mid-poll) sets this so pollOnce runs one more pass — the just-written row is
+// never missed between the DB read and the next interval tick.
+let pendingRerun = false;
 
 // 관리자 등록 시그널 종목 — anonymous(비로그인) 클라이언트도 시세 구독을 허용하는
 // 화이트리스트. 홈에서 노출되는 limited 시그널은 비로그인도 시세를 볼 수 있어야
@@ -14,52 +18,78 @@ let running = false;
 // 주기마다 갱신한다.
 export const publicSignalSymbols = new Set<string>();
 
+// Reads the (watchlist ∪ signal) stock codes and syncs the pinned set +
+// anonymous public signal whitelist. GROUP BY 로 distinct stock_code 추출
+// (SELECT DISTINCT 도 동등하지만 drizzle 버전 의존성을 피해 명시적 그룹핑).
+async function syncPins(): Promise<void> {
+  const db = getDb();
+  const [watchlistRows, signalRows] = await Promise.all([
+    db
+      .select({ stockCode: userWatchlist.stockCode })
+      .from(userWatchlist)
+      .groupBy(userWatchlist.stockCode),
+    db
+      .select({ stockCode: signal.stockCode })
+      .from(signal)
+      .groupBy(signal.stockCode),
+  ]);
+  const signalCodes = signalRows.map((r) => r.stockCode);
+  // 화이트리스트 동기화: 비로그인도 시세를 볼 수 있는 시그널 종목.
+  publicSignalSymbols.clear();
+  for (const code of signalCodes) {
+    publicSignalSymbols.add(code);
+  }
+  const symbols = Array.from(
+    new Set([...watchlistRows.map((r) => r.stockCode), ...signalCodes])
+  );
+  const { added, removed } = quoteHub.setPins(symbols);
+  if (added > 0 || removed > 0) {
+    log.info({
+      pinned: {
+        event: "pins_updated",
+        total: symbols.length,
+        watchlist: watchlistRows.length,
+        signals: signalRows.length,
+        added,
+        removed,
+      },
+    });
+  }
+}
+
 async function pollOnce(): Promise<void> {
-  // GROUP BY 로 distinct stock_code 추출. SELECT DISTINCT 도 동등하지만
-  // drizzle 버전 의존성을 피해 명시적 그룹핑을 쓴다.
+  // Single-flight: a concurrent call records a rerun instead of overlapping, so
+  // the trigger that lands mid-poll still gets a fresh pass afterwards.
   if (running) {
+    pendingRerun = true;
     return;
   }
   running = true;
   try {
-    const db = getDb();
-    const [watchlistRows, signalRows] = await Promise.all([
-      db
-        .select({ stockCode: userWatchlist.stockCode })
-        .from(userWatchlist)
-        .groupBy(userWatchlist.stockCode),
-      db
-        .select({ stockCode: signal.stockCode })
-        .from(signal)
-        .groupBy(signal.stockCode),
-    ]);
-    const signalCodes = signalRows.map((r) => r.stockCode);
-    // 화이트리스트 동기화: 비로그인도 시세를 볼 수 있는 시그널 종목.
-    publicSignalSymbols.clear();
-    for (const code of signalCodes) {
-      publicSignalSymbols.add(code);
-    }
-    const symbols = Array.from(
-      new Set([...watchlistRows.map((r) => r.stockCode), ...signalCodes])
-    );
-    const { added, removed } = quoteHub.setPins(symbols);
-    if (added > 0 || removed > 0) {
-      log.info({
-        pinned: {
-          event: "pins_updated",
-          total: symbols.length,
-          watchlist: watchlistRows.length,
-          signals: signalRows.length,
-          added,
-          removed,
-        },
-      });
-    }
-  } catch (error) {
-    log.warn({ pinned: { event: "pins_poll_failed" }, error });
+    do {
+      pendingRerun = false;
+      try {
+        await syncPins();
+      } catch (error) {
+        log.warn({ pinned: { event: "pins_poll_failed" }, error });
+      }
+    } while (pendingRerun);
   } finally {
     running = false;
   }
+}
+
+/**
+ * Runs a pin sync immediately, bypassing the interval. The API server calls the
+ * internal endpoint backing this right after a watchlist/signal write so newly
+ * referenced stocks are pinned (and signal stocks whitelisted) within
+ * milliseconds instead of up to one poll interval. No-op without a DB.
+ */
+export async function triggerPinsRefresh(): Promise<void> {
+  if (!isNewsDbConfigured()) {
+    return;
+  }
+  await pollOnce();
 }
 
 /**

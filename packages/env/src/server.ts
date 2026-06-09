@@ -12,6 +12,14 @@ export const env = createEnv({
     CORS_ORIGIN: z.url(),
     STREAM_TOKEN_SECRET: z.string().min(32),
 
+    // Realtime service base URL for internal triggers. After a watchlist/signal
+    // write the API nudges this URL so the realtime poller re-pins immediately
+    // instead of waiting for its ~10s interval. Auth reuses STREAM_TOKEN_SECRET.
+    // Defaults to the local dev port so a monorepo `pnpm dev` needs no extra
+    // config; override per environment. Best-effort — failures fall back to the
+    // poller, so a wrong/unreachable URL only loses the speedup, not correctness.
+    REALTIME_INTERNAL_URL: z.url().default("http://localhost:3001"),
+
     // Social login (all optional — each provider activates only when its keys
     // are set). Google/Apple are built-in; Naver/Kakao via genericOAuth plugin.
     GOOGLE_CLIENT_ID: z.string().optional(),

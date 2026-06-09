@@ -1,0 +1,27 @@
+{
+  "name": "company",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --port 5002",
+    "build": "next build",
+    "start": "next start --port 5002",
+    "check-types": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@moneyroad-app/ui": "workspace:*",
+    "lucide-react": "catalog:",
+    "next": "^16.2.0",
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3"
+  },
+  "devDependencies": {
+    "@moneyroad-app/config": "workspace:*",
+    "@tailwindcss/postcss": "^4.1.18",
+    "@types/node": "^20",
+    "@types/react": "^19.2.10",
+    "@types/react-dom": "catalog:",
+    "tailwindcss": "^4.1.18",
+    "typescript": "^6"
+  }
+}

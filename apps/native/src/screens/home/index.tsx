@@ -132,7 +132,7 @@ export default function HomeScreen() {
   const displayName = session?.user?.name?.trim() || "투자자";
   const indices = useIndexStream(fallbackIndices);
   const topSignalsQuery = useQuery(
-    orpc.signal.feed.queryOptions({ input: { window: "24h", limit: 3 } })
+    orpc.signal.feed.queryOptions({ input: { window: "all", limit: 3 } })
   );
   const topSignals = topSignalsQuery.data?.items ?? [];
   const newsQuery = useQuery(

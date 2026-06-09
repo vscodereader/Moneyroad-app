@@ -3,6 +3,7 @@ import { env } from "@moneyroad-app/env/realtime";
 import { initLogger } from "evlog";
 import { evlog } from "evlog/fastify";
 import Fastify from "fastify";
+import { registerInternalPlugin } from "./plugins/internal";
 import { registerNewsPlugin } from "./plugins/news";
 import { registerQuotesPlugin } from "./plugins/quotes";
 import { registerSchedulerPlugin } from "./plugins/scheduler";
@@ -22,6 +23,7 @@ export function buildServer() {
   app.register(registerQuotesPlugin);
   app.register(registerNewsPlugin);
   app.register(registerSchedulerPlugin);
+  app.register(registerInternalPlugin);
 
   app.get("/", () => "OK RT");
 

@@ -4,6 +4,7 @@ import { protectedProcedure, publicProcedure } from "../index";
 import { discussionRouter } from "./discussion";
 import { inquiryRouter } from "./inquiry";
 import { newsRouter } from "./news";
+import { noticeRouter } from "./notice";
 import { notificationRouter } from "./notification";
 import { priceAlertRouter } from "./price-alert";
 import { signalRouter } from "./signal";
@@ -19,6 +20,7 @@ export const appRouter = {
   })),
   todo: todoRouter,
   news: newsRouter,
+  notice: noticeRouter,
   notification: notificationRouter,
   signal: signalRouter,
   stock: stockRouter,

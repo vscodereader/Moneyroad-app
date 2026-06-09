@@ -1,20 +1,25 @@
 // MoneyRoad — MyPage settings sub-screens (8)
 
+import type { NoticeItem } from "@moneyroad-app/api/routers/notice";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import {
   ActivityIndicator,
   Linking,
+  Modal,
   Pressable,
+  ScrollView,
   Text,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Gradient } from "@/components/charts";
 import { Icon } from "@/components/icons";
 import { SegmentedControl, StockLogo, Switch } from "@/components/ui";
 import { useMrTheme } from "@/hooks/use-mr-theme";
 import { useNotificationSettings } from "@/hooks/use-notification-settings";
+import { authClient } from "@/lib/auth-client";
 import InquiryFormScreen from "@/screens/settings/inquiry";
 import { PrivacyPolicy, TermsOfService } from "@/screens/settings/legal";
 import PriceAlertNewScreen from "@/screens/settings/price-alert-new";
@@ -30,6 +35,7 @@ import { fmt } from "@/utils/format";
 import { nav } from "@/utils/nav";
 import { orpc } from "@/utils/orpc";
 import {
+  type MrTokens,
   SIGNAL_TYPE_KEYS,
   type SignalTypeKey,
   signalMeta,
@@ -600,53 +606,36 @@ export function DisplaySettings() {
 }
 
 // ── 6. 내가 쓴 글·답글 ────────────────────────────────────────
+// 토론방은 관리자가 생성하므로 사용자의 "글"은 본인이 참여(메시지 작성)한 토론방을,
+// "답글"은 본인이 작성한 개별 메시지를 의미한다. 둘 다 실데이터(discussion).
 export function MyPosts() {
   const { t } = useMrTheme();
   const [tab, setTab] = useState<"posts" | "replies">("posts");
-  const myPosts = [
-    {
-      id: "t1",
-      title: "하이닉스 22만원 돌파, 25만원까지 보시는 분?",
-      time: "5분 전",
-      replies: 38,
-      likes: 124,
-      code: "000660",
-    },
-    {
-      id: "mp1",
-      title: "삼성전자 단기 80,000원 저항 돌파 어떻게 보시나요",
-      time: "어제",
-      replies: 12,
-      likes: 27,
-      code: "005930",
-    },
-  ];
-  const myReplies = [
-    {
-      id: "r1",
-      threadId: "t2",
-      threadTitle: "체코 원전 본계약! 드디어 결실",
-      text: "축하드립니다. 추가 수주 모멘텀 이어지길.",
-      time: "20분 전",
-      code: "034020",
-    },
-    {
-      id: "r2",
-      threadId: "t3",
-      threadTitle: "카카오 규제 이슈, 어디까지 빠질까요",
-      text: "발표 전까지 비중 줄여놓는게 안전할 듯합니다.",
-      time: "1시간 전",
-      code: "035720",
-    },
-    {
-      id: "r3",
-      threadId: "t5",
-      threadTitle: "LG엔솔 IRA 추가 보조금 확정",
-      text: "GM 합작공장 가동률 회복 데이터 어디서 확인할 수 있나요?",
-      time: "3시간 전",
-      code: "373220",
-    },
-  ];
+  const roomsQuery = useQuery(orpc.discussion.myRooms.queryOptions());
+  const repliesQuery = useQuery(orpc.discussion.myReplies.queryOptions());
+  const myRooms = roomsQuery.data ?? [];
+  const myReplies = repliesQuery.data ?? [];
+  const activeQuery = tab === "posts" ? roomsQuery : repliesQuery;
+
+  const stockChip = (name: string | null) => {
+    if (!name) {
+      return null;
+    }
+    return (
+      <View
+        style={{
+          paddingHorizontal: 6,
+          paddingVertical: 2,
+          backgroundColor: t.bgSubtle,
+          borderRadius: 4,
+        }}
+      >
+        <Text style={{ fontSize: 10, fontWeight: "700", color: t.fgMuted }}>
+          {name}
+        </Text>
+      </View>
+    );
+  };
 
   const tabChip = (key: "posts" | "replies", label: string) => {
     const active = tab === key;
@@ -677,6 +666,11 @@ export function MyPosts() {
     );
   };
 
+  const emptyText =
+    tab === "posts"
+      ? "참여한 토론방이 없어요.\n관심 종목 토론방에 의견을 남겨보세요."
+      : "작성한 답글이 없어요.\n토론방에서 첫 의견을 남겨보세요.";
+
   return (
     <SettingsScreen title="내가 쓴 글·답글">
       <View
@@ -687,169 +681,155 @@ export function MyPosts() {
           paddingVertical: 10,
         }}
       >
-        {tabChip("posts", `내 글 ${myPosts.length}`)}
+        {tabChip("posts", `내 글 ${myRooms.length}`)}
         {tabChip("replies", `답글 ${myReplies.length}`)}
       </View>
 
+      {activeQuery.isPending ? (
+        <View style={{ paddingVertical: 40, alignItems: "center" }}>
+          <ActivityIndicator color={t.primary} />
+        </View>
+      ) : null}
+
+      {activeQuery.isSuccess &&
+      (tab === "posts" ? myRooms.length === 0 : myReplies.length === 0) ? (
+        <View
+          style={{
+            paddingVertical: 48,
+            paddingHorizontal: 24,
+            alignItems: "center",
+            gap: 8,
+          }}
+        >
+          <Icon.navDiscuss color={t.fgSubtle} size={28} />
+          <Text
+            style={{
+              fontSize: 13,
+              color: t.fgMuted,
+              textAlign: "center",
+              lineHeight: 19,
+            }}
+          >
+            {emptyText}
+          </Text>
+        </View>
+      ) : null}
+
       {tab === "posts"
-        ? myPosts.map((p) => {
-            const stock = findStock(p.code);
-            return (
-              <Pressable
-                key={p.id}
-                onPress={() => nav.openDiscussionRoom(p.id)}
+        ? myRooms.map((p) => (
+            <Pressable
+              key={p.id}
+              onPress={() => nav.openDiscussionRoom(p.id)}
+              style={{
+                paddingVertical: 14,
+                paddingHorizontal: 16,
+                backgroundColor: t.bg,
+                borderBottomWidth: 1,
+                borderBottomColor: t.border,
+              }}
+            >
+              <View
+                style={{ flexDirection: "row", gap: 6, alignItems: "center" }}
+              >
+                {stockChip(p.stockName ?? p.stockCode)}
+                <Text style={{ fontSize: 11, color: t.fgSubtle }}>
+                  {p.time}
+                </Text>
+              </View>
+              <Text
                 style={{
-                  paddingVertical: 14,
-                  paddingHorizontal: 16,
-                  backgroundColor: t.bg,
-                  borderBottomWidth: 1,
-                  borderBottomColor: t.border,
+                  fontSize: 14,
+                  fontWeight: "700",
+                  color: t.fgStrong,
+                  marginTop: 6,
+                  lineHeight: 20,
                 }}
               >
+                {p.name}
+              </Text>
+              <View style={{ flexDirection: "row", gap: 14, marginTop: 8 }}>
                 <View
-                  style={{ flexDirection: "row", gap: 6, alignItems: "center" }}
-                >
-                  {stock ? (
-                    <View
-                      style={{
-                        paddingHorizontal: 6,
-                        paddingVertical: 2,
-                        backgroundColor: t.bgSubtle,
-                        borderRadius: 4,
-                      }}
-                    >
-                      <Text
-                        style={{
-                          fontSize: 10,
-                          fontWeight: "700",
-                          color: t.fgMuted,
-                        }}
-                      >
-                        {stock.name}
-                      </Text>
-                    </View>
-                  ) : null}
-                  <Text style={{ fontSize: 11, color: t.fgSubtle }}>
-                    {p.time}
-                  </Text>
-                </View>
-                <Text
                   style={{
-                    fontSize: 14,
-                    fontWeight: "700",
-                    color: t.fgStrong,
-                    marginTop: 6,
-                    lineHeight: 20,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 3,
                   }}
                 >
-                  {p.title}
-                </Text>
-                <View style={{ flexDirection: "row", gap: 14, marginTop: 8 }}>
-                  <View
+                  <Icon.thumbsUp color={t.fgMuted} size={13} />
+                  <Text
                     style={{
-                      flexDirection: "row",
-                      alignItems: "center",
-                      gap: 3,
+                      fontSize: 12,
+                      fontWeight: "600",
+                      color: t.fgMuted,
                     }}
                   >
-                    <Icon.thumbsUp color={t.fgMuted} size={13} />
-                    <Text
-                      style={{
-                        fontSize: 12,
-                        fontWeight: "600",
-                        color: t.fgMuted,
-                      }}
-                    >
-                      {p.likes}
-                    </Text>
-                  </View>
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      alignItems: "center",
-                      gap: 3,
-                    }}
-                  >
-                    <Icon.reply color={t.fgMuted} size={13} />
-                    <Text
-                      style={{
-                        fontSize: 12,
-                        fontWeight: "600",
-                        color: t.fgMuted,
-                      }}
-                    >
-                      {p.replies}
-                    </Text>
-                  </View>
+                    {p.likesCount}
+                  </Text>
                 </View>
-              </Pressable>
-            );
-          })
-        : myReplies.map((r) => {
-            const stock = findStock(r.code);
-            return (
-              <Pressable
-                key={r.id}
-                onPress={() => nav.openDiscussionRoom(r.threadId)}
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 3,
+                  }}
+                >
+                  <Icon.reply color={t.fgMuted} size={13} />
+                  <Text
+                    style={{
+                      fontSize: 12,
+                      fontWeight: "600",
+                      color: t.fgMuted,
+                    }}
+                  >
+                    {p.repliesCount}
+                  </Text>
+                </View>
+              </View>
+            </Pressable>
+          ))
+        : myReplies.map((r) => (
+            <Pressable
+              key={r.id}
+              onPress={() => nav.openDiscussionRoom(r.roomId)}
+              style={{
+                paddingVertical: 14,
+                paddingHorizontal: 16,
+                backgroundColor: t.bg,
+                borderBottomWidth: 1,
+                borderBottomColor: t.border,
+              }}
+            >
+              <View
+                style={{ flexDirection: "row", gap: 6, alignItems: "center" }}
+              >
+                {stockChip(r.stockName ?? r.stockCode)}
+                <Text style={{ fontSize: 11, color: t.fgSubtle }}>
+                  {r.time}
+                </Text>
+              </View>
+              <Text
                 style={{
-                  paddingVertical: 14,
-                  paddingHorizontal: 16,
-                  backgroundColor: t.bg,
-                  borderBottomWidth: 1,
-                  borderBottomColor: t.border,
+                  fontSize: 12,
+                  fontWeight: "700",
+                  color: t.fgMuted,
+                  marginTop: 6,
+                  lineHeight: 18,
                 }}
               >
-                <View
-                  style={{ flexDirection: "row", gap: 6, alignItems: "center" }}
-                >
-                  {stock ? (
-                    <View
-                      style={{
-                        paddingHorizontal: 6,
-                        paddingVertical: 2,
-                        backgroundColor: t.bgSubtle,
-                        borderRadius: 4,
-                      }}
-                    >
-                      <Text
-                        style={{
-                          fontSize: 10,
-                          fontWeight: "700",
-                          color: t.fgMuted,
-                        }}
-                      >
-                        {stock.name}
-                      </Text>
-                    </View>
-                  ) : null}
-                  <Text style={{ fontSize: 11, color: t.fgSubtle }}>
-                    {r.time}
-                  </Text>
-                </View>
-                <Text
-                  style={{
-                    fontSize: 12,
-                    fontWeight: "700",
-                    color: t.fgMuted,
-                    marginTop: 6,
-                    lineHeight: 18,
-                  }}
-                >
-                  ↳ {r.threadTitle}
-                </Text>
-                <Text
-                  style={{
-                    fontSize: 13,
-                    color: t.fgStrong,
-                    marginTop: 4,
-                    lineHeight: 20,
-                  }}
-                >
-                  {r.text}
-                </Text>
-              </Pressable>
-            );
-          })}
+                ↳ {r.roomName}
+              </Text>
+              <Text
+                style={{
+                  fontSize: 13,
+                  color: t.fgStrong,
+                  marginTop: 4,
+                  lineHeight: 20,
+                }}
+              >
+                {r.content}
+              </Text>
+            </Pressable>
+          ))}
       <View style={{ height: 16 }} />
     </SettingsScreen>
   );
@@ -1044,65 +1024,287 @@ export function Invite() {
   );
 }
 
+// 공지 분류(enum) → 한글 라벨 / 색상.
+const NOTICE_CATEGORY_LABEL: Record<NoticeItem["category"], string> = {
+  notice: "공지",
+  update: "업데이트",
+  event: "이벤트",
+};
+
+function noticeTagStyle(
+  t: MrTokens,
+  category: NoticeItem["category"]
+): { bg: string; color: string } {
+  if (category === "update") {
+    return { bg: t.successBg, color: t.success };
+  }
+  if (category === "event") {
+    return { bg: t.warningBg, color: t.warning };
+  }
+  return { bg: t.primarySubtle, color: t.primary };
+}
+
+// 상세에서 보여줄 정확한 등록 일시(KST).
+const noticeDateFmt = new Intl.DateTimeFormat("ko-KR", {
+  timeZone: "Asia/Seoul",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: false,
+});
+
+// 공지 상세 Drawer(슬라이드업 바텀시트). 관리자는 핀 토글·삭제도 가능.
+function NoticeSheet({
+  item,
+  onClose,
+}: {
+  item: NoticeItem;
+  onClose: () => void;
+}) {
+  const { t } = useMrTheme();
+  const insets = useSafeAreaInsets();
+  const queryClient = useQueryClient();
+  const { data: session } = authClient.useSession();
+  const isAdmin = session?.user.role === "admin";
+  const ts = noticeTagStyle(t, item.category);
+  const invalidate = () =>
+    queryClient.invalidateQueries({ queryKey: orpc.notice.list.key() });
+  const setPinned = useMutation(
+    orpc.notice.setPinned.mutationOptions({ onSuccess: invalidate })
+  );
+  const remove = useMutation(
+    orpc.notice.remove.mutationOptions({
+      onSuccess: () => {
+        invalidate();
+        onClose();
+      },
+    })
+  );
+
+  return (
+    <Modal animationType="slide" onRequestClose={onClose} transparent visible>
+      <Pressable
+        onPress={onClose}
+        style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.45)" }}
+      />
+      <View
+        style={{
+          backgroundColor: t.bg,
+          borderTopLeftRadius: 18,
+          borderTopRightRadius: 18,
+          maxHeight: "82%",
+          paddingBottom: insets.bottom,
+        }}
+      >
+        <View
+          style={{
+            width: 36,
+            height: 4,
+            borderRadius: 999,
+            backgroundColor: t.borderStrong,
+            alignSelf: "center",
+            marginTop: 10,
+          }}
+        />
+        <ScrollView
+          contentContainerStyle={{
+            paddingHorizontal: 20,
+            paddingTop: 12,
+            paddingBottom: 24,
+          }}
+        >
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 6,
+              marginTop: 8,
+            }}
+          >
+            {item.pinned ? <Text style={{ fontSize: 12 }}>📌</Text> : null}
+            <View
+              style={{
+                paddingHorizontal: 8,
+                paddingVertical: 2,
+                borderRadius: 999,
+                backgroundColor: ts.bg,
+              }}
+            >
+              <Text
+                style={{ fontSize: 11, fontWeight: "800", color: ts.color }}
+              >
+                {NOTICE_CATEGORY_LABEL[item.category]}
+              </Text>
+            </View>
+            <Pressable
+              hitSlop={8}
+              onPress={onClose}
+              style={{ marginLeft: "auto" }}
+            >
+              <Icon.close color={t.fgStrong} size={18} />
+            </Pressable>
+          </View>
+
+          <Text
+            style={{
+              fontSize: 18,
+              fontWeight: "800",
+              color: t.fgStrong,
+              marginTop: 10,
+              lineHeight: 25,
+            }}
+          >
+            {item.title}
+          </Text>
+          <Text style={{ fontSize: 12, color: t.fgSubtle, marginTop: 4 }}>
+            {noticeDateFmt.format(new Date(item.createdAt))}
+          </Text>
+
+          <Text
+            style={{
+              fontSize: 14,
+              lineHeight: 22,
+              color: t.fgStrong,
+              marginTop: 16,
+            }}
+          >
+            {item.body}
+          </Text>
+
+          {isAdmin ? (
+            <View style={{ flexDirection: "row", gap: 10, marginTop: 24 }}>
+              <Pressable
+                disabled={setPinned.isPending}
+                onPress={() =>
+                  setPinned.mutate({ id: item.id, pinned: !item.pinned })
+                }
+                style={{
+                  flex: 1,
+                  height: 44,
+                  borderRadius: 10,
+                  borderWidth: 1,
+                  borderColor: t.borderStrong,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 6,
+                }}
+              >
+                <Icon.pin color={t.fgStrong} size={16} />
+                <Text
+                  style={{ fontSize: 13, fontWeight: "700", color: t.fgStrong }}
+                >
+                  {item.pinned ? "고정 해제" : "최상단 고정"}
+                </Text>
+              </Pressable>
+              <Pressable
+                disabled={remove.isPending}
+                onPress={() => remove.mutate({ id: item.id })}
+                style={{
+                  flex: 1,
+                  height: 44,
+                  borderRadius: 10,
+                  backgroundColor: t.downStrong,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 6,
+                }}
+              >
+                <Icon.trash color="#fff" size={16} />
+                <Text
+                  style={{ fontSize: 13, fontWeight: "700", color: "#fff" }}
+                >
+                  삭제
+                </Text>
+              </Pressable>
+            </View>
+          ) : null}
+        </ScrollView>
+      </View>
+    </Modal>
+  );
+}
+
 // ── 8. 공지사항 및 고객 지원 ──────────────────────────────────
 export function Support() {
   const { t } = useMrTheme();
   const [openFaq, setOpenFaq] = useState<number | null>(0);
-  const notices = [
-    {
-      id: "n1",
-      tag: "공지",
-      title: "5월 20일 시스템 점검 안내 (01:00~03:00)",
-      time: "1일 전",
-      pinned: true,
-    },
-    {
-      id: "n2",
-      tag: "업데이트",
-      title: "v1.4.2 업데이트 — 토론방 채팅 기능 추가",
-      time: "3일 전",
-    },
-    {
-      id: "n3",
-      tag: "공지",
-      title: "AI 시그널 알고리즘 v3.0 적용 안내",
-      time: "1주일 전",
-    },
-    {
-      id: "n4",
-      tag: "이벤트",
-      title: "친구 초대 이벤트, 적립 기간 2배 (~5/31)",
-      time: "2주일 전",
-    },
-  ];
+  const [selectedNotice, setSelectedNotice] = useState<NoticeItem | null>(null);
+  const { data: session } = authClient.useSession();
+  const isAdmin = session?.user.role === "admin";
+  const noticesQuery = useQuery(orpc.notice.list.queryOptions());
+  const notices = noticesQuery.data ?? [];
   const faqs: { q: string; a?: string }[] = [
     {
-      q: "시그널 점수는 어떻게 계산되나요?",
-      a: "기술·AI·이벤트·커뮤니티 4가지 시그널을 가중 평균하여 0~100점으로 환산합니다. 가중치는 마이 > AI 시그널 학습 데이터에서 조정할 수 있습니다.",
+      q: "가격 알림이 오지 않아요",
+      a: "먼저 기기 설정과 앱의 알림 권한이 켜져 있는지 확인해 주세요. 그다음 마이 > 가격 알림에서 해당 알림이 활성(스위치 ON) 상태인지 확인합니다. 가격 알림은 설정한 도달가에 주가가 처음 닿을 때 1회만 발송되며, 한 번 울린 알림은 다시 발송되지 않습니다. 장 운영 시간(평일 09:00~15:30) 외에는 알림이 지연될 수 있습니다.",
     },
-    { q: "가격 알림이 오지 않아요" },
-    { q: "관심 종목은 몇 개까지 등록할 수 있나요?" },
-    { q: "AI 데일리 브리프는 언제 업데이트되나요?" },
+    {
+      q: "관심 종목은 몇 개까지 등록할 수 있나요?",
+      a: "등록 개수에는 제한이 없습니다. 원하는 만큼 관심 종목을 추가할 수 있어요. 관심 종목은 뉴스·공시 알림(관심 탭)과 시그널 추적에 활용됩니다.",
+    },
   ];
 
-  const tagStyle = (tag: string): { bg: string; color: string } => {
-    if (tag === "공지") {
-      return { bg: t.primarySubtle, color: t.primary };
-    }
-    if (tag === "업데이트") {
-      return { bg: t.successBg, color: t.success };
-    }
-    return { bg: t.warningBg, color: t.warning };
-  };
-
   return (
-    <SettingsScreen title="공지사항 및 고객 지원">
+    <SettingsScreen
+      right={
+        isAdmin ? (
+          <Pressable
+            hitSlop={6}
+            onPress={nav.openCreateNotice}
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 2,
+              paddingHorizontal: 8,
+            }}
+          >
+            <Icon.plus color={t.primary} size={16} />
+            <Text style={{ fontSize: 13, fontWeight: "700", color: t.primary }}>
+              등록
+            </Text>
+          </Pressable>
+        ) : undefined
+      }
+      title="공지사항 및 고객 지원"
+    >
       <SettingsGroup label="공지사항">
+        {noticesQuery.isPending ? (
+          <View style={{ paddingVertical: 32, alignItems: "center" }}>
+            <ActivityIndicator color={t.primary} />
+          </View>
+        ) : null}
+
+        {noticesQuery.isSuccess && notices.length === 0 ? (
+          <View
+            style={{
+              paddingVertical: 36,
+              paddingHorizontal: 24,
+              alignItems: "center",
+            }}
+          >
+            <Text
+              style={{
+                fontSize: 13,
+                color: t.fgMuted,
+                textAlign: "center",
+                lineHeight: 19,
+              }}
+            >
+              등록된 공지사항이 없습니다.
+            </Text>
+          </View>
+        ) : null}
+
         {notices.map((n) => {
-          const ts = tagStyle(n.tag);
+          const ts = noticeTagStyle(t, n.category);
           return (
             <Pressable
               key={n.id}
+              onPress={() => setSelectedNotice(n)}
               style={{
                 paddingVertical: 14,
                 paddingHorizontal: 16,
@@ -1126,7 +1328,7 @@ export function Support() {
                   <Text
                     style={{ fontSize: 10, fontWeight: "800", color: ts.color }}
                   >
-                    {n.tag}
+                    {NOTICE_CATEGORY_LABEL[n.category]}
                   </Text>
                 </View>
                 <Text
@@ -1253,6 +1455,13 @@ export function Support() {
         />
       </SettingsGroup>
       <View style={{ height: 16 }} />
+
+      {selectedNotice ? (
+        <NoticeSheet
+          item={selectedNotice}
+          onClose={() => setSelectedNotice(null)}
+        />
+      ) : null}
     </SettingsScreen>
   );
 }

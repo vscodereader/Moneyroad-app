@@ -9,7 +9,7 @@ import {
   userWatchlist,
 } from "@moneyroad-app/db/schema";
 import { ORPCError } from "@orpc/server";
-import { and, desc, eq, inArray, lt, type SQL, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, lt, type SQL, sql } from "drizzle-orm";
 import z from "zod";
 
 import { adminProcedure, protectedProcedure, publicProcedure } from "../index";
@@ -399,6 +399,116 @@ export const discussionRouter = {
         })),
         nextCursor: hasMore ? (slice[0]?.id ?? null) : null,
       };
+    }),
+
+  /**
+   * "내가 쓴 글" — distinct rooms the signed-in user has posted a (non-deleted)
+   * message in, ordered by the user's most recent activity in each. Rooms are
+   * admin-created, so a user's "글" here means the threads they participate in.
+   * Shaped like a room card (name + stock + like/reply counts).
+   */
+  myRooms: protectedProcedure
+    .input(
+      z
+        .object({ limit: z.number().int().min(1).max(100).default(50) })
+        .optional()
+    )
+    .handler(async ({ context, input }) => {
+      const userId = context.session.user.id;
+      const limit = input?.limit ?? 50;
+      const c = counts(sql<number>`${discussionRoom.id}`);
+      // The user's own last message time in each room (drives ordering + label).
+      const myLastAt =
+        sql<Date | null>`(SELECT MAX(${discussionMessage.createdAt}) FROM ${discussionMessage} WHERE ${discussionMessage.roomId} = ${discussionRoom.id} AND ${discussionMessage.userId} = ${userId} AND ${discussionMessage.deletedAt} IS NULL)`.mapWith(
+          (value) =>
+            value == null ? null : new Date(`${value as string}+0000`)
+        );
+      const mine = sql`EXISTS (SELECT 1 FROM ${discussionMessage} WHERE ${discussionMessage.roomId} = ${discussionRoom.id} AND ${discussionMessage.userId} = ${userId} AND ${discussionMessage.deletedAt} IS NULL)`;
+
+      const rows = await db
+        .select({
+          id: discussionRoom.id,
+          name: discussionRoom.name,
+          stockCode: discussionRoom.stockCode,
+          stockName: stockMaster.htsKorIsnm,
+          sentiment: discussionRoom.sentiment,
+          likesCount: c.likesCount,
+          repliesCount: c.repliesCount,
+          myLastAt,
+        })
+        .from(discussionRoom)
+        .leftJoin(
+          stockMaster,
+          eq(discussionRoom.stockCode, stockMaster.mkscShrnIscd)
+        )
+        .where(mine)
+        .orderBy(sql`${myLastAt} DESC NULLS LAST`)
+        .limit(limit);
+
+      return rows.map((r) => ({
+        id: r.id,
+        name: r.name,
+        stockCode: r.stockCode,
+        stockName: r.stockName,
+        sentiment: r.sentiment,
+        likesCount: r.likesCount,
+        repliesCount: r.repliesCount,
+        time: r.myLastAt ? relativeTime(r.myLastAt) : "",
+      }));
+    }),
+
+  /**
+   * "답글" — the signed-in user's own (non-deleted) messages, newest first,
+   * each joined with its room for context (room name + stock chip + link).
+   */
+  myReplies: protectedProcedure
+    .input(
+      z
+        .object({ limit: z.number().int().min(1).max(100).default(50) })
+        .optional()
+    )
+    .handler(async ({ context, input }) => {
+      const userId = context.session.user.id;
+      const limit = input?.limit ?? 50;
+
+      const rows = await db
+        .select({
+          id: discussionMessage.id,
+          roomId: discussionRoom.id,
+          roomName: discussionRoom.name,
+          stockCode: discussionRoom.stockCode,
+          stockName: stockMaster.htsKorIsnm,
+          content: discussionMessage.content,
+          createdAt: discussionMessage.createdAt,
+        })
+        .from(discussionMessage)
+        .innerJoin(
+          discussionRoom,
+          eq(discussionMessage.roomId, discussionRoom.id)
+        )
+        .leftJoin(
+          stockMaster,
+          eq(discussionRoom.stockCode, stockMaster.mkscShrnIscd)
+        )
+        .where(
+          and(
+            eq(discussionMessage.userId, userId),
+            isNull(discussionMessage.deletedAt)
+          )
+        )
+        .orderBy(desc(discussionMessage.id))
+        .limit(limit);
+
+      return rows.map((r) => ({
+        id: r.id,
+        roomId: r.roomId,
+        roomName: r.roomName,
+        stockCode: r.stockCode,
+        stockName: r.stockName,
+        content: r.content,
+        time: relativeTime(r.createdAt),
+        createdAt: r.createdAt.toISOString(),
+      }));
     }),
 
   send: protectedProcedure

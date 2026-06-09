@@ -4,13 +4,15 @@ import { and, count, desc, eq, gte, inArray, lt, type SQL } from "drizzle-orm";
 import z from "zod";
 
 import { adminProcedure, protectedProcedure, publicProcedure } from "../index";
+import { refreshRealtimePins } from "../lib/realtime-trigger";
 
 const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 50;
 const DAY_MS = 86_400_000;
 
 const actionSchema = z.enum(["buy", "sell", "hold"]);
-const windowSchema = z.enum(["24h", "7d", "all"]).default("24h");
+// 시그널은 관리자가 삭제하기 전까지 노출된다. 시간 윈도우는 기본적으로 무제한.
+const windowSchema = z.enum(["24h", "7d", "all"]).default("all");
 
 type Action = z.infer<typeof actionSchema>;
 type Window = z.infer<typeof windowSchema>;
@@ -37,20 +39,19 @@ function sinceOf(window: Window): Date | null {
   return new Date(Date.now() - days * DAY_MS);
 }
 
-const MS = { min: 60_000, hour: 3_600_000, day: DAY_MS } as const;
+// 시그널은 삭제 전까지 장기 노출되므로 상대시간("N시간 전") 대신
+// 등록 날짜(KST)를 "YYYY.MM.DD" 형태로 보여준다.
+const signalDateFmt = new Intl.DateTimeFormat("ko-KR", {
+  timeZone: "Asia/Seoul",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
 
-function relativeTime(date: Date): string {
-  const diff = Date.now() - date.getTime();
-  if (diff < MS.min) {
-    return "방금 전";
-  }
-  if (diff < MS.hour) {
-    return `${Math.floor(diff / MS.min)}분 전`;
-  }
-  if (diff < MS.day) {
-    return `${Math.floor(diff / MS.hour)}시간 전`;
-  }
-  return `${Math.floor(diff / MS.day)}일 전`;
+function formatSignalDate(date: Date): string {
+  const parts = signalDateFmt.formatToParts(date);
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
+  return `${get("year")}.${get("month")}.${get("day")}`;
 }
 
 /** Stock code → name for the given codes (one round trip). */
@@ -127,7 +128,7 @@ export const signalRouter = {
         title: r.title,
         body: r.body,
         name: names.get(r.code) ?? r.code,
-        time: relativeTime(r.createdAt),
+        time: formatSignalDate(r.createdAt),
       }));
       const last = page.at(-1);
       const nextCursor = hasMore && last ? last.createdAt.toISOString() : null;
@@ -180,7 +181,20 @@ export const signalRouter = {
       if (!row) {
         throw new Error("시그널 생성 실패");
       }
+      // New signal stock → tell realtime to pin/whitelist it now (not in ~10s).
+      refreshRealtimePins("signal.create");
       return { id: row.id };
+    }),
+
+  // Admin: delete a signal. Signals stay visible until removed, so this is the
+  // counterpart to create — used by the admin manage screen.
+  remove: adminProcedure
+    .input(z.object({ id: z.string().min(1) }))
+    .handler(async ({ input }) => {
+      await db.delete(signal).where(eq(signal.id, input.id));
+      // Stock may no longer be referenced → let realtime drop the pin promptly.
+      refreshRealtimePins("signal.remove");
+      return { ok: true };
     }),
 
   // Count of signals on the current user's watched stocks in the last 24h.

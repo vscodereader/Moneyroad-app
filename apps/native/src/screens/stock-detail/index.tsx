@@ -167,7 +167,7 @@ export default function StockDetailScreen() {
 
   const relSignalsQuery = useQuery(
     orpc.signal.feed.queryOptions({
-      input: { code: stock.code, window: "24h", limit: 2 },
+      input: { code: stock.code, window: "all", limit: 2 },
     })
   );
   const relSignals = relSignalsQuery.data?.items ?? [];

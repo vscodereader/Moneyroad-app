@@ -3,7 +3,7 @@
 import { Pressable, Text, View } from "react-native";
 import { Gradient, IndexIntradayChart, Sparkline } from "@/components/charts";
 import { Icon, SIGNAL_ACTION_ICON } from "@/components/icons";
-import { ScorePill, Skeleton, StockLogo, StrengthBar } from "@/components/ui";
+import { Skeleton, StockLogo, StrengthBar } from "@/components/ui";
 import { type LiveIndex, SESSION_MINUTES } from "@/hooks/use-index-stream";
 import { useLiveQuote } from "@/hooks/use-live-quotes";
 import { useMrTheme } from "@/hooks/use-mr-theme";
@@ -166,9 +166,6 @@ export function StockRow({
         >
           {stock.code} · {stock.sector}
         </Text>
-        <View style={{ marginTop: 6, flexDirection: "row" }}>
-          <ScorePill score={stock.score} />
-        </View>
       </View>
       <View style={{ alignItems: "flex-end", gap: 4 }}>
         {hasSpark && live ? (

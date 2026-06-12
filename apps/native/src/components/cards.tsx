@@ -26,44 +26,89 @@ export function IndexStrip({ indices }: { indices: LiveIndex[] }) {
         borderBottomColor: t.border,
       }}
     >
-      {indices.map((idx) => (
-        <View
-          key={idx.name}
-          style={{ flex: 1, backgroundColor: t.bg, padding: 12, gap: 2 }}
-        >
+      {indices.map((idx) => {
+        const { change, changePct, prevClose, value } = idx;
+        const hasValue =
+          value !== null &&
+          change !== null &&
+          changePct !== null &&
+          prevClose !== null;
+        if (!hasValue) {
+          return (
+            <View
+              key={idx.name}
+              style={{ flex: 1, backgroundColor: t.bg, padding: 12, gap: 2 }}
+            >
+              <View
+                style={{
+                  flexDirection: "row",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                }}
+              >
+                <Text
+                  style={{ fontSize: 11, color: t.fgMuted, fontWeight: "600" }}
+                >
+                  {idx.name}
+                </Text>
+                <Skeleton height={20} radius={4} width={56} />
+              </View>
+              <Text
+                style={{ fontSize: 17, fontWeight: "800", color: t.fgStrong }}
+              >
+                시세 연결 중
+              </Text>
+              <Text
+                style={{ fontSize: 12, fontWeight: "700", color: t.fgMuted }}
+              >
+                지수 데이터를 기다리고 있어요
+              </Text>
+            </View>
+          );
+        }
+        return (
           <View
-            style={{
-              flexDirection: "row",
-              justifyContent: "space-between",
-              alignItems: "center",
-            }}
+            key={idx.name}
+            style={{ flex: 1, backgroundColor: t.bg, padding: 12, gap: 2 }}
           >
-            <Text style={{ fontSize: 11, color: t.fgMuted, fontWeight: "600" }}>
-              {idx.name}
+            <View
+              style={{
+                flexDirection: "row",
+                justifyContent: "space-between",
+                alignItems: "center",
+              }}
+            >
+              <Text
+                style={{ fontSize: 11, color: t.fgMuted, fontWeight: "600" }}
+              >
+                {idx.name}
+              </Text>
+              <IndexIntradayChart
+                height={20}
+                prevClose={prevClose}
+                series={idx.series}
+                sessionMinutes={SESSION_MINUTES}
+                t={t}
+                width={56}
+              />
+            </View>
+            <Text
+              style={{ fontSize: 17, fontWeight: "800", color: t.fgStrong }}
+            >
+              {fmt.indexValue(value)}
             </Text>
-            <IndexIntradayChart
-              height={20}
-              prevClose={idx.prevClose}
-              series={idx.series}
-              sessionMinutes={SESSION_MINUTES}
-              t={t}
-              width={56}
-            />
+            <Text
+              style={{
+                fontSize: 12,
+                fontWeight: "700",
+                color: changeColor(change, t),
+              }}
+            >
+              {fmt.signedNum(change)} ({fmt.pct(changePct)})
+            </Text>
           </View>
-          <Text style={{ fontSize: 17, fontWeight: "800", color: t.fgStrong }}>
-            {fmt.indexValue(idx.value)}
-          </Text>
-          <Text
-            style={{
-              fontSize: 12,
-              fontWeight: "700",
-              color: changeColor(idx.change, t),
-            }}
-          >
-            {fmt.signedNum(idx.change)} ({fmt.pct(idx.changePct)})
-          </Text>
-        </View>
-      ))}
+        );
+      })}
     </View>
   );
 }

@@ -24,7 +24,7 @@ import {
   MrScreen,
   SectionHead,
 } from "@/components/ui";
-import { useLiveQuote } from "@/hooks/use-live-quotes";
+import { type LiveQuote, useLiveQuote } from "@/hooks/use-live-quotes";
 import { useMrTheme } from "@/hooks/use-mr-theme";
 import {
   STOCK_CHART_RANGE_LABELS,
@@ -33,7 +33,7 @@ import {
   useStockChart,
 } from "@/hooks/use-stock-chart";
 import { authClient } from "@/lib/auth-client";
-import { findStock, stocks } from "@/utils/data";
+import { findStock, type Stock } from "@/utils/data";
 import { changeColor, fmt } from "@/utils/format";
 import { nav } from "@/utils/nav";
 import { orpc } from "@/utils/orpc";
@@ -75,22 +75,139 @@ function verdictColorFor(score: number, t: MrTokens): string {
   return t.fgStrong;
 }
 
+function QuoteSummary({
+  live,
+  t,
+}: {
+  live: LiveQuote | undefined;
+  t: MrTokens;
+}) {
+  if (!live) {
+    return (
+      <View style={{ paddingVertical: 8 }}>
+        <Text style={{ color: t.fgStrong, fontSize: 22, fontWeight: "800" }}>
+          시세 연결 중
+        </Text>
+        <Text
+          style={{
+            color: t.fgMuted,
+            fontSize: 13,
+            fontWeight: "600",
+            marginTop: 6,
+          }}
+        >
+          실시간 시세를 기다리고 있어요.
+        </Text>
+      </View>
+    );
+  }
+
+  return (
+    <>
+      <Text
+        style={{
+          fontSize: 34,
+          fontWeight: "800",
+          letterSpacing: -0.5,
+          color: t.fgStrong,
+        }}
+      >
+        {fmt.price(live.price)}
+        <Text style={{ fontSize: 16, fontWeight: "600", color: t.fgMuted }}>
+          {" "}
+          원
+        </Text>
+      </Text>
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 8,
+          marginTop: 4,
+        }}
+      >
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 2 }}>
+          <Text
+            style={{
+              fontSize: 14,
+              fontWeight: "700",
+              color: changeColor(live.change, t),
+            }}
+          >
+            {fmt.signedNum(live.change)} ({fmt.pct(live.changeRate)})
+          </Text>
+        </View>
+        <Text style={{ fontSize: 12, color: t.fgSubtle, fontWeight: "500" }}>
+          오늘
+        </Text>
+      </View>
+    </>
+  );
+}
+
+function StockNotFoundView() {
+  const { t } = useMrTheme();
+
+  return (
+    <MrScreen>
+      <MrHeader left={<BackButton onPress={nav.back} />} title="종목 정보" />
+      <View
+        style={{
+          alignItems: "center",
+          flex: 1,
+          justifyContent: "center",
+          paddingHorizontal: 32,
+        }}
+      >
+        <Icon.alert color={t.fgMuted} size={40} />
+        <Text
+          style={{
+            color: t.fgStrong,
+            fontSize: 18,
+            fontWeight: "800",
+            marginTop: 16,
+            textAlign: "center",
+          }}
+        >
+          종목 정보를 찾을 수 없습니다
+        </Text>
+        <Text
+          style={{
+            color: t.fgMuted,
+            fontSize: 14,
+            fontWeight: "600",
+            lineHeight: 20,
+            marginTop: 8,
+            textAlign: "center",
+          }}
+        >
+          검색이나 관심 종목에서 다시 선택해 주세요.
+        </Text>
+      </View>
+    </MrScreen>
+  );
+}
+
 export default function StockDetailScreen() {
+  const { code } = useLocalSearchParams<{ code: string }>();
+  const stock = code ? findStock(code) : undefined;
+
+  if (!stock) {
+    return <StockNotFoundView />;
+  }
+
+  return <StockDetailContent stock={stock} />;
+}
+
+function StockDetailContent({ stock }: { stock: Stock }) {
   const { t } = useMrTheme();
   const insets = useSafeAreaInsets();
   const meta = signalMeta(t);
-  const { code } = useLocalSearchParams<{ code: string }>();
-  const stock = findStock(code) ?? stocks[0];
   const [range, setRange] = useState<StockChartRange>("1D");
   const [openSignal, setOpenSignal] = useState<string | null>(null);
 
-  // Show 0 until a live tick arrives — the static stock metadata is seed data
-  // and would be mistaken for a real price otherwise.
   const live = useLiveQuote(stock.code);
-  const price = live?.price ?? 0;
-  const change = live?.change ?? 0;
-  const changePct = live?.changeRate ?? 0;
-  const up = change > 0;
+  const up = live ? live.change > 0 : false;
 
   // Range별 차트 시리즈(가격+거래량+prevClose)를 realtime 프록시에서 가져옴.
   // 1D에 한해 마지막 점의 가격을 라이브 가격으로 갱신해 헤더 가격과 차트 끝점이
@@ -233,52 +350,7 @@ export default function StockDetailScreen() {
       <ScrollView showsVerticalScrollIndicator={false}>
         {/* Price */}
         <View style={{ paddingHorizontal: 16, paddingTop: 16 }}>
-          <Text
-            style={{
-              fontSize: 34,
-              fontWeight: "800",
-              letterSpacing: -0.5,
-              color: t.fgStrong,
-            }}
-          >
-            {fmt.price(price)}
-            <Text style={{ fontSize: 16, fontWeight: "600", color: t.fgMuted }}>
-              {" "}
-              원
-            </Text>
-          </Text>
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              gap: 8,
-              marginTop: 4,
-            }}
-          >
-            <View
-              style={{ flexDirection: "row", alignItems: "center", gap: 2 }}
-            >
-              {/*{up ? (*/}
-              {/*  <Icon.arrowUp color={changeColor(change, t)} size={14} />*/}
-              {/*) : (*/}
-              {/*  <Icon.arrowDown color={changeColor(change, t)} size={14} />*/}
-              {/*)}*/}
-              <Text
-                style={{
-                  fontSize: 14,
-                  fontWeight: "700",
-                  color: changeColor(change, t),
-                }}
-              >
-                {fmt.signedNum(change)} ({fmt.pct(changePct)})
-              </Text>
-            </View>
-            <Text
-              style={{ fontSize: 12, color: t.fgSubtle, fontWeight: "500" }}
-            >
-              오늘
-            </Text>
-          </View>
+          <QuoteSummary live={live} t={t} />
         </View>
 
         {/* Chart range tabs */}

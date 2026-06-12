@@ -5,7 +5,6 @@ import { Icon } from "@/components/icons";
 import { BackButton, MrScreen, SectionHead, StockLogo } from "@/components/ui";
 import { useMrTheme } from "@/hooks/use-mr-theme";
 import { findStock, recent, type Stock, stocks, trending } from "@/utils/data";
-import { changeColor, fmt } from "@/utils/format";
 import { nav } from "@/utils/nav";
 import type { MrTokens } from "@/utils/theme";
 
@@ -41,20 +40,9 @@ function ResultRow({ stock, t }: { stock: Stock; t: MrTokens }) {
           {stock.code} · {stock.sector}
         </Text>
       </View>
-      <View style={{ alignItems: "flex-end" }}>
-        <Text style={{ fontSize: 15, fontWeight: "700", color: t.fgStrong }}>
-          {fmt.price(stock.price)}
-        </Text>
-        <Text
-          style={{
-            fontSize: 12,
-            fontWeight: "700",
-            color: changeColor(stock.change, t),
-          }}
-        >
-          {fmt.pct(stock.changePct)}
-        </Text>
-      </View>
+      <Text style={{ color: t.fgSubtle, fontSize: 11, fontWeight: "700" }}>
+        시세 연결 전
+      </Text>
     </Pressable>
   );
 }
@@ -262,12 +250,12 @@ export default function SearchScreen() {
                 </View>
                 <Text
                   style={{
-                    fontSize: 12,
+                    color: t.fgSubtle,
+                    fontSize: 11,
                     fontWeight: "700",
-                    color: changeColor(s.change, t),
                   }}
                 >
-                  {fmt.pct(s.changePct)}
+                  시세 연결 전
                 </Text>
               </Pressable>
             ))}

@@ -122,9 +122,9 @@ export function StockRow({
   onPress?: () => void;
 }) {
   const { t } = useMrTheme();
-  const up = stock.change > 0;
+  const live = useLiveQuote(stock.code);
   const spark = useStockSparkline(stock.code);
-  const sparkData = spark.length > 1 ? spark : stock.spark;
+  const hasSpark = spark.length > 1;
   return (
     <Pressable
       android_ripple={{ color: t.bgSubtle }}
@@ -171,25 +171,39 @@ export function StockRow({
         </View>
       </View>
       <View style={{ alignItems: "flex-end", gap: 4 }}>
-        <Sparkline
-          data={sparkData}
-          height={22}
-          positive={up}
-          t={t}
-          width={64}
-        />
-        <Text style={{ fontSize: 15, fontWeight: "700", color: t.fgStrong }}>
-          {fmt.price(stock.price)}
-        </Text>
-        <Text
-          style={{
-            fontSize: 12,
-            fontWeight: "700",
-            color: changeColor(stock.change, t),
-          }}
-        >
-          {fmt.pct(stock.changePct)}
-        </Text>
+        {hasSpark && live ? (
+          <Sparkline
+            data={spark}
+            height={22}
+            positive={live.change > 0}
+            t={t}
+            width={64}
+          />
+        ) : (
+          <Skeleton height={22} radius={4} width={64} />
+        )}
+        {live ? (
+          <>
+            <Text
+              style={{ fontSize: 15, fontWeight: "700", color: t.fgStrong }}
+            >
+              {fmt.price(live.price)}
+            </Text>
+            <Text
+              style={{
+                fontSize: 12,
+                fontWeight: "700",
+                color: changeColor(live.change, t),
+              }}
+            >
+              {fmt.pct(live.changeRate)}
+            </Text>
+          </>
+        ) : (
+          <Text style={{ fontSize: 13, fontWeight: "700", color: t.fgMuted }}>
+            시세 연결 중
+          </Text>
+        )}
       </View>
     </Pressable>
   );
@@ -325,11 +339,8 @@ function SignalStockRow({
   t: MrTokens;
 }) {
   const live = useLiveQuote(stock.code);
-  const price = live?.price ?? stock.price;
-  const change = live?.change ?? stock.change;
-  const changePct = live?.changeRate ?? stock.changePct;
   const spark = useStockSparkline(stock.code);
-  const sparkData = spark.length > 1 ? spark : stock.spark;
+  const hasSpark = spark.length > 1;
   return (
     <Pressable
       android_ripple={onPress ? { color: t.bgMuted } : undefined}
@@ -351,20 +362,28 @@ function SignalStockRow({
         <Text style={{ fontSize: 13, fontWeight: "700", color: t.fgStrong }}>
           {stock.name}
         </Text>
-        <Text style={{ fontSize: 11, color: t.fgMuted }}>
-          {fmt.price(price)}원 ·{" "}
-          <Text style={{ color: changeColor(change, t) }}>
-            {fmt.pct(changePct)}
+        {live ? (
+          <Text style={{ fontSize: 11, color: t.fgMuted }}>
+            {fmt.price(live.price)}원 ·{" "}
+            <Text style={{ color: changeColor(live.change, t) }}>
+              {fmt.pct(live.changeRate)}
+            </Text>
           </Text>
-        </Text>
+        ) : (
+          <Text style={{ fontSize: 11, color: t.fgMuted }}>시세 연결 중</Text>
+        )}
       </View>
-      <Sparkline
-        data={sparkData}
-        height={22}
-        positive={change > 0}
-        t={t}
-        width={56}
-      />
+      {hasSpark && live ? (
+        <Sparkline
+          data={spark}
+          height={22}
+          positive={live.change > 0}
+          t={t}
+          width={56}
+        />
+      ) : (
+        <Skeleton height={22} radius={4} width={56} />
+      )}
       {onPress ? <Icon.chevRight color={t.fgSubtle} size={18} /> : null}
     </Pressable>
   );

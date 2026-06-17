@@ -88,7 +88,12 @@ function WatchlistPreview({
   isLoading,
   t,
 }: {
-  items: { code: string; market: string; name: string }[];
+  items: {
+    code: string;
+    iconUrl?: null | string;
+    market: string;
+    name: string;
+  }[];
   isLoading: boolean;
   t: MrTokens;
 }) {

@@ -1,10 +1,19 @@
 import { db } from "@moneyroad-app/db";
-import { stockMaster, userWatchlist } from "@moneyroad-app/db/schema";
+import {
+  stockMaster,
+  stockResource,
+  userWatchlist,
+} from "@moneyroad-app/db/schema";
 import { and, desc, eq } from "drizzle-orm";
 import z from "zod";
 
 import { protectedProcedure } from "../index";
 import { refreshRealtimePins } from "../lib/realtime-trigger";
+import {
+  buildStockResourceUrl,
+  STOCK_ICON_RESOURCE_TYPE,
+  STOCK_RESOURCE_READY_STATUS,
+} from "../lib/stock-resource";
 
 // The app's watchlist powers news features (watch tab + breaking push), so
 // entries are stored as type='news'. A signal-type watch is future work.
@@ -19,12 +28,22 @@ export const watchlistRouter = {
         code: userWatchlist.stockCode,
         name: stockMaster.htsKorIsnm,
         market: stockMaster.marketType,
+        iconStorageBucket: stockResource.storageBucket,
+        iconStorageKey: stockResource.storageKey,
         createdAt: userWatchlist.createdAt,
       })
       .from(userWatchlist)
       .innerJoin(
         stockMaster,
         eq(userWatchlist.stockCode, stockMaster.mkscShrnIscd)
+      )
+      .leftJoin(
+        stockResource,
+        and(
+          eq(stockResource.stockCode, userWatchlist.stockCode),
+          eq(stockResource.resourceType, STOCK_ICON_RESOURCE_TYPE),
+          eq(stockResource.status, STOCK_RESOURCE_READY_STATUS)
+        )
       )
       .where(
         and(
@@ -37,6 +56,10 @@ export const watchlistRouter = {
       code: r.code,
       name: r.name,
       market: r.market,
+      iconUrl: buildStockResourceUrl({
+        storageBucket: r.iconStorageBucket,
+        storageKey: r.iconStorageKey,
+      }),
       createdAt: r.createdAt.toISOString(),
     }));
   }),

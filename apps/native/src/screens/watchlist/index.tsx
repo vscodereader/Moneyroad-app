@@ -152,7 +152,10 @@ export default function WatchlistScreen() {
       if (cur.some((w) => w.code === entry.code)) {
         return cur;
       }
-      return [{ ...entry, createdAt: new Date().toISOString() }, ...cur];
+      return [
+        { ...entry, createdAt: new Date().toISOString(), iconUrl: null },
+        ...cur,
+      ];
     });
     addMut.mutate({ stockCode: entry.code });
     setQ("");

@@ -23,6 +23,7 @@ import {
   MrHeader,
   MrScreen,
   SectionHead,
+  StockResourceLogo,
 } from "@/components/ui";
 import { type LiveQuote, useLiveQuote } from "@/hooks/use-live-quotes";
 import { useMrTheme } from "@/hooks/use-mr-theme";
@@ -264,6 +265,10 @@ function StockDetailContent({ stock }: { stock: Stock }) {
   });
   const relRoomsQuery = useQuery(relRoomsOptions);
   const relRooms = (relRoomsQuery.data ?? []).slice(0, 2);
+  const stockDetailQuery = useQuery(
+    orpc.stock.detail.queryOptions({ input: { code: stock.code } })
+  );
+  const stockIconUrl = stockDetailQuery.data?.iconUrl ?? null;
 
   const toggleLike = useMutation(
     orpc.discussion.toggleLike.mutationOptions({
@@ -297,15 +302,39 @@ function StockDetailContent({ stock }: { stock: Stock }) {
           </>
         }
         title={
-          <View>
-            <Text
-              style={{ fontSize: 16, fontWeight: "800", color: t.fgStrong }}
-            >
-              {stock.name}
-            </Text>
-            <Text style={{ fontSize: 11, color: t.fgMuted, fontWeight: "600" }}>
-              {stock.code} · {stock.sector}
-            </Text>
+          <View
+            style={{
+              alignItems: "center",
+              flexDirection: "row",
+              gap: 8,
+              minWidth: 0,
+            }}
+          >
+            <StockResourceLogo
+              iconUrl={stockIconUrl}
+              imageSize={24}
+              name={stock.name}
+              radius={8}
+              size={32}
+            />
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text
+                numberOfLines={1}
+                style={{ color: t.fgStrong, fontSize: 16, fontWeight: "800" }}
+              >
+                {stock.name}
+              </Text>
+              <Text
+                numberOfLines={1}
+                style={{
+                  color: t.fgMuted,
+                  fontSize: 11,
+                  fontWeight: "600",
+                }}
+              >
+                {stock.code} · {stock.sector}
+              </Text>
+            </View>
           </View>
         }
       />

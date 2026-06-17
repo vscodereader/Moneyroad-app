@@ -1,8 +1,9 @@
 // MoneyRoad — shared UI atoms
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import {
   type DimensionValue,
+  Image,
   Pressable,
   type StyleProp,
   Text,
@@ -204,6 +205,62 @@ export function StockLogo({
       >
         {stock.logo}
       </Text>
+    </View>
+  );
+}
+
+export function StockResourceLogo({
+  iconUrl,
+  imageSize,
+  name,
+  radius = 10,
+  size = 36,
+}: {
+  iconUrl?: null | string;
+  imageSize?: number;
+  name: string;
+  radius?: number;
+  size?: number;
+}) {
+  const { t } = useMrTheme();
+  const [iconLoadFailed, setIconLoadFailed] = useState(false);
+  const logoSize = imageSize ?? Math.max(0, size - 8);
+
+  useEffect(() => {
+    setIconLoadFailed(false);
+  }, [iconUrl]);
+
+  return (
+    <View
+      style={{
+        alignItems: "center",
+        backgroundColor: t.bgSubtle,
+        borderRadius: radius,
+        height: size,
+        justifyContent: "center",
+        overflow: "hidden",
+        width: size,
+      }}
+    >
+      {iconUrl && !iconLoadFailed ? (
+        <Image
+          accessibilityLabel={`${name} 로고`}
+          onError={() => setIconLoadFailed(true)}
+          resizeMode="contain"
+          source={{ uri: iconUrl }}
+          style={{ borderRadius: radius, height: logoSize, width: logoSize }}
+        />
+      ) : (
+        <Text
+          style={{
+            color: t.fgMuted,
+            fontSize: size > 32 ? 15 : 13,
+            fontWeight: "800",
+          }}
+        >
+          {name.charAt(0)}
+        </Text>
+      )}
     </View>
   );
 }

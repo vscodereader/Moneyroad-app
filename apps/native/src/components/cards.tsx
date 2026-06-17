@@ -3,7 +3,12 @@
 import { Pressable, Text, View } from "react-native";
 import { Gradient, IndexIntradayChart, Sparkline } from "@/components/charts";
 import { Icon, SIGNAL_ACTION_ICON } from "@/components/icons";
-import { Skeleton, StockLogo, StrengthBar } from "@/components/ui";
+import {
+  Skeleton,
+  StockLogo,
+  StockResourceLogo,
+  StrengthBar,
+} from "@/components/ui";
 import { type LiveIndex, SESSION_MINUTES } from "@/hooks/use-index-stream";
 import { useLiveQuote } from "@/hooks/use-live-quotes";
 import { useMrTheme } from "@/hooks/use-mr-theme";
@@ -211,7 +216,12 @@ export function WatchRow({
   entry,
   onPress,
 }: {
-  entry: { code: string; market: string; name: string };
+  entry: {
+    code: string;
+    iconUrl?: null | string;
+    market: string;
+    name: string;
+  };
   onPress?: () => void;
 }) {
   const { t } = useMrTheme();
@@ -233,20 +243,7 @@ export function WatchRow({
         paddingVertical: 14,
       })}
     >
-      <View
-        style={{
-          alignItems: "center",
-          backgroundColor: t.bgSubtle,
-          borderRadius: 10,
-          height: 36,
-          justifyContent: "center",
-          width: 36,
-        }}
-      >
-        <Text style={{ color: t.fgMuted, fontSize: 15, fontWeight: "800" }}>
-          {entry.name.charAt(0)}
-        </Text>
-      </View>
+      <StockResourceLogo iconUrl={entry.iconUrl} name={entry.name} />
       <View style={{ flex: 1, minWidth: 0 }}>
         <Text
           numberOfLines={1}

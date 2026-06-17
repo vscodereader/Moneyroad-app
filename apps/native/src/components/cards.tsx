@@ -3,7 +3,7 @@
 import { Pressable, Text, View } from "react-native";
 import { Gradient, IndexIntradayChart, Sparkline } from "@/components/charts";
 import { Icon, SIGNAL_ACTION_ICON } from "@/components/icons";
-import { ScorePill, Skeleton, StockLogo, StrengthBar } from "@/components/ui";
+import { Skeleton, StockLogo, StrengthBar } from "@/components/ui";
 import { type LiveIndex, SESSION_MINUTES } from "@/hooks/use-index-stream";
 import { useLiveQuote } from "@/hooks/use-live-quotes";
 import { useMrTheme } from "@/hooks/use-mr-theme";
@@ -26,44 +26,89 @@ export function IndexStrip({ indices }: { indices: LiveIndex[] }) {
         borderBottomColor: t.border,
       }}
     >
-      {indices.map((idx) => (
-        <View
-          key={idx.name}
-          style={{ flex: 1, backgroundColor: t.bg, padding: 12, gap: 2 }}
-        >
+      {indices.map((idx) => {
+        const { change, changePct, prevClose, value } = idx;
+        const hasValue =
+          value !== null &&
+          change !== null &&
+          changePct !== null &&
+          prevClose !== null;
+        if (!hasValue) {
+          return (
+            <View
+              key={idx.name}
+              style={{ flex: 1, backgroundColor: t.bg, padding: 12, gap: 2 }}
+            >
+              <View
+                style={{
+                  flexDirection: "row",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                }}
+              >
+                <Text
+                  style={{ fontSize: 11, color: t.fgMuted, fontWeight: "600" }}
+                >
+                  {idx.name}
+                </Text>
+                <Skeleton height={20} radius={4} width={56} />
+              </View>
+              <Text
+                style={{ fontSize: 17, fontWeight: "800", color: t.fgStrong }}
+              >
+                시세 연결 중
+              </Text>
+              <Text
+                style={{ fontSize: 12, fontWeight: "700", color: t.fgMuted }}
+              >
+                지수 데이터를 기다리고 있어요
+              </Text>
+            </View>
+          );
+        }
+        return (
           <View
-            style={{
-              flexDirection: "row",
-              justifyContent: "space-between",
-              alignItems: "center",
-            }}
+            key={idx.name}
+            style={{ flex: 1, backgroundColor: t.bg, padding: 12, gap: 2 }}
           >
-            <Text style={{ fontSize: 11, color: t.fgMuted, fontWeight: "600" }}>
-              {idx.name}
+            <View
+              style={{
+                flexDirection: "row",
+                justifyContent: "space-between",
+                alignItems: "center",
+              }}
+            >
+              <Text
+                style={{ fontSize: 11, color: t.fgMuted, fontWeight: "600" }}
+              >
+                {idx.name}
+              </Text>
+              <IndexIntradayChart
+                height={20}
+                prevClose={prevClose}
+                series={idx.series}
+                sessionMinutes={SESSION_MINUTES}
+                t={t}
+                width={56}
+              />
+            </View>
+            <Text
+              style={{ fontSize: 17, fontWeight: "800", color: t.fgStrong }}
+            >
+              {fmt.indexValue(value)}
             </Text>
-            <IndexIntradayChart
-              height={20}
-              prevClose={idx.prevClose}
-              series={idx.series}
-              sessionMinutes={SESSION_MINUTES}
-              t={t}
-              width={56}
-            />
+            <Text
+              style={{
+                fontSize: 12,
+                fontWeight: "700",
+                color: changeColor(change, t),
+              }}
+            >
+              {fmt.signedNum(change)} ({fmt.pct(changePct)})
+            </Text>
           </View>
-          <Text style={{ fontSize: 17, fontWeight: "800", color: t.fgStrong }}>
-            {fmt.indexValue(idx.value)}
-          </Text>
-          <Text
-            style={{
-              fontSize: 12,
-              fontWeight: "700",
-              color: changeColor(idx.change, t),
-            }}
-          >
-            {fmt.signedNum(idx.change)} ({fmt.pct(idx.changePct)})
-          </Text>
-        </View>
-      ))}
+        );
+      })}
     </View>
   );
 }
@@ -77,9 +122,9 @@ export function StockRow({
   onPress?: () => void;
 }) {
   const { t } = useMrTheme();
-  const up = stock.change > 0;
+  const live = useLiveQuote(stock.code);
   const spark = useStockSparkline(stock.code);
-  const sparkData = spark.length > 1 ? spark : stock.spark;
+  const hasSpark = spark.length > 1;
   return (
     <Pressable
       android_ripple={{ color: t.bgSubtle }}
@@ -121,30 +166,41 @@ export function StockRow({
         >
           {stock.code} · {stock.sector}
         </Text>
-        <View style={{ marginTop: 6, flexDirection: "row" }}>
-          <ScorePill score={stock.score} />
-        </View>
       </View>
       <View style={{ alignItems: "flex-end", gap: 4 }}>
-        <Sparkline
-          data={sparkData}
-          height={22}
-          positive={up}
-          t={t}
-          width={64}
-        />
-        <Text style={{ fontSize: 15, fontWeight: "700", color: t.fgStrong }}>
-          {fmt.price(stock.price)}
-        </Text>
-        <Text
-          style={{
-            fontSize: 12,
-            fontWeight: "700",
-            color: changeColor(stock.change, t),
-          }}
-        >
-          {fmt.pct(stock.changePct)}
-        </Text>
+        {hasSpark && live ? (
+          <Sparkline
+            data={spark}
+            height={22}
+            positive={live.change > 0}
+            t={t}
+            width={64}
+          />
+        ) : (
+          <Skeleton height={22} radius={4} width={64} />
+        )}
+        {live ? (
+          <>
+            <Text
+              style={{ fontSize: 15, fontWeight: "700", color: t.fgStrong }}
+            >
+              {fmt.price(live.price)}
+            </Text>
+            <Text
+              style={{
+                fontSize: 12,
+                fontWeight: "700",
+                color: changeColor(live.change, t),
+              }}
+            >
+              {fmt.pct(live.changeRate)}
+            </Text>
+          </>
+        ) : (
+          <Text style={{ fontSize: 13, fontWeight: "700", color: t.fgMuted }}>
+            시세 연결 중
+          </Text>
+        )}
       </View>
     </Pressable>
   );
@@ -280,11 +336,8 @@ function SignalStockRow({
   t: MrTokens;
 }) {
   const live = useLiveQuote(stock.code);
-  const price = live?.price ?? stock.price;
-  const change = live?.change ?? stock.change;
-  const changePct = live?.changeRate ?? stock.changePct;
   const spark = useStockSparkline(stock.code);
-  const sparkData = spark.length > 1 ? spark : stock.spark;
+  const hasSpark = spark.length > 1;
   return (
     <Pressable
       android_ripple={onPress ? { color: t.bgMuted } : undefined}
@@ -306,20 +359,28 @@ function SignalStockRow({
         <Text style={{ fontSize: 13, fontWeight: "700", color: t.fgStrong }}>
           {stock.name}
         </Text>
-        <Text style={{ fontSize: 11, color: t.fgMuted }}>
-          {fmt.price(price)}원 ·{" "}
-          <Text style={{ color: changeColor(change, t) }}>
-            {fmt.pct(changePct)}
+        {live ? (
+          <Text style={{ fontSize: 11, color: t.fgMuted }}>
+            {fmt.price(live.price)}원 ·{" "}
+            <Text style={{ color: changeColor(live.change, t) }}>
+              {fmt.pct(live.changeRate)}
+            </Text>
           </Text>
-        </Text>
+        ) : (
+          <Text style={{ fontSize: 11, color: t.fgMuted }}>시세 연결 중</Text>
+        )}
       </View>
-      <Sparkline
-        data={sparkData}
-        height={22}
-        positive={change > 0}
-        t={t}
-        width={56}
-      />
+      {hasSpark && live ? (
+        <Sparkline
+          data={spark}
+          height={22}
+          positive={live.change > 0}
+          t={t}
+          width={56}
+        />
+      ) : (
+        <Skeleton height={22} radius={4} width={56} />
+      )}
       {onPress ? <Icon.chevRight color={t.fgSubtle} size={18} /> : null}
     </Pressable>
   );

@@ -16,7 +16,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Gradient } from "@/components/charts";
 import { Icon } from "@/components/icons";
-import { SegmentedControl, StockLogo, Switch } from "@/components/ui";
+import { SegmentedControl, Switch } from "@/components/ui";
 import { useMrTheme } from "@/hooks/use-mr-theme";
 import { useNotificationSettings } from "@/hooks/use-notification-settings";
 import { authClient } from "@/lib/auth-client";
@@ -30,7 +30,6 @@ import {
   SettingsScreen,
   Slider,
 } from "@/screens/settings/ui";
-import { findStock } from "@/utils/data";
 import { fmt } from "@/utils/format";
 import { nav } from "@/utils/nav";
 import { orpc } from "@/utils/orpc";
@@ -157,11 +156,7 @@ function PriceAlertRow({
   onRemove: () => void;
 }) {
   const { t } = useMrTheme();
-  const stock = findStock(alert.stockCode);
-  const name = stock?.name ?? alert.stockName ?? alert.stockCode;
-  const diff = stock
-    ? ((alert.targetPrice - stock.price) / stock.price) * 100
-    : null;
+  const name = alert.stockName ?? alert.stockCode;
   return (
     <View
       style={{
@@ -175,24 +170,20 @@ function PriceAlertRow({
         borderBottomColor: t.border,
       }}
     >
-      {stock ? (
-        <StockLogo radius={8} size={36} stock={stock} />
-      ) : (
-        <View
-          style={{
-            width: 36,
-            height: 36,
-            borderRadius: 8,
-            backgroundColor: t.bgSubtle,
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <Text style={{ fontSize: 14, fontWeight: "800", color: t.fgMuted }}>
-            {name.charAt(0)}
-          </Text>
-        </View>
-      )}
+      <View
+        style={{
+          width: 36,
+          height: 36,
+          borderRadius: 8,
+          backgroundColor: t.bgSubtle,
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <Text style={{ fontSize: 14, fontWeight: "800", color: t.fgMuted }}>
+          {name.charAt(0)}
+        </Text>
+      </View>
       <View style={{ flex: 1, minWidth: 0 }}>
         <Text style={{ fontSize: 14, fontWeight: "700", color: t.fgStrong }}>
           {name}
@@ -210,12 +201,6 @@ function PriceAlertRow({
             {" "}
             {fmt.price(alert.targetPrice)}원
           </Text>
-          {diff === null ? null : (
-            <Text style={{ color: t.fgSubtle }}>
-              {"  "}(현재가 대비 {diff > 0 ? "+" : ""}
-              {diff.toFixed(1)}%)
-            </Text>
-          )}
         </Text>
       </View>
       <Switch on={alert.active} onChange={onToggle} />

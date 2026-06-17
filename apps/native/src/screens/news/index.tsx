@@ -15,18 +15,11 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { NewsCard } from "@/components/cards";
 import { Icon } from "@/components/icons";
-import {
-  Chip,
-  MrHeader,
-  MrScreen,
-  ScorePill,
-  StockLogo,
-} from "@/components/ui";
+import { Chip, MrHeader, MrScreen, StockLogo } from "@/components/ui";
 import { useMrTheme } from "@/hooks/use-mr-theme";
 import { type NewsTab, useNewsStream } from "@/hooks/use-news-stream";
 import { authClient } from "@/lib/auth-client";
 import { findStock, type NewsItem } from "@/utils/data";
-import { changeColor, fmt } from "@/utils/format";
 import { orpc } from "@/utils/orpc";
 
 const TABS: { k: NewsTab; l: string }[] = [
@@ -174,16 +167,10 @@ function NewsSheet({ item, onClose }: { item: NewsItem; onClose: () => void }) {
                 >
                   {stockName}
                 </Text>
-                {dummyStock ? (
-                  <Text style={{ fontSize: 12, color: t.fgMuted }}>
-                    {fmt.price(dummyStock.price)}원 ·{" "}
-                    <Text style={{ color: changeColor(dummyStock.change, t) }}>
-                      {fmt.pct(dummyStock.changePct)}
-                    </Text>
-                  </Text>
-                ) : null}
+                <Text style={{ fontSize: 12, color: t.fgMuted }}>
+                  시세 정보는 준비 중입니다.
+                </Text>
               </View>
-              {dummyStock ? <ScorePill score={dummyStock.score} /> : null}
             </View>
           ) : null}
 

@@ -24,7 +24,7 @@ import {
   MrScreen,
   SectionHead,
 } from "@/components/ui";
-import { useLiveQuote } from "@/hooks/use-live-quotes";
+import { type LiveQuote, useLiveQuote } from "@/hooks/use-live-quotes";
 import { useMrTheme } from "@/hooks/use-mr-theme";
 import {
   STOCK_CHART_RANGE_LABELS,
@@ -33,64 +33,146 @@ import {
   useStockChart,
 } from "@/hooks/use-stock-chart";
 import { authClient } from "@/lib/auth-client";
-import { findStock, stocks } from "@/utils/data";
+import { findStock, type Stock } from "@/utils/data";
 import { changeColor, fmt } from "@/utils/format";
 import { nav } from "@/utils/nav";
 import { orpc } from "@/utils/orpc";
-//import { type MrTokens, SIGNAL_TYPE_KEYS, signalMeta } from "@/utils/theme";
-import { type MrTokens, signalMeta } from "@/utils/theme";
+import type { MrTokens } from "@/utils/theme";
 
 const RANGES: readonly StockChartRange[] = STOCK_CHART_RANGES;
 
-function scoreVerdict(score: number): string {
-  if (score >= 80) {
-    return "강한 매수 시그널";
+function QuoteSummary({
+  live,
+  t,
+}: {
+  live: LiveQuote | undefined;
+  t: MrTokens;
+}) {
+  if (!live) {
+    return (
+      <View style={{ paddingVertical: 8 }}>
+        <Text style={{ color: t.fgStrong, fontSize: 22, fontWeight: "800" }}>
+          시세 연결 중
+        </Text>
+        <Text
+          style={{
+            color: t.fgMuted,
+            fontSize: 13,
+            fontWeight: "600",
+            marginTop: 6,
+          }}
+        >
+          실시간 시세를 기다리고 있어요.
+        </Text>
+      </View>
+    );
   }
-  if (score >= 65) {
-    return "매수 우위";
-  }
-  if (score >= 50) {
-    return "중립";
-  }
-  return "약세 우위";
+
+  return (
+    <>
+      <Text
+        style={{
+          fontSize: 34,
+          fontWeight: "800",
+          letterSpacing: -0.5,
+          color: t.fgStrong,
+        }}
+      >
+        {fmt.price(live.price)}
+        <Text style={{ fontSize: 16, fontWeight: "600", color: t.fgMuted }}>
+          {" "}
+          원
+        </Text>
+      </Text>
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 8,
+          marginTop: 4,
+        }}
+      >
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 2 }}>
+          <Text
+            style={{
+              fontSize: 14,
+              fontWeight: "700",
+              color: changeColor(live.change, t),
+            }}
+          >
+            {fmt.signedNum(live.change)} ({fmt.pct(live.changeRate)})
+          </Text>
+        </View>
+        <Text style={{ fontSize: 12, color: t.fgSubtle, fontWeight: "500" }}>
+          오늘
+        </Text>
+      </View>
+    </>
+  );
 }
 
-function summaryBgFor(score: number, t: MrTokens): string {
-  if (score >= 70) {
-    return t.upBg;
-  }
-  if (score < 50) {
-    return t.downBg;
-  }
-  return t.bgSubtle;
-}
+function StockNotFoundView() {
+  const { t } = useMrTheme();
 
-function verdictColorFor(score: number, t: MrTokens): string {
-  if (score >= 70) {
-    return t.upStrong;
-  }
-  if (score < 50) {
-    return t.downStrong;
-  }
-  return t.fgStrong;
+  return (
+    <MrScreen>
+      <MrHeader left={<BackButton onPress={nav.back} />} title="종목 정보" />
+      <View
+        style={{
+          alignItems: "center",
+          flex: 1,
+          justifyContent: "center",
+          paddingHorizontal: 32,
+        }}
+      >
+        <Icon.alert color={t.fgMuted} size={40} />
+        <Text
+          style={{
+            color: t.fgStrong,
+            fontSize: 18,
+            fontWeight: "800",
+            marginTop: 16,
+            textAlign: "center",
+          }}
+        >
+          종목 정보를 찾을 수 없습니다
+        </Text>
+        <Text
+          style={{
+            color: t.fgMuted,
+            fontSize: 14,
+            fontWeight: "600",
+            lineHeight: 20,
+            marginTop: 8,
+            textAlign: "center",
+          }}
+        >
+          검색이나 관심 종목에서 다시 선택해 주세요.
+        </Text>
+      </View>
+    </MrScreen>
+  );
 }
 
 export default function StockDetailScreen() {
+  const { code } = useLocalSearchParams<{ code: string }>();
+  const stock = code ? findStock(code) : undefined;
+
+  if (!stock) {
+    return <StockNotFoundView />;
+  }
+
+  return <StockDetailContent stock={stock} />;
+}
+
+function StockDetailContent({ stock }: { stock: Stock }) {
   const { t } = useMrTheme();
   const insets = useSafeAreaInsets();
-  const meta = signalMeta(t);
-  const { code } = useLocalSearchParams<{ code: string }>();
-  const stock = findStock(code) ?? stocks[0];
   const [range, setRange] = useState<StockChartRange>("1D");
   const [openSignal, setOpenSignal] = useState<string | null>(null);
 
-  // Show 0 until a live tick arrives — the static stock metadata is seed data
-  // and would be mistaken for a real price otherwise.
   const live = useLiveQuote(stock.code);
-  const price = live?.price ?? 0;
-  const change = live?.change ?? 0;
-  const changePct = live?.changeRate ?? 0;
-  const up = change > 0;
+  const up = live ? live.change > 0 : false;
 
   // Range별 차트 시리즈(가격+거래량+prevClose)를 realtime 프록시에서 가져옴.
   // 1D에 한해 마지막 점의 가격을 라이브 가격으로 갱신해 헤더 가격과 차트 끝점이
@@ -196,9 +278,6 @@ export default function StockDetailScreen() {
     toggleLike.mutate({ roomId });
   };
 
-  const summaryBg = summaryBgFor(stock.score, t);
-  const verdictColor = verdictColorFor(stock.score, t);
-
   return (
     <MrScreen>
       <MrHeader
@@ -233,52 +312,7 @@ export default function StockDetailScreen() {
       <ScrollView showsVerticalScrollIndicator={false}>
         {/* Price */}
         <View style={{ paddingHorizontal: 16, paddingTop: 16 }}>
-          <Text
-            style={{
-              fontSize: 34,
-              fontWeight: "800",
-              letterSpacing: -0.5,
-              color: t.fgStrong,
-            }}
-          >
-            {fmt.price(price)}
-            <Text style={{ fontSize: 16, fontWeight: "600", color: t.fgMuted }}>
-              {" "}
-              원
-            </Text>
-          </Text>
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              gap: 8,
-              marginTop: 4,
-            }}
-          >
-            <View
-              style={{ flexDirection: "row", alignItems: "center", gap: 2 }}
-            >
-              {/*{up ? (*/}
-              {/*  <Icon.arrowUp color={changeColor(change, t)} size={14} />*/}
-              {/*) : (*/}
-              {/*  <Icon.arrowDown color={changeColor(change, t)} size={14} />*/}
-              {/*)}*/}
-              <Text
-                style={{
-                  fontSize: 14,
-                  fontWeight: "700",
-                  color: changeColor(change, t),
-                }}
-              >
-                {fmt.signedNum(change)} ({fmt.pct(changePct)})
-              </Text>
-            </View>
-            <Text
-              style={{ fontSize: 12, color: t.fgSubtle, fontWeight: "500" }}
-            >
-              오늘
-            </Text>
-          </View>
+          <QuoteSummary live={live} t={t} />
         </View>
 
         {/* Chart range tabs */}
@@ -345,110 +379,6 @@ export default function StockDetailScreen() {
             </View>
           )}
         </View>
-
-        {/* Composite signal */}
-        {/*<SectionHead title="종합 시그널 분석" />*/}
-        {/*<View style={{ paddingHorizontal: 16 }}>*/}
-        {/*  <View*/}
-        {/*    style={{*/}
-        {/*      flexDirection: "row",*/}
-        {/*      gap: 16,*/}
-        {/*      alignItems: "center",*/}
-        {/*      backgroundColor: t.bgElev,*/}
-        {/*      borderWidth: 1,*/}
-        {/*      borderColor: t.border,*/}
-        {/*      borderRadius: 12,*/}
-        {/*      padding: 16,*/}
-        {/*    }}*/}
-        {/*  >*/}
-        {/*    <View*/}
-        {/*      style={{*/}
-        {/*        width: 120,*/}
-        {/*        height: 120,*/}
-        {/*        alignItems: "center",*/}
-        {/*        justifyContent: "center",*/}
-        {/*      }}*/}
-        {/*    >*/}
-        {/*      <SignalDial breakdown={stock.signalBreakdown} size={120} t={t} />*/}
-        {/*      <View style={{ position: "absolute", alignItems: "center" }}>*/}
-        {/*        <Text*/}
-        {/*          style={{ fontSize: 11, color: t.fgMuted, fontWeight: "700" }}*/}
-        {/*        >*/}
-        {/*          종합 시그널*/}
-        {/*        </Text>*/}
-        {/*        <Text*/}
-        {/*          style={{*/}
-        {/*            fontSize: 36,*/}
-        {/*            fontWeight: "800",*/}
-        {/*            color: t.fgStrong,*/}
-        {/*            marginTop: 2,*/}
-        {/*          }}*/}
-        {/*        >*/}
-        {/*          {stock.score}*/}
-        {/*        </Text>*/}
-        {/*        <Text*/}
-        {/*          style={{ fontSize: 11, color: t.fgMuted, fontWeight: "600" }}*/}
-        {/*        >*/}
-        {/*          / 100*/}
-        {/*        </Text>*/}
-        {/*      </View>*/}
-        {/*    </View>*/}
-        {/*    <View style={{ flex: 1, gap: 8 }}>*/}
-        {/*      {SIGNAL_TYPE_KEYS.map((k) => (*/}
-        {/*        <View*/}
-        {/*          key={k}*/}
-        {/*          style={{ flexDirection: "row", alignItems: "center", gap: 8 }}*/}
-        {/*        >*/}
-        {/*          <View*/}
-        {/*            style={{*/}
-        {/*              width: 8,*/}
-        {/*              height: 8,*/}
-        {/*              borderRadius: 999,*/}
-        {/*              backgroundColor: meta[k].color,*/}
-        {/*            }}*/}
-        {/*          />*/}
-        {/*          <Text*/}
-        {/*            style={{*/}
-        {/*              flex: 1,*/}
-        {/*              fontSize: 12,*/}
-        {/*              fontWeight: "600",*/}
-        {/*              color: t.fgMuted,*/}
-        {/*            }}*/}
-        {/*          >*/}
-        {/*            {meta[k].label}*/}
-        {/*          </Text>*/}
-        {/*          <Text*/}
-        {/*            style={{*/}
-        {/*              fontSize: 13,*/}
-        {/*              fontWeight: "800",*/}
-        {/*              color: t.fgStrong,*/}
-        {/*            }}*/}
-        {/*          >*/}
-        {/*            {stock.signalBreakdown[k]}*/}
-        {/*          </Text>*/}
-        {/*        </View>*/}
-        {/*      ))}*/}
-        {/*    </View>*/}
-        {/*  </View>*/}
-        {/*  <View*/}
-        {/*    style={{*/}
-        {/*      marginTop: 10,*/}
-        {/*      paddingVertical: 10,*/}
-        {/*      paddingHorizontal: 12,*/}
-        {/*      backgroundColor: summaryBg,*/}
-        {/*      borderRadius: 10,*/}
-        {/*    }}*/}
-        {/*  >*/}
-        {/*    <Text style={{ fontSize: 12, lineHeight: 18, color: t.fgStrong }}>*/}
-        {/*      <Text style={{ fontWeight: "800", color: verdictColor }}>*/}
-        {/*        {scoreVerdict(stock.score)}*/}
-        {/*      </Text>*/}
-        {/*      {*/}
-        {/*        " · 최근 24시간 4개 시그널 종합 점수입니다. 시그널 점수는 매매 권유가 아닙니다."*/}
-        {/*      }*/}
-        {/*    </Text>*/}
-        {/*  </View>*/}
-        {/*</View>*/}
 
         {/* Recent signals */}
         <SectionHead more="더보기" title="최근 시그널" />

@@ -12,23 +12,16 @@ import { Icon } from "@/components/icons";
 import { SegmentedControl } from "@/components/ui";
 import { useMrTheme } from "@/hooks/use-mr-theme";
 import { SettingsGroup, SettingsScreen } from "@/screens/settings/ui";
-import { findStock } from "@/utils/data";
 import { fmt } from "@/utils/format";
 import { nav } from "@/utils/nav";
 import { orpc } from "@/utils/orpc";
 
 type Direction = "above" | "below";
-type Mode = "direct" | "percent";
 type StockPick = { code: string; name: string; market: string };
 
 const DIRECTION_OPTIONS: { value: Direction; label: string }[] = [
   { value: "above", label: "이상" },
   { value: "below", label: "이하" },
-];
-
-const MODE_OPTIONS: { value: Mode; label: string }[] = [
-  { value: "direct", label: "직접 입력" },
-  { value: "percent", label: "현재가 대비 %" },
 ];
 
 function digitsOnly(value: string): number {
@@ -72,7 +65,6 @@ function StockPicker({
   });
 
   if (selected) {
-    const price = findStock(selected.code)?.price ?? null;
     return (
       <View
         style={{
@@ -91,7 +83,6 @@ function StockPicker({
           </Text>
           <Text style={{ fontSize: 11, color: t.fgMuted, marginTop: 2 }}>
             {selected.code} · {selected.market}
-            {price === null ? "" : ` · 현재가 ${fmt.price(price)}원`}
           </Text>
         </View>
         <Pressable hitSlop={8} onPress={onClear}>
@@ -168,54 +159,20 @@ function StockPicker({
   );
 }
 
-function ValueInput({
-  mode,
-  direction,
+function PriceInput({
   priceInput,
   setPriceInput,
-  pctInput,
-  setPctInput,
 }: {
-  mode: Mode;
-  direction: Direction;
   priceInput: string;
   setPriceInput: (v: string) => void;
-  pctInput: string;
-  setPctInput: (v: string) => void;
 }) {
   const { t } = useMrTheme();
-  if (mode === "direct") {
-    return (
-      <View style={{ ...INPUT_ROW, backgroundColor: t.bgSubtle }}>
-        <TextInput
-          keyboardType="number-pad"
-          onChangeText={setPriceInput}
-          placeholder="도달가 입력"
-          placeholderTextColor={t.fgSubtle}
-          style={{
-            flex: 1,
-            fontSize: 16,
-            fontWeight: "700",
-            color: t.fgStrong,
-            padding: 0,
-          }}
-          value={priceInput}
-        />
-        <Text style={{ fontSize: 14, color: t.fgMuted, fontWeight: "700" }}>
-          원
-        </Text>
-      </View>
-    );
-  }
   return (
     <View style={{ ...INPUT_ROW, backgroundColor: t.bgSubtle }}>
-      <Text style={{ fontSize: 14, color: t.fgMuted, fontWeight: "700" }}>
-        {direction === "above" ? "현재가 +" : "현재가 −"}
-      </Text>
       <TextInput
         keyboardType="number-pad"
-        onChangeText={setPctInput}
-        placeholder="0"
+        onChangeText={setPriceInput}
+        placeholder="도달가 입력"
         placeholderTextColor={t.fgSubtle}
         style={{
           flex: 1,
@@ -224,44 +181,25 @@ function ValueInput({
           color: t.fgStrong,
           padding: 0,
         }}
-        value={pctInput}
+        value={priceInput}
       />
       <Text style={{ fontSize: 14, color: t.fgMuted, fontWeight: "700" }}>
-        %
+        원
       </Text>
     </View>
   );
 }
 
-function computeTarget(args: {
-  mode: Mode;
-  direction: Direction;
-  currentPrice: number | null;
-  priceInput: string;
-  pctInput: string;
-}): number | null {
-  if (args.mode === "direct") {
-    const v = digitsOnly(args.priceInput);
-    return v > 0 ? v : null;
-  }
-  if (!args.currentPrice) {
-    return null;
-  }
-  const pct = digitsOnly(args.pctInput);
-  if (pct <= 0) {
-    return null;
-  }
-  const factor = args.direction === "above" ? 1 + pct / 100 : 1 - pct / 100;
-  return Math.max(1, Math.round(args.currentPrice * factor));
+function computeDirectTarget(priceInput: string): number | null {
+  const value = digitsOnly(priceInput);
+  return value > 0 ? value : null;
 }
 
 function AlertForm({ stock }: { stock: StockPick }) {
   const { t } = useMrTheme();
   const queryClient = useQueryClient();
   const [direction, setDirection] = useState<Direction>("above");
-  const [mode, setMode] = useState<Mode>("direct");
   const [priceInput, setPriceInput] = useState("");
-  const [pctInput, setPctInput] = useState("");
 
   const createAlert = useMutation(
     orpc.priceAlert.create.mutationOptions({
@@ -272,16 +210,7 @@ function AlertForm({ stock }: { stock: StockPick }) {
     })
   );
 
-  const currentPrice = findStock(stock.code)?.price ?? null;
-  const hasPrice = currentPrice !== null;
-  const effectiveMode: Mode = hasPrice ? mode : "direct";
-  const targetPrice = computeTarget({
-    mode: effectiveMode,
-    direction,
-    currentPrice,
-    priceInput,
-    pctInput,
-  });
+  const targetPrice = computeDirectTarget(priceInput);
   const canSubmit = targetPrice !== null && !createAlert.isPending;
 
   return (
@@ -303,25 +232,12 @@ function AlertForm({ stock }: { stock: StockPick }) {
 
       <SettingsGroup label="가격 설정">
         <View style={{ paddingHorizontal: 16 }}>
-          <SegmentedControl
-            onChange={setMode}
-            options={MODE_OPTIONS}
-            value={effectiveMode}
-          />
-          {hasPrice ? null : (
-            <Text style={{ fontSize: 11, color: t.fgSubtle, marginTop: 6 }}>
-              현재가 정보가 없어 직접 입력만 사용할 수 있어요.
-            </Text>
-          )}
+          <Text style={{ fontSize: 11, color: t.fgSubtle }}>
+            현재가 데이터가 연결되기 전까지 도달가는 직접 입력만 사용할 수
+            있어요.
+          </Text>
 
-          <ValueInput
-            direction={direction}
-            mode={effectiveMode}
-            pctInput={pctInput}
-            priceInput={priceInput}
-            setPctInput={setPctInput}
-            setPriceInput={setPriceInput}
-          />
+          <PriceInput priceInput={priceInput} setPriceInput={setPriceInput} />
 
           <View
             style={{

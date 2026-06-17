@@ -5,7 +5,6 @@ import EventSource from "react-native-sse";
 import { useAppStateResume } from "@/hooks/use-app-state-resume";
 import { authClient } from "@/lib/auth-client";
 import { fetchStreamToken } from "@/lib/stream-token";
-import type { MarketIndex } from "@/utils/data";
 
 // 업종 구분 코드 ↔ 표시 이름. realtime은 코드로, IndexStrip은 이름으로 다룬다.
 const INDEX_DEFS = [
@@ -28,9 +27,13 @@ export interface IndexPoint {
   v: number; // 해당 시점 지수값
 }
 
-export interface LiveIndex extends MarketIndex {
-  prevClose: number;
+export interface LiveIndex {
+  change: number | null;
+  changePct: number | null;
+  name: string;
+  prevClose: number | null;
   series: IndexPoint[];
+  value: number | null;
 }
 
 interface QuoteEvent {
@@ -58,13 +61,12 @@ function liveMinute(): number {
 
 /**
  * Drives the market-index strip: seeds today's intraday series (10-min candles)
- * from the realtime REST endpoint, then appends live SSE ticks per minute. Falls
- * back to the passed-in static indices until data arrives, and degrades to
- * live-tick-only (no morning history) if the seed is unavailable. Connects
- * whenever `EXPO_PUBLIC_REALTIME_URL` is set — indices are public so no token
- * is required; a stream token is attached when signed in.
+ * from the realtime REST endpoint, then appends live SSE ticks per minute.
+ * Degrades to live-tick-only (no morning history) if the seed is unavailable.
+ * Connects whenever `EXPO_PUBLIC_REALTIME_URL` is set — indices are public so
+ * no token is required; a stream token is attached when signed in.
  */
-export function useIndexStream(fallback: MarketIndex[]): LiveIndex[] {
+export function useIndexStream(): LiveIndex[] {
   const { data: session } = authClient.useSession();
   const userId = session?.user?.id;
 
@@ -110,7 +112,7 @@ export function useIndexStream(fallback: MarketIndex[]): LiveIndex[] {
           }
           const cur = prev[code];
           next[code] = {
-            value: cur?.value || (s.points.at(-1)?.v ?? 0),
+            value: cur?.value ?? s.points.at(-1)?.v ?? 0,
             prevClose: s.prevClose,
             // Live ticks that arrived before the seed take precedence per minute.
             byMinute: { ...byMinute, ...(cur?.byMinute ?? {}) },
@@ -239,18 +241,28 @@ export function useIndexStream(fallback: MarketIndex[]): LiveIndex[] {
 
   return INDEX_DEFS.map(({ code, name }) => {
     const lv = live[code];
-    const fb = fallback.find((i) => i.name === name);
-    const series = lv
-      ? Object.entries(lv.byMinute)
-          .map(([m, v]) => ({ m: Number(m), v }))
-          .sort((a, b) => a.m - b.m)
-      : [];
-    const value = lv?.value ?? fb?.value ?? 0;
-    const prevClose = lv?.prevClose ?? (fb ? fb.value - fb.change : 0);
-    // Derive change from value vs previous close so the number always matches
-    // the chart baseline and never flashes 0 between seed load and first tick.
-    const change = prevClose > 0 ? value - prevClose : (fb?.change ?? 0);
-    const changePct = prevClose > 0 ? (change / prevClose) * 100 : 0;
-    return { name, value, change, changePct, prevClose, series };
+    if (!(lv && lv.value > 0 && lv.prevClose > 0)) {
+      return {
+        name,
+        value: null,
+        change: null,
+        changePct: null,
+        prevClose: null,
+        series: [],
+      };
+    }
+    const series = Object.entries(lv.byMinute)
+      .map(([m, v]) => ({ m: Number(m), v }))
+      .sort((a, b) => a.m - b.m);
+    const change = lv.value - lv.prevClose;
+    const changePct = (change / lv.prevClose) * 100;
+    return {
+      name,
+      value: lv.value,
+      change,
+      changePct,
+      prevClose: lv.prevClose,
+      series,
+    };
   });
 }

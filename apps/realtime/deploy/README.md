@@ -93,6 +93,79 @@ curl -s -o /dev/null -w '%{http_code}\n' -H "Accept: text/event-stream" "$URL/st
 #    curl -N -H "Accept: text/event-stream" "$URL/stream/quotes?symbols=005930,000660&token=$TOKEN"
 ```
 
+## 5. 종목 아이콘 CDN 동기화 Job
+
+`stock_master`를 읽어 Toss 아이콘을 GCS에 업로드하고, 운영 DB의
+`stock_resource`를 갱신하는 일회성/수동 Job이다. 로컬에서 실행하면 로컬
+`DATABASE_URL`에 쓰므로, 운영 반영은 Cloud Run Job으로 실행한다.
+
+```bash
+export PROJECT=moneyroad-app
+export REGION=asia-northeast3
+export AR_REPO=moneyroad
+export IMAGE=$REGION-docker.pkg.dev/$PROJECT/$AR_REPO/realtime:$(git rev-parse --short HEAD)
+export JOB=moneyroad-stock-icons-sync
+export BUCKET=moneyroad-stock-assets
+export CDN_BASE_URL=https://storage.googleapis.com/$BUCKET
+export CONN_NAME=$(gcloud sql instances describe moneyroad-prod --format='value(connectionName)')
+export PROJECT_NUMBER=$(gcloud projects describe $PROJECT --format='value(projectNumber)')
+export RUNTIME_SA=$PROJECT_NUMBER-compute@developer.gserviceaccount.com
+```
+
+최초 1회 권한 부여:
+
+```bash
+gcloud storage buckets add-iam-policy-binding gs://$BUCKET \
+  --member="serviceAccount:$RUNTIME_SA" \
+  --role="roles/storage.objectAdmin"
+```
+
+이미지 빌드:
+
+```bash
+gcloud builds submit --config cloudbuild.yaml \
+  --substitutions=_IMAGE=$IMAGE,_DOCKERFILE=apps/realtime/Dockerfile
+```
+
+최초 1회 Job 생성:
+
+```bash
+gcloud run jobs create $JOB \
+  --image=$IMAGE \
+  --region=$REGION \
+  --project=$PROJECT \
+  --set-cloudsql-instances=$CONN_NAME \
+  --set-secrets=DATABASE_URL=database-url:latest \
+  --set-env-vars=STOCK_ICON_BUCKET=$BUCKET,STOCK_ICON_CDN_BASE_URL=$CDN_BASE_URL \
+  --command=node \
+  --args=dist/scripts/sync-stock-icons.mjs \
+  --max-retries=1 \
+  --task-timeout=3600
+```
+
+이후 이미지 갱신 및 실행:
+
+```bash
+gcloud run jobs update $JOB \
+  --image=$IMAGE \
+  --region=$REGION \
+  --project=$PROJECT
+
+gcloud run jobs execute $JOB \
+  --region=$REGION \
+  --project=$PROJECT \
+  --wait
+```
+
+대상 수를 제한해 테스트하려면 Job 실행 시 args를 임시로 바꾼다:
+
+```bash
+gcloud run jobs update $JOB \
+  --region=$REGION \
+  --project=$PROJECT \
+  --args=dist/scripts/sync-stock-icons.mjs,--limit,10
+```
+
 ## 참고
 - ⚠️ min=max=1 + CPU 상시 할당이라 **항상 켜져 있어 지속 비용**이 발생한다(scale-to-zero 아님).
 - 클라이언트(앱): React Native에는 EventSource가 없으므로 `react-native-sse` 폴리필 사용. 웹은 브라우저 내장 `EventSource`.

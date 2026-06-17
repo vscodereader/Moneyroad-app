@@ -8,6 +8,7 @@ export * from "./notice";
 export * from "./notification-history";
 export * from "./signal";
 export * from "./stock-master";
+export * from "./stock-resource";
 export * from "./todo";
 export * from "./user-notification-setting";
 export * from "./user-price-alert";

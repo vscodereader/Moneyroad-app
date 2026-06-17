@@ -6,13 +6,16 @@
     "build": "tsdown",
     "check-types": "tsc -b",
     "dev": "tsx watch src/index.ts",
+    "download:stock-icons": "tsx src/scripts/download-stock-icons.ts",
     "load:stock-master": "tsx src/scripts/load-stock-master.ts",
+    "sync:stock-icons": "tsx src/scripts/sync-stock-icons.ts",
     "start": "node dist/index.mjs"
   },
   "dependencies": {
     "@ai-sdk/google": "^3.0.1",
     "@fastify/schedule": "^6.0.0",
     "@fastify/sse": "^0.4.0",
+    "@google-cloud/storage": "^7.21.0",
     "adm-zip": "^0.5.16",
     "ai": "catalog:",
     "drizzle-orm": "catalog:",

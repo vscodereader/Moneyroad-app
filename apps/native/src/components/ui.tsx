@@ -67,13 +67,13 @@ export function IconButton({
         <View
           style={{
             position: "absolute",
-            top: 7,
-            right: 8,
-            width: 7,
-            height: 7,
+            top: 6,
+            right: 6,
+            width: 10,
+            height: 10,
             borderRadius: 999,
             backgroundColor: t.upStrong,
-            borderWidth: 1.5,
+            borderWidth: 2,
             borderColor: t.bg,
           }}
         />

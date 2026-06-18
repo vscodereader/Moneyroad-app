@@ -3,6 +3,10 @@ import { buildServer } from "./server";
 import { startNews, stopNews } from "./services/news";
 import { isCollectorEnabled } from "./services/news/collector";
 import { startPinnedPoller, stopPinnedPoller } from "./services/pinned-poller";
+import {
+  startPriceAlertEvaluator,
+  stopPriceAlertEvaluator,
+} from "./services/price-alert/evaluator";
 import { startQuotes, stopQuotes } from "./services/quotes";
 
 const app = buildServer();
@@ -28,12 +32,15 @@ app.listen({ port: env.PORT, host: "0.0.0.0" }, (err) => {
   // upstream even when no SSE client is connected (alarm evaluator depends on
   // continuous ticks). No-op without DATABASE_URL.
   startPinnedPoller();
+  // 활성 가격 알림의 도달가 교차를 감지해 처음 도달 시 1회 푸시. No-op without DB.
+  startPriceAlertEvaluator();
 });
 
 function shutdown() {
   stopQuotes();
   stopNews();
   stopPinnedPoller();
+  stopPriceAlertEvaluator();
   app.close();
 }
 

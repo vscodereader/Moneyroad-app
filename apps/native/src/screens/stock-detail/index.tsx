@@ -39,6 +39,7 @@ import { changeColor, fmt } from "@/utils/format";
 import { nav } from "@/utils/nav";
 import { orpc } from "@/utils/orpc";
 import type { MrTokens } from "@/utils/theme";
+import { PriceAlertSheet } from "./components/price-alert-sheet";
 
 const RANGES: readonly StockChartRange[] = STOCK_CHART_RANGES;
 
@@ -212,6 +213,38 @@ function StockDetailContent({ stock }: { stock: Stock }) {
     orpc.watchlist.remove.mutationOptions({ onSettled: invalidateWatchlist })
   );
 
+  // 가격 알림 시트 + 헤더 종 아이콘의 dot(이 종목에 활성 알림이 있는지).
+  const [alertOpen, setAlertOpen] = useState(false);
+  const priceAlertsQuery = useQuery(
+    orpc.priceAlert.list.queryOptions({ enabled: isAuthed })
+  );
+  const hasActiveAlert = (priceAlertsQuery.data ?? []).some(
+    (a) => a.stockCode === stock.code && a.active
+  );
+
+  const openAlerts = () => {
+    if (!isAuthed) {
+      Alert.alert(
+        "로그인이 필요해요",
+        "가격 알림은 로그인 후 이용할 수 있어요."
+      );
+      return;
+    }
+    setAlertOpen(true);
+  };
+
+  // 시트의 "주식 정보" 토글 — 확인 알림 없이 관심 종목을 즉시 켜고 끈다.
+  const setWatched = (next: boolean) => {
+    if (!isAuthed) {
+      return;
+    }
+    if (next) {
+      addWatchMut.mutate({ stockCode: stock.code });
+    } else {
+      removeWatchMut.mutate({ stockCode: stock.code });
+    }
+  };
+
   const toggleWatch = () => {
     if (!isAuthed) {
       Alert.alert(
@@ -289,6 +322,9 @@ function StockDetailContent({ stock }: { stock: Stock }) {
         left={<BackButton onPress={nav.back} />}
         right={
           <>
+            <IconButton dot={hasActiveAlert} onPress={openAlerts}>
+              <Icon.bell color={t.fgSubtle} size={22} />
+            </IconButton>
             <IconButton onPress={toggleWatch}>
               <Icon.star
                 color={isWatched ? t.sigTech : t.fgSubtle}
@@ -478,6 +514,17 @@ function StockDetailContent({ stock }: { stock: Stock }) {
 
         <View style={{ height: 24 + insets.bottom }} />
       </ScrollView>
+
+      <PriceAlertSheet
+        currentPrice={live?.price}
+        isAuthed={isAuthed}
+        isWatched={isWatched}
+        onClose={() => setAlertOpen(false)}
+        onSetWatched={setWatched}
+        stockCode={stock.code}
+        stockName={stock.name}
+        visible={alertOpen}
+      />
     </MrScreen>
   );
 }

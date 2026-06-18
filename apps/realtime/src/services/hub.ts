@@ -22,6 +22,7 @@ export class QuoteHub {
   private readonly subscribers = new Map<string, Set<Client>>();
   private readonly clients = new Set<Client>();
   private readonly pinned = new Set<string>();
+  private readonly taps = new Set<(quote: Quote) => void>();
   private readonly feed: MarketDataFeed;
   private seq = 0;
 
@@ -120,7 +121,22 @@ export class QuoteHub {
     return { added, removed };
   }
 
+  /**
+   * Registers a tap invoked for every incoming quote — before SSE fan-out and
+   * regardless of whether any client subscribes to the symbol. The price-alert
+   * evaluator uses this to observe pinned ticks. Returns an unsubscribe fn.
+   */
+  onQuote(handler: (quote: Quote) => void): () => void {
+    this.taps.add(handler);
+    return () => {
+      this.taps.delete(handler);
+    };
+  }
+
   private broadcast(quote: Quote): void {
+    for (const tap of this.taps) {
+      tap(quote);
+    }
     const set = this.subscribers.get(quote.symbol);
     if (!set) {
       return;

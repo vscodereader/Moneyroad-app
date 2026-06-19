@@ -9,7 +9,7 @@
     },
     "name": "머니로드",
     "slug": "moneyroad-app",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "icon": "./assets/images/icon.png",
     "plugins": ["expo-font", "expo-notifications"],
     "experiments": {

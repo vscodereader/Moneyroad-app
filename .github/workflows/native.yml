@@ -1,23 +1,27 @@
-# native(Expo) 빌드 + Google Play/App Store 제출
-# - 수동 실행 전용(workflow_dispatch). 모바일은 빌드마다 EAS 비용 + 스토어 버전이
-#   생기므로 push 자동 트리거는 두지 않는다.
-# - 실제 빌드는 EAS 서버에서 수행된다. 러너는 eas-cli만 돌린다.
-# - submit=true면 빌드 완료 후 eas.json의 submit_track 제출 프로필로 자동 제출한다
-#   (internal=내부 / closed=비공개(Android alpha) / open=공개(Android beta) / production=정식).
-#   iOS는 트랙 개념이 없어 어느 프로필이든 TestFlight 업로드까지만 한다. 외부(공개)
-#   테스트 전환은 App Store Connect 콘솔에서 수동(외부 그룹 + 공개 링크 + 베타 심사).
+# native(Expo) 빌드 + 제출 / OTA(EAS Update)
+# - 수동 실행 전용(workflow_dispatch).
+# - action=build : EAS 서버 빌드(+선택적 스토어 제출). 스토어 버전이 생긴다.
+# - action=ota   : eas update 로 JS/에셋만 즉시 배포(심사 X). 네이티브 변경엔 쓸 수 없다.
+#                  fingerprint runtime 이 일치하는 "이미 배포된 빌드"에만 도달한다.
+# - 실제 빌드/업데이트는 EAS 서버에서 수행. 러너는 eas-cli만 돌린다.
 #
 # 사전 준비(최초 1회): docs/deploy/native-google-play.md
 #   - GitHub Secret: EXPO_TOKEN
-#   - Google Play 서비스계정 키를 EAS에 등록
-#   - Play Console에 앱 생성 + 첫 AAB 1회 수동 업로드
-name: native build & submit
+name: native build & submit / OTA
 
 on:
   workflow_dispatch:
     inputs:
+      action:
+        description: "작업 종류 (build=빌드/제출, ota=OTA 즉시 업데이트)"
+        type: choice
+        required: true
+        default: build
+        options:
+          - build
+          - ota
       platform:
-        description: "빌드 플랫폼"
+        description: "[build] 빌드 플랫폼 (ota는 무시)"
         type: choice
         required: true
         default: android
@@ -26,7 +30,7 @@ on:
           - ios
           - all
       profile:
-        description: "EAS 빌드 프로필"
+        description: "EAS 빌드 프로필 / [ota] 업데이트 대상 채널"
         type: choice
         required: true
         default: production
@@ -35,12 +39,12 @@ on:
           - staging
           - preview
       submit:
-        description: "빌드 후 스토어 제출 여부"
+        description: "[build] 빌드 후 스토어 제출 여부 (ota는 무시)"
         type: boolean
         required: true
         default: true
       submit_track:
-        description: "제출 트랙 (submit=true일 때)"
+        description: "[build] 제출 트랙 (submit=true일 때)"
         type: choice
         required: true
         default: internal
@@ -49,13 +53,18 @@ on:
           - closed
           - open
           - production
+      message:
+        description: "[ota] 업데이트 메모 (비우면 커밋 SHA 사용)"
+        type: string
+        required: false
+        default: ""
 
 permissions:
   contents: read
 
 jobs:
-  build:
-    name: build ${{ inputs.platform }} (${{ inputs.profile }})
+  run:
+    name: ${{ inputs.action }} ${{ inputs.profile }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -67,8 +76,8 @@ jobs:
           node-version: 22
           cache: pnpm
 
-      # eas-cli가 업로드 전 app.json의 config 플러그인(expo-font 등)을 로컬에서
-      # 평가하므로 워크스페이스 의존성을 먼저 설치해야 한다.
+      # eas-cli가 app.json config 플러그인을 로컬 평가하고,
+      # OTA(eas update)도 metro 번들링에 의존성이 필요하므로 먼저 설치한다.
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
@@ -78,12 +87,21 @@ jobs:
           eas-version: latest
           token: ${{ secrets.EXPO_TOKEN }}
 
-      - name: EAS build (+ optional submit)
+      - name: EAS build / submit / OTA
         working-directory: apps/native
+        env:
+          OTA_MESSAGE: ${{ inputs.message }}
         run: |
-          FLAGS="--platform ${{ inputs.platform }} --profile ${{ inputs.profile }} --non-interactive"
-          if [ "${{ inputs.submit }}" = "true" ]; then
-            FLAGS="$FLAGS --auto-submit-with-profile ${{ inputs.submit_track }}"
+          if [ "${{ inputs.action }}" = "ota" ]; then
+            MSG="$OTA_MESSAGE"
+            if [ -z "$MSG" ]; then MSG="OTA via workflow ($GITHUB_SHA)"; fi
+            echo "eas update --branch ${{ inputs.profile }} --message \"$MSG\""
+            eas update --branch "${{ inputs.profile }}" --message "$MSG" --non-interactive
+          else
+            FLAGS="--platform ${{ inputs.platform }} --profile ${{ inputs.profile }} --non-interactive"
+            if [ "${{ inputs.submit }}" = "true" ]; then
+              FLAGS="$FLAGS --auto-submit-with-profile ${{ inputs.submit_track }}"
+            fi
+            echo "eas build $FLAGS"
+            eas build $FLAGS
           fi
-          echo "eas build $FLAGS"
-          eas build $FLAGS

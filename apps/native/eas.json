@@ -8,23 +8,27 @@
       "developmentClient": true,
       "distribution": "internal",
       "node": "22.13.0",
-      "environment": "development"
+      "environment": "development",
+      "channel": "development"
     },
     "preview": {
       "distribution": "internal",
       "node": "22.13.0",
-      "environment": "preview"
+      "environment": "preview",
+      "channel": "preview"
     },
     "production": {
       "autoIncrement": true,
       "node": "22.13.0",
-      "environment": "production"
+      "environment": "production",
+      "channel": "production"
     },
     "staging": {
       "distribution": "store",
       "autoIncrement": true,
       "node": "22.13.0",
-      "environment": "preview"
+      "environment": "preview",
+      "channel": "staging"
     }
   },
   "submit": {

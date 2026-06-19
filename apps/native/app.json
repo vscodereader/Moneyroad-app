@@ -35,6 +35,12 @@
         "projectId": "b2ba4ca6-8c07-4b3a-8862-6517c665fe7c"
       }
     },
-    "owner": "mkvista"
+    "owner": "mkvista",
+    "runtimeVersion": {
+      "policy": "fingerprint"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/b2ba4ca6-8c07-4b3a-8862-6517c665fe7c"
+    }
   }
 }

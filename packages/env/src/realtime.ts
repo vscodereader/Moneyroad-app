@@ -40,6 +40,12 @@ export const env = createEnv({
     // the ticks). No-op without DATABASE_URL.
     WATCHLIST_POLL_INTERVAL_MS: z.coerce.number().default(10_000),
 
+    // Backstop refresh cadence for the price-alert evaluator's in-memory index.
+    // Alert create/delete also triggers an immediate refresh via the internal
+    // refresh endpoint; this interval is the safety net if that fire-and-forget
+    // trigger is missed. No-op without DATABASE_URL.
+    PRICE_ALERT_REFRESH_INTERVAL_MS: z.coerce.number().default(15_000),
+
     NODE_ENV: z
       .enum(["development", "production", "test"])
       .default("development"),

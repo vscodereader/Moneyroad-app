@@ -9,6 +9,7 @@ import { KeyboardProvider } from "react-native-keyboard-controller";
 
 import { AppThemeProvider } from "@/contexts/app-theme-context";
 import { useLogCurrentScreen } from "@/hooks/use-log-current-screen";
+import { useNotificationResponse } from "@/hooks/use-notification-response";
 import { usePushRegistration } from "@/hooks/use-push-registration";
 import { useQuotesManager } from "@/hooks/use-quotes-manager";
 import { hydrateOnboarding } from "@/utils/onboarding";
@@ -21,6 +22,8 @@ export const unstable_settings = {
 function StackLayout() {
   // Register the device's push token once the user is signed in.
   usePushRegistration();
+  // Deep-link into the matching screen when a notification is tapped.
+  useNotificationResponse();
   // Singleton SSE pipeline driving the global quotes store.
   useQuotesManager();
   // Dev-only: log the active route to the Metro console.

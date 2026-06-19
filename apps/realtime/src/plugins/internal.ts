@@ -4,6 +4,7 @@ import { log } from "evlog";
 import type { FastifyInstance } from "fastify";
 
 import { triggerPinsRefresh } from "@/services/pinned-poller";
+import { refreshPriceAlerts } from "@/services/price-alert/evaluator";
 
 // Constant-time compare of the shared secret. Length-guarded since
 // timingSafeEqual throws on length mismatch.
@@ -33,7 +34,12 @@ export function registerInternalPlugin(app: FastifyInstance) {
           .send({ error: "Unauthorized", code: "INVALID_INTERNAL_SECRET" });
         return;
       }
-      await triggerPinsRefresh();
+      await Promise.all([
+        triggerPinsRefresh(),
+        refreshPriceAlerts().catch((err) => {
+          log.warn({ err, internal: { event: "refresh_price_alerts_failed" } });
+        }),
+      ]);
       reply.send({ ok: true });
     }
   );

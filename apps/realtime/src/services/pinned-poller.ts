@@ -1,5 +1,10 @@
-import { signal, userWatchlist } from "@moneyroad-app/db/schema";
+import {
+  signal,
+  userPriceAlert,
+  userWatchlist,
+} from "@moneyroad-app/db/schema";
 import { env } from "@moneyroad-app/env/realtime";
+import { and, eq, isNull } from "drizzle-orm";
 import { log } from "evlog";
 
 import { getDb, isNewsDbConfigured } from "@/services/news/db";
@@ -23,7 +28,7 @@ export const publicSignalSymbols = new Set<string>();
 // (SELECT DISTINCT 도 동등하지만 drizzle 버전 의존성을 피해 명시적 그룹핑).
 async function syncPins(): Promise<void> {
   const db = getDb();
-  const [watchlistRows, signalRows] = await Promise.all([
+  const [watchlistRows, signalRows, alertRows] = await Promise.all([
     db
       .select({ stockCode: userWatchlist.stockCode })
       .from(userWatchlist)
@@ -32,6 +37,14 @@ async function syncPins(): Promise<void> {
       .select({ stockCode: signal.stockCode })
       .from(signal)
       .groupBy(signal.stockCode),
+    // 활성·미발화 가격 알림 종목 — 평가기가 도달가 교차를 보려면 상시 구독돼야 한다.
+    db
+      .select({ stockCode: userPriceAlert.stockCode })
+      .from(userPriceAlert)
+      .where(
+        and(eq(userPriceAlert.active, true), isNull(userPriceAlert.triggeredAt))
+      )
+      .groupBy(userPriceAlert.stockCode),
   ]);
   const signalCodes = signalRows.map((r) => r.stockCode);
   // 화이트리스트 동기화: 비로그인도 시세를 볼 수 있는 시그널 종목.
@@ -40,7 +53,11 @@ async function syncPins(): Promise<void> {
     publicSignalSymbols.add(code);
   }
   const symbols = Array.from(
-    new Set([...watchlistRows.map((r) => r.stockCode), ...signalCodes])
+    new Set([
+      ...watchlistRows.map((r) => r.stockCode),
+      ...signalCodes,
+      ...alertRows.map((r) => r.stockCode),
+    ])
   );
   const { added, removed } = quoteHub.setPins(symbols);
   if (added > 0 || removed > 0) {
@@ -50,6 +67,7 @@ async function syncPins(): Promise<void> {
         total: symbols.length,
         watchlist: watchlistRows.length,
         signals: signalRows.length,
+        alerts: alertRows.length,
         added,
         removed,
       },

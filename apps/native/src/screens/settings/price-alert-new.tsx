@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -9,25 +9,14 @@ import {
 } from "react-native";
 
 import { Icon } from "@/components/icons";
-import { SegmentedControl } from "@/components/ui";
+import { PriceAlertControls } from "@/components/price-alert-controls";
+import { useLiveQuote } from "@/hooks/use-live-quotes";
 import { useMrTheme } from "@/hooks/use-mr-theme";
 import { SettingsGroup, SettingsScreen } from "@/screens/settings/ui";
 import { fmt } from "@/utils/format";
-import { nav } from "@/utils/nav";
 import { orpc } from "@/utils/orpc";
 
-type Direction = "above" | "below";
 type StockPick = { code: string; name: string; market: string };
-
-const DIRECTION_OPTIONS: { value: Direction; label: string }[] = [
-  { value: "above", label: "이상" },
-  { value: "below", label: "이하" },
-];
-
-function digitsOnly(value: string): number {
-  const n = Number(value.replace(/[^0-9]/g, ""));
-  return Number.isFinite(n) ? n : 0;
-}
 
 const INPUT_ROW = {
   marginTop: 10,
@@ -159,148 +148,36 @@ function StockPicker({
   );
 }
 
-function PriceInput({
-  priceInput,
-  setPriceInput,
-}: {
-  priceInput: string;
-  setPriceInput: (v: string) => void;
-}) {
+// 종목 선택 후 현재가 기준 가격 알림 설정(stock/[code] 시트와 동일한 UI).
+function AlertEditor({ stock }: { stock: StockPick }) {
   const { t } = useMrTheme();
-  return (
-    <View style={{ ...INPUT_ROW, backgroundColor: t.bgSubtle }}>
-      <TextInput
-        keyboardType="number-pad"
-        onChangeText={setPriceInput}
-        placeholder="도달가 입력"
-        placeholderTextColor={t.fgSubtle}
-        style={{
-          flex: 1,
-          fontSize: 16,
-          fontWeight: "700",
-          color: t.fgStrong,
-          padding: 0,
-        }}
-        value={priceInput}
-      />
-      <Text style={{ fontSize: 14, color: t.fgMuted, fontWeight: "700" }}>
-        원
-      </Text>
-    </View>
-  );
-}
-
-function computeDirectTarget(priceInput: string): number | null {
-  const value = digitsOnly(priceInput);
-  return value > 0 ? value : null;
-}
-
-function AlertForm({ stock }: { stock: StockPick }) {
-  const { t } = useMrTheme();
-  const queryClient = useQueryClient();
-  const [direction, setDirection] = useState<Direction>("above");
-  const [priceInput, setPriceInput] = useState("");
-
-  const createAlert = useMutation(
-    orpc.priceAlert.create.mutationOptions({
-      onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: orpc.priceAlert.list.key() });
-        nav.back();
-      },
-    })
-  );
-
-  const targetPrice = computeDirectTarget(priceInput);
-  const canSubmit = targetPrice !== null && !createAlert.isPending;
-
+  const live = useLiveQuote(stock.code);
   return (
     <>
-      <SettingsGroup label="알림 방향">
-        <View style={{ paddingHorizontal: 16 }}>
-          <SegmentedControl
-            onChange={setDirection}
-            options={DIRECTION_OPTIONS}
-            value={direction}
-          />
-          <Text style={{ fontSize: 11, color: t.fgSubtle, marginTop: 6 }}>
-            {direction === "above"
-              ? "도달가 이상이 되면 알림을 받습니다."
-              : "도달가 이하가 되면 알림을 받습니다."}
-          </Text>
-        </View>
-      </SettingsGroup>
-
-      <SettingsGroup label="가격 설정">
-        <View style={{ paddingHorizontal: 16 }}>
-          <Text style={{ fontSize: 11, color: t.fgSubtle }}>
-            현재가 데이터가 연결되기 전까지 도달가는 직접 입력만 사용할 수
-            있어요.
-          </Text>
-
-          <PriceInput priceInput={priceInput} setPriceInput={setPriceInput} />
-
-          <View
-            style={{
-              marginTop: 12,
-              paddingVertical: 10,
-              paddingHorizontal: 12,
-              backgroundColor: t.bgSubtle,
-              borderRadius: 10,
-              flexDirection: "row",
-              justifyContent: "space-between",
-              alignItems: "center",
-            }}
-          >
-            <Text style={{ fontSize: 12, color: t.fgMuted }}>도달가</Text>
-            <Text
-              style={{ fontSize: 15, fontWeight: "800", color: t.fgStrong }}
-            >
-              {targetPrice === null ? "-" : `${fmt.price(targetPrice)}원`}
-            </Text>
-          </View>
-        </View>
-      </SettingsGroup>
-
       <View style={{ paddingHorizontal: 16, paddingTop: 18 }}>
-        <Pressable
-          disabled={!canSubmit}
-          onPress={() =>
-            targetPrice !== null &&
-            createAlert.mutate({
-              stockCode: stock.code,
-              direction,
-              targetPrice,
-            })
-          }
+        <Text
           style={{
-            height: 48,
-            borderRadius: 12,
-            backgroundColor: canSubmit ? t.primary : t.borderStrong,
-            alignItems: "center",
-            justifyContent: "center",
+            color: t.fgStrong,
+            fontSize: 20,
+            fontWeight: "800",
+            letterSpacing: -0.3,
           }}
         >
-          {createAlert.isPending ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={{ fontSize: 15, fontWeight: "800", color: "#fff" }}>
-              알림 추가
-            </Text>
-          )}
-        </Pressable>
-        {createAlert.isError ? (
-          <Text
-            style={{
-              marginTop: 10,
-              fontSize: 12,
-              color: t.downStrong,
-              textAlign: "center",
-            }}
-          >
-            추가 중 오류가 발생했어요. 잠시 후 다시 시도해 주세요.
-          </Text>
-        ) : null}
+          가격 알림을 받을까요?
+        </Text>
+        <Text
+          style={{
+            color: t.fgMuted,
+            fontSize: 14,
+            fontWeight: "600",
+            marginTop: 6,
+          }}
+        >
+          {stock.name} ·{" "}
+          {live ? `현재가 ${fmt.price(live.price)}원` : "시세 연결 중"}
+        </Text>
       </View>
+      <PriceAlertControls currentPrice={live?.price} stockCode={stock.code} />
     </>
   );
 }
@@ -321,9 +198,9 @@ export default function PriceAlertNewScreen() {
       </SettingsGroup>
 
       {selectedStock ? (
-        <AlertForm key={selectedStock.code} stock={selectedStock} />
+        <AlertEditor key={selectedStock.code} stock={selectedStock} />
       ) : null}
-      <View style={{ height: 24 }} />
+      <View style={{ height: 32 }} />
     </SettingsScreen>
   );
 }

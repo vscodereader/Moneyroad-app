@@ -12,6 +12,12 @@ export type TabName = "home" | "signals" | "news" | "discuss" | "mypage";
 
 export const nav = {
   openStock: (code: string) => router.push(`${BASE}/stock/${code}` as Href),
+  // 뉴스 탭으로 이동하며 newsId를 넘겨, 해당 기사 시트를 자동으로 연다(푸시 탭 등).
+  openNews: (newsId: string) =>
+    router.navigate({
+      pathname: `${BASE}/(tabs)/news`,
+      params: { newsId },
+    } as Href),
   openSearch: () => router.push(`${BASE}/search` as Href),
   openAlerts: () => router.push(`${BASE}/alerts` as Href),
   openWatchlist: () => router.push(`${BASE}/watchlist` as Href),

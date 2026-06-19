@@ -1,5 +1,6 @@
 import { BottomTabBarHeightContext } from "@react-navigation/bottom-tabs";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { router, useLocalSearchParams } from "expo-router";
 import { useContext, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -30,16 +31,33 @@ const TABS: { k: NewsTab; l: string }[] = [
   { k: "policy", l: "정책" },
 ];
 
-function NewsSheet({ item, onClose }: { item: NewsItem; onClose: () => void }) {
+function NewsSheet({
+  newsId,
+  onClose,
+  seed,
+}: {
+  newsId: string;
+  onClose: () => void;
+  seed?: NewsItem;
+}) {
   const { t } = useMrTheme();
   const insets = useSafeAreaInsets();
   const detail = useQuery(
-    orpc.news.detail.queryOptions({ input: { id: item.id } })
+    orpc.news.detail.queryOptions({ input: { id: newsId } })
   );
-  const dummyStock = findStock(item.code);
-  const stockName = dummyStock?.name ?? item.stockName;
-  const url = detail.data?.url ?? null;
-  const preview = detail.data?.preview;
+  const d = detail.data;
+  // 피드에서 연 경우 seed로 즉시 표시하고, 푸시 딥링크처럼 seed가 없으면 detail로 채운다.
+  const title =
+    seed?.title ?? d?.title ?? (detail.isLoading ? "불러오는 중…" : "");
+  const source = seed?.source ?? d?.source ?? "뉴스";
+  const time = seed?.time ?? d?.time ?? "";
+  const ai = seed?.ai ?? d?.ai ?? "";
+  const code = seed?.code ?? d?.stock?.code ?? "";
+  const dummyStock = code ? findStock(code) : undefined;
+  const stockName =
+    dummyStock?.name ?? seed?.stockName ?? d?.stock?.name ?? null;
+  const url = d?.url ?? null;
+  const preview = d?.preview;
 
   return (
     <Modal animationType="slide" onRequestClose={onClose} transparent visible>
@@ -117,10 +135,10 @@ function NewsSheet({ item, onClose }: { item: NewsItem; onClose: () => void }) {
               lineHeight: 25,
             }}
           >
-            {item.title}
+            {title}
           </Text>
           <Text style={{ fontSize: 12, color: t.fgSubtle, marginTop: 4 }}>
-            {item.source} · {item.time}
+            {source} · {time}
           </Text>
 
           <View
@@ -143,7 +161,7 @@ function NewsSheet({ item, onClose }: { item: NewsItem; onClose: () => void }) {
               핵심 요약
             </Text>
             <Text style={{ fontSize: 14, lineHeight: 22, color: t.fgStrong }}>
-              {item.ai}
+              {ai}
             </Text>
           </View>
 
@@ -306,6 +324,16 @@ export default function NewsScreen() {
     seededRef.current = true;
   }, [session, isLoggedIn]);
   const [openNews, setOpenNews] = useState<NewsItem | null>(null);
+  // 푸시 등에서 newsId로 진입하면 해당 기사 시트를 자동으로 연다.
+  const params = useLocalSearchParams<{ newsId?: string }>();
+  const [deepLinkNewsId, setDeepLinkNewsId] = useState<string | null>(null);
+  useEffect(() => {
+    if (params.newsId) {
+      setDeepLinkNewsId(params.newsId);
+      // 소비 후 파라미터를 비워, 닫고 다시 들어와도 재오픈되지 않게 한다.
+      router.setParams({ newsId: "" });
+    }
+  }, [params.newsId]);
   // 비로그인 + watch 탭이면 페치 차단 — ListEmptyComponent로 안내만 표시.
   const guestWatch = tab === "watch" && !isLoggedIn;
   const feed = useInfiniteQuery(
@@ -450,9 +478,26 @@ export default function NewsScreen() {
         </View>
       ) : null}
 
-      {openNews ? (
-        <NewsSheet item={openNews} onClose={() => setOpenNews(null)} />
-      ) : null}
+      {(() => {
+        if (openNews) {
+          return (
+            <NewsSheet
+              newsId={openNews.id}
+              onClose={() => setOpenNews(null)}
+              seed={openNews}
+            />
+          );
+        }
+        if (deepLinkNewsId) {
+          return (
+            <NewsSheet
+              newsId={deepLinkNewsId}
+              onClose={() => setDeepLinkNewsId(null)}
+            />
+          );
+        }
+        return null;
+      })()}
     </MrScreen>
   );
 }

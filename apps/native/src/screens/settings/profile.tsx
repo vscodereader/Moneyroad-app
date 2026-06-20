@@ -1,7 +1,9 @@
 import { useMutation } from "@tanstack/react-query";
+import { type Href, router } from "expo-router";
 import { useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Image,
   Pressable,
   Text,
@@ -12,8 +14,14 @@ import {
 import { Gradient } from "@/components/charts";
 import { useMrTheme } from "@/hooks/use-mr-theme";
 import { authClient } from "@/lib/auth-client";
-import { SettingsGroup, SettingsScreen } from "@/screens/settings/ui";
+import { getRegisteredPushToken } from "@/lib/push";
+import {
+  SettingsGroup,
+  SettingsRow,
+  SettingsScreen,
+} from "@/screens/settings/ui";
 import { nav } from "@/utils/nav";
+import { client } from "@/utils/orpc";
 
 const NAME_MAX = 30;
 
@@ -39,9 +47,80 @@ export default function ProfileScreen() {
     onSuccess: () => nav.back(),
   });
 
+  const signOut = useMutation({
+    mutationFn: async () => {
+      const token = getRegisteredPushToken();
+      if (token) {
+        await client.notification.unregisterPushToken({ token }).catch(() => {
+          // best-effort cleanup before ending the session
+        });
+      }
+      const res = await authClient.signOut();
+      if (res?.error) {
+        throw new Error(res.error.message ?? "로그아웃 실패");
+      }
+      return res?.data;
+    },
+    onSuccess: () => {
+      router.replace("/(moneyroad)/login" as Href);
+    },
+  });
+
+  const deleteAccount = useMutation({
+    mutationFn: async () => {
+      const token = getRegisteredPushToken();
+      if (token) {
+        await client.notification.unregisterPushToken({ token }).catch(() => {
+          // best-effort cleanup; account deletion should continue
+        });
+      }
+      const res = await authClient.deleteUser({});
+      if (res.error) {
+        throw new Error(res.error.message ?? "계정 삭제 실패");
+      }
+      return res.data;
+    },
+    onSuccess: () => {
+      Alert.alert("계정 삭제 완료", "계정이 삭제되었습니다.", [
+        {
+          text: "확인",
+          onPress: () => router.replace("/(moneyroad)/login" as Href),
+        },
+      ]);
+    },
+  });
+
+  const deleting = deleteAccount.isPending;
+  const loggingOut = signOut.isPending;
   const trimmed = name.trim();
   const canSave =
     trimmed.length > 0 && trimmed !== currentName && !updateName.isPending;
+
+  const handleLogout = () => {
+    Alert.alert("로그아웃", "로그아웃 하시겠어요?", [
+      { text: "취소", style: "cancel" },
+      {
+        text: "로그아웃",
+        style: "destructive",
+        onPress: () => signOut.mutate(),
+      },
+    ]);
+  };
+
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      "계정 삭제",
+      "계정을 삭제하면 관심 종목, 알림 설정, 세션 정보가 함께 삭제됩니다. 이 작업은 되돌릴 수 없습니다.",
+      [
+        { text: "취소", style: "cancel" },
+        {
+          text: "삭제",
+          style: "destructive",
+          onPress: () => deleteAccount.mutate(),
+        },
+      ]
+    );
+  };
 
   return (
     <SettingsScreen title="프로필">
@@ -153,6 +232,33 @@ export default function ProfileScreen() {
           </Text>
         ) : null}
       </View>
+      <SettingsGroup label="계정">
+        <SettingsRow
+          label="로그아웃"
+          onPress={loggingOut || deleting ? undefined : handleLogout}
+          right={loggingOut ? <ActivityIndicator color={t.primary} /> : null}
+          sub="현재 기기에서 세션을 종료합니다."
+        />
+        <SettingsRow
+          label="계정삭제"
+          onPress={loggingOut || deleting ? undefined : handleDeleteAccount}
+          right={deleting ? <ActivityIndicator color={t.primary} /> : null}
+          sub="계정과 관련 데이터를 삭제합니다."
+        />
+      </SettingsGroup>
+      {signOut.isError || deleteAccount.isError ? (
+        <Text
+          style={{
+            marginTop: 10,
+            paddingHorizontal: 16,
+            fontSize: 12,
+            color: t.downStrong,
+            textAlign: "center",
+          }}
+        >
+          요청을 처리하지 못했어요. 잠시 후 다시 시도해 주세요.
+        </Text>
+      ) : null}
       <View style={{ height: 24 }} />
     </SettingsScreen>
   );

@@ -6,6 +6,7 @@ import { MrHeader, MrScreen } from "@/components/ui";
 import { useMrTheme } from "@/hooks/use-mr-theme";
 import { authClient } from "@/lib/auth-client";
 import { getRegisteredPushToken } from "@/lib/push";
+import { getAppVersionLabel } from "@/utils/app-version";
 import { nav } from "@/utils/nav";
 import { client, orpc } from "@/utils/orpc";
 import type { MrTokens } from "@/utils/theme";
@@ -116,6 +117,7 @@ export default function MyPageScreen() {
   const email = user?.email ?? "";
   const avatarUrl = user?.image ?? null;
   const initial = displayName.charAt(0).toUpperCase();
+  const appVersionLabel = getAppVersionLabel();
 
   const watchlist = useQuery(orpc.watchlist.list.queryOptions());
   const watchedCount = watchlist.data?.length ?? 0;
@@ -337,7 +339,9 @@ export default function MyPageScreen() {
             paddingBottom: 8,
           }}
         >
-          <Text style={{ fontSize: 11, color: t.fgSubtle }}>버전 1.4.2</Text>
+          <Text style={{ fontSize: 11, color: t.fgSubtle }}>
+            {appVersionLabel}
+          </Text>
           <Pressable hitSlop={8} onPress={handleLogout}>
             <Text
               style={{ fontSize: 12, fontWeight: "700", color: t.downStrong }}

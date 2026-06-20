@@ -16,6 +16,7 @@ import { useMrTheme } from "@/hooks/use-mr-theme";
 import { authClient } from "@/lib/auth-client";
 import { nav } from "@/utils/nav";
 import type { MrTokens } from "@/utils/theme";
+import { getAuthModeSwitchAccessibility } from "./accessibility";
 
 type Mode = "signin" | "signup";
 type Provider = "google" | "apple" | "naver" | "kakao";
@@ -223,6 +224,7 @@ export default function LoginScreen() {
     passwordConfirm.length > 0;
   const signinReady = trimmedUsername.length > 0 && password.length > 0;
   const canSubmit = isSignup ? signupReady : signinReady;
+  const modeSwitchAccessibility = getAuthModeSwitchAccessibility(mode);
 
   return (
     <MrScreen>
@@ -308,6 +310,8 @@ export default function LoginScreen() {
         ) : null}
 
         <Pressable
+          accessibilityLabel={isSignup ? "회원가입" : "로그인"}
+          accessibilityRole="button"
           disabled={!canSubmit || loading}
           onPress={submitCredentials}
           style={{
@@ -330,6 +334,10 @@ export default function LoginScreen() {
         </Pressable>
 
         <Pressable
+          accessibilityHint={modeSwitchAccessibility.hint}
+          accessibilityLabel={modeSwitchAccessibility.label}
+          accessibilityRole="link"
+          accessible
           hitSlop={8}
           onPress={() => {
             setMode(isSignup ? "signin" : "signup");

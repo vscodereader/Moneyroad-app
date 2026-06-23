@@ -27,8 +27,14 @@
     "ios": {
       "bundleIdentifier": "kr.ai.moneyroad",
       "infoPlist": {
+        "CFBundleAllowMixedLocalizations": true,
+        "CFBundleDevelopmentRegion": "ko",
+        "CFBundleLocalizations": ["ko"],
         "ITSAppUsesNonExemptEncryption": false
       }
+    },
+    "locales": {
+      "ko": "./languages/korean.json"
     },
     "extra": {
       "eas": {

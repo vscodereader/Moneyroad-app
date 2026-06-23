@@ -1,0 +1,8 @@
+{
+  "ios": {
+    "CFBundleDisplayName": "머니로드"
+  },
+  "android": {
+    "app_name": "머니로드"
+  }
+}

@@ -9,7 +9,7 @@
     },
     "name": "머니로드",
     "slug": "moneyroad-app",
-    "version": "1.0.3",
+    "version": "1.0.4",
     "icon": "./assets/images/icon.png",
     "plugins": ["expo-font", "expo-notifications"],
     "experiments": {
@@ -27,8 +27,14 @@
     "ios": {
       "bundleIdentifier": "kr.ai.moneyroad",
       "infoPlist": {
+        "CFBundleAllowMixedLocalizations": true,
+        "CFBundleDevelopmentRegion": "ko",
+        "CFBundleLocalizations": ["ko"],
         "ITSAppUsesNonExemptEncryption": false
       }
+    },
+    "locales": {
+      "ko": "./languages/korean.json"
     },
     "extra": {
       "eas": {

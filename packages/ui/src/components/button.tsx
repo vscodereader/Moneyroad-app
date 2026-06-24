@@ -10,6 +10,8 @@ const buttonVariants = cva(
         default: "bg-primary text-primary-foreground [a]:hover:bg-primary/80",
         outline:
           "border-border bg-background hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50",
+        outlineOnDark:
+          "border-primary-foreground/20 bg-primary-foreground/[0.06] text-primary-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] hover:border-moneyroad-primary-muted hover:bg-moneyroad-primary-muted hover:text-moneyroad-primary aria-expanded:bg-primary-foreground/10 aria-expanded:text-primary-foreground",
         secondary:
           "bg-secondary text-secondary-foreground hover:bg-secondary/80 aria-expanded:bg-secondary aria-expanded:text-secondary-foreground",
         ghost:
@@ -24,6 +26,8 @@ const buttonVariants = cva(
         xs: "h-6 gap-1 rounded-none px-2 text-xs has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3",
         sm: "h-7 gap-1 rounded-none px-2.5 has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3.5",
         lg: "h-9 gap-1.5 px-2.5 has-data-[icon=inline-end]:pr-3 has-data-[icon=inline-start]:pl-3",
+        store:
+          "h-14 gap-3 rounded-xl px-4 hover:bg-moneyroad-primary-muted hover:text-moneyroad-primary has-data-[icon=inline-end]:pr-4 has-data-[icon=inline-start]:pl-4",
         icon: "size-8",
         "icon-xs": "size-6 rounded-none [&_svg:not([class*='size-'])]:size-3",
         "icon-sm": "size-7 rounded-none",

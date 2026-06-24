@@ -16,7 +16,7 @@ const geistMono = Geist_Mono({
 
 const SITE_TITLE = "머니로드 — 한국 개인투자자를 위한 시그널·뉴스·토론 앱";
 const SITE_DESCRIPTION =
-  "관심 종목의 시그널·뉴스·토론을 한 화면에서. 기술적·AI·이벤트·커뮤니티 신호를 0~100점으로 종합해 투자 결정을 돕는 머니로드. 지금 사전등록하세요.";
+  "관심 종목의 시그널·뉴스·토론을 한 화면에서. 기술적·AI·이벤트·커뮤니티 신호를 0~100점으로 종합해 투자 결정을 돕는 머니로드. 지금 App Store와 Google Play에서 다운로드하세요.";
 
 export const metadata: Metadata = {
   title: SITE_TITLE,

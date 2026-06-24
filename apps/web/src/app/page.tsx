@@ -2,7 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 
 import { Wordmark } from "@/components/landing/brand";
-import { WaitlistForm } from "@/components/landing/waitlist-form";
+import { StoreButtons } from "@/components/landing/store-buttons";
 
 // ── 디바이스 목업 프레임 ─────────────────────────────────────────────
 function PhoneFrame({
@@ -154,10 +154,10 @@ export default function Home() {
         <nav className="mx-auto flex max-w-6xl items-center justify-between px-5 py-3.5">
           <Wordmark />
           <a
-            className="rounded-full bg-[#256EF4] px-4 py-2 font-semibold text-sm text-white transition-colors hover:bg-[#0B50D0]"
-            href="#waitlist"
+            className="rounded-full px-4 py-2 font-semibold text-[#256EF4] text-sm transition-colors hover:bg-[#ECF2FE] hover:text-[#0B50D0] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#256EF4] focus-visible:ring-offset-2"
+            href="#download"
           >
-            사전등록
+            앱 다운로드
           </a>
         </nav>
       </header>
@@ -169,7 +169,7 @@ export default function Home() {
           <div className="mx-auto grid max-w-6xl items-center gap-12 px-5 py-16 lg:grid-cols-2 lg:py-24">
             <div className="flex flex-col items-start">
               <span className="inline-flex items-center gap-2 rounded-full border border-[#D6E4FF] bg-[#ECF2FE] px-3 py-1 font-semibold text-[#0B50D0] text-xs">
-                한국 개인투자자를 위한 투자 보조 앱
+                App Store · Google Play 정식 출시
               </span>
               <h1 className="mt-5 font-bold text-4xl text-[#131416] leading-[1.15] tracking-tight sm:text-5xl">
                 감으로 사지 말고,
@@ -180,10 +180,10 @@ export default function Home() {
                 관심 종목의 시그널·뉴스·토론을 한 화면에서. 머니로드가 흩어진
                 시장 정보를 당신의 결정 흐름에 맞춰 정리합니다.
               </p>
-              <div className="mt-8 w-full max-w-md" id="waitlist">
-                <WaitlistForm />
+              <div className="mt-8 w-full max-w-md" id="download">
+                <StoreButtons />
                 <p className="mt-3 text-[#8A949E] text-sm">
-                  출시 알림만 보내드려요. 스팸은 없습니다.
+                  iOS와 Android에서 바로 설치할 수 있어요.
                 </p>
               </div>
             </div>
@@ -314,13 +314,13 @@ export default function Home() {
         <section className="bg-[#1E2124]">
           <div className="mx-auto max-w-3xl px-5 py-20 text-center">
             <h2 className="font-bold text-3xl text-white tracking-tight sm:text-4xl">
-              출시되면 가장 먼저 알려드릴게요
+              이제 앱에서 바로 시작하세요
             </h2>
             <p className="mt-4 text-[#B1B8BE] text-lg">
-              지금 사전등록하고 머니로드의 첫 사용자가 되어보세요.
+              App Store와 Google Play에서 머니로드를 다운로드할 수 있습니다.
             </p>
             <div className="mx-auto mt-8 max-w-md">
-              <WaitlistForm variant="onDark" />
+              <StoreButtons variant="onDark" />
             </div>
           </div>
         </section>

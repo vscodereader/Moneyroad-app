@@ -16,6 +16,7 @@ const tabSchema = z.enum(["watch", "all", "industry", "market", "policy"]);
 // Screen-facing item shape (mirrors apps/native NewsItem).
 export interface FeedItem {
   ai: string;
+  aiGenerated: boolean;
   category: string;
   code: string;
   id: string;
@@ -123,6 +124,7 @@ function toFeedItem(row: NewsRow, stockName: string | null): FeedItem {
     sentiment: sentimentOf(row.title),
     thumbHint: thumbHintOf(row.tags, label),
     ai: row.summary ?? row.description.slice(0, AI_FALLBACK_MAX),
+    aiGenerated: Boolean(row.summary),
     stockName,
   };
 }
@@ -267,6 +269,7 @@ export const newsRouter = {
         source: row.source ?? "뉴스",
         time: relativeTime(row.pubDate),
         ai: row.summary ?? row.description.slice(0, AI_FALLBACK_MAX),
+        aiGenerated: Boolean(row.summary),
         url: row.link ?? null,
         preview: row.description.slice(0, PREVIEW_MAX) || null,
         stock,

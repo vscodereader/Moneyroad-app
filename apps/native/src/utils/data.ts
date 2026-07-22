@@ -48,6 +48,8 @@ export interface Signal {
 
 export interface NewsItem {
   ai: string;
+  /** True only when `ai` is a real AI-generated summary (not a description fallback). */
+  aiGenerated?: boolean;
   category: string;
   code: string;
   id: string;

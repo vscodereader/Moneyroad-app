@@ -26,8 +26,12 @@ import { orpc } from "@/utils/orpc";
 const TABS: { k: NewsTab; l: string }[] = [
   { k: "watch", l: "관심 종목" },
   { k: "all", l: "전체" },
-  { k: "industry", l: "산업" },
   { k: "market", l: "시장" },
+  { k: "industry", l: "산업" },
+  // ----(추가: 기업·해외 탭)----
+  { k: "company", l: "기업" },
+  { k: "global", l: "해외" },
+  // ----(추가 끝)----
   { k: "policy", l: "정책" },
 ];
 
@@ -51,16 +55,12 @@ function NewsSheet({
     seed?.title ?? d?.title ?? (detail.isLoading ? "불러오는 중…" : "");
   const source = seed?.source ?? d?.source ?? "뉴스";
   const time = seed?.time ?? d?.time ?? "";
-  const ai = seed?.ai ?? d?.ai ?? "";
   const code = seed?.code ?? d?.stock?.code ?? "";
   const dummyStock = code ? findStock(code) : undefined;
   const stockName =
     dummyStock?.name ?? seed?.stockName ?? d?.stock?.name ?? null;
   const url = d?.url ?? null;
   const preview = d?.preview;
-  // Only surface the AI-summary UI when a real summary exists (not the
-  // description fallback). Local dev has no AI key, so this stays hidden.
-  const aiGenerated = seed?.aiGenerated ?? d?.aiGenerated ?? false;
 
   return (
     <Modal animationType="slide" onRequestClose={onClose} transparent visible>
@@ -102,31 +102,6 @@ function NewsSheet({
               marginTop: 8,
             }}
           >
-            {aiGenerated ? (
-              <>
-                <View
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    gap: 4,
-                    height: 22,
-                    paddingHorizontal: 8,
-                    borderRadius: 999,
-                    backgroundColor: t.sigAi,
-                  }}
-                >
-                  <Icon.sparkles color="#fff" size={11} />
-                  <Text
-                    style={{ fontSize: 11, fontWeight: "700", color: "#fff" }}
-                  >
-                    AI 요약
-                  </Text>
-                </View>
-                <Text style={{ fontSize: 11, color: t.fgSubtle }}>
-                  Gemini가 생성
-                </Text>
-              </>
-            ) : null}
             <Pressable
               hitSlop={8}
               onPress={onClose}
@@ -149,32 +124,6 @@ function NewsSheet({
           <Text style={{ fontSize: 12, color: t.fgSubtle, marginTop: 4 }}>
             {source} · {time}
           </Text>
-
-          {aiGenerated ? (
-            <View
-              style={{
-                marginTop: 16,
-                padding: 14,
-                borderRadius: 12,
-                backgroundColor: t.bgSubtle,
-              }}
-            >
-              <Text
-                style={{
-                  fontSize: 11,
-                  fontWeight: "800",
-                  color: t.sigAi,
-                  letterSpacing: 0.3,
-                  marginBottom: 6,
-                }}
-              >
-                핵심 요약
-              </Text>
-              <Text style={{ fontSize: 14, lineHeight: 22, color: t.fgStrong }}>
-                {ai}
-              </Text>
-            </View>
-          ) : null}
 
           {stockName ? (
             <View

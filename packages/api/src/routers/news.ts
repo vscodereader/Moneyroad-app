@@ -1,6 +1,6 @@
 import { db } from "@moneyroad-app/db";
 import { news, stockMaster, userWatchlist } from "@moneyroad-app/db/schema";
-import { and, desc, eq, inArray, lt, type SQL } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, lt, type SQL } from "drizzle-orm";
 import z from "zod";
 
 import { publicProcedure } from "../index";
@@ -11,7 +11,16 @@ const PREVIEW_MAX = 280;
 const AI_FALLBACK_MAX = 160;
 const THUMB_MAX = 8;
 
-const tabSchema = z.enum(["watch", "all", "industry", "market", "policy"]);
+// ----(추가: 기업(company)·해외(global) 탭)----
+const tabSchema = z.enum([
+  "watch",
+  "all",
+  "market",
+  "industry",
+  "company",
+  "global",
+  "policy",
+]);
 
 // Screen-facing item shape (mirrors apps/native NewsItem).
 export interface FeedItem {
@@ -47,10 +56,16 @@ function categoryLabel(category: string | null): string {
 // screen's tabs. "policy" has no dedicated classifier yet → reuses "other".
 function categoryFilter(tab: z.infer<typeof tabSchema>): SQL | undefined {
   switch (tab) {
+    case "market":
+      return eq(news.category, "market");
     case "industry":
       return eq(news.category, "sector");
-    case "market":
-      return inArray(news.category, ["market", "global"]);
+    // ----(추가: 기업·해외 탭 → 각 카테고리로 필터)----
+    case "company":
+      return eq(news.category, "company");
+    case "global":
+      return eq(news.category, "global");
+    // ----(추가 끝)----
     case "policy":
       return eq(news.category, "other");
     default:
@@ -155,6 +170,8 @@ export const newsRouter = {
     )
     .handler(async ({ input, context }) => {
       const filters: SQL[] = [];
+      // ----(추가: 카테고리 없는 '뉴스'(미분류) 기사는 피드에서 제외)----
+      filters.push(isNotNull(news.category));
 
       if (input.tab === "watch") {
         const userId = context.session?.user?.id;

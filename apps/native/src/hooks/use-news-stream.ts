@@ -8,7 +8,15 @@ import { authClient } from "@/lib/auth-client";
 import { fetchStreamToken } from "@/lib/stream-token";
 import { orpc } from "@/utils/orpc";
 
-export type NewsTab = "watch" | "all" | "industry" | "market" | "policy";
+// ----(추가: 기업(company)·해외(global) 탭)----
+export type NewsTab =
+  | "watch"
+  | "all"
+  | "market"
+  | "industry"
+  | "company"
+  | "global"
+  | "policy";
 
 const INVALIDATE_DEBOUNCE_MS = 800;
 const RECONNECT_BASE_MS = 1000;
@@ -18,10 +26,16 @@ const RECONNECT_MAX_MS = 30_000;
 // everything; the feed refetch re-applies the precise (watchlist) filter.
 function streamCategories(tab: NewsTab): string | undefined {
   switch (tab) {
+    case "market":
+      return "market";
     case "industry":
       return "sector";
-    case "market":
-      return "market,global";
+    // ----(추가: 기업·해외 탭 → 각 카테고리 구독)----
+    case "company":
+      return "company";
+    case "global":
+      return "global";
+    // ----(추가 끝)----
     case "policy":
       return "other";
     default:

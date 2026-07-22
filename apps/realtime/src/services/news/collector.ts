@@ -7,11 +7,13 @@ import { summarizeNews } from "./ai";
 import { mapWithConcurrency } from "./concurrency";
 import { getDb, isNewsDbConfigured } from "./db";
 import {
-  classifyCategory,
+  classifyArticle,
   crawlNaverArticle,
   extractSourceFromUrl,
   extractTags,
   fetchNaverNewsList,
+  isRelevant,
+  pickPrimary,
 } from "./naver";
 import { parseNewsBody, parseNewsTitle } from "./parser";
 import { notifyBreakingNews } from "./push";
@@ -59,20 +61,36 @@ async function filterNewItems(
   );
 }
 
-/** Enriches a single new item: crawl body, match stock, AI summarize. */
+/**
+ * Enriches a single new item: crawl body, match stock, classify. Returns null
+ * when the article is not stock-relevant (dropped before insert).
+ */
 async function prepareItem(
   item: NaverNewsItem,
   query: string
-): Promise<PreparedNews> {
+): Promise<PreparedNews | null> {
   const { source: crawledSource, content } = await crawlNaverArticle(item.link);
   const source = crawledSource ?? extractSourceFromUrl(item.originallink);
   const title = parseNewsTitle(item.title);
   const description = parseNewsBody(item.description);
-  const tags = extractTags(title, query);
   const stockCode = await matchStockCode(title, content);
 
+  // Relevance gate: drop articles with no stock/finance signal (e.g. an
+  // unrelated story that only matched "주식" inside "주식회사").
+  if (!isRelevant({ title, description, content, stockCode })) {
+    return null;
+  }
+
+  const tags = extractTags(title, query);
   const ai = await summarizeNews({ title, body: content ?? description });
-  const category = ai?.category ?? classifyCategory(query);
+  // Classify by the article's own text (title + body), not the search query.
+  const { scores } = classifyArticle({
+    title,
+    description,
+    content,
+    stockCode,
+  });
+  const category = ai?.category ?? pickPrimary(scores);
 
   return {
     id: crypto.randomUUID(),
@@ -134,11 +152,17 @@ async function collectQuery(
     return { fetchedCount: items.length, insertedCount: 0 };
   }
 
-  const prepared = await mapWithConcurrency(
+  const preparedRaw = await mapWithConcurrency(
     newItems,
     CRAWL_CONCURRENCY,
     (item) => prepareItem(item, query)
   );
+  const prepared = preparedRaw.filter(
+    (item): item is PreparedNews => item !== null
+  );
+  if (prepared.length === 0) {
+    return { fetchedCount: items.length, insertedCount: 0 };
+  }
 
   const inserted = await getDb()
     .insert(news)

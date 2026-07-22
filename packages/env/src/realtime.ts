@@ -26,7 +26,10 @@ export const env = createEnv({
     NEWS_FETCH_INTERVAL_MS: z.coerce.number().default(60_000),
     // AI summary/classification (optional). Skipped when the key is absent.
     GOOGLE_GENERATIVE_AI_API_KEY: z.string().optional(),
-    NEWS_AI_MODEL: z.string().default("gemini-2.5-flash"),
+    // 뉴스 라벨 분류 전용 모델. flash = 노이즈 게이팅 품질 우선. 배치 분류라
+    // 호출 수가 적어(사이클당 ~2회) 무료 20 RPM 안에서 넉넉히 돈다.
+    // "-latest" 별칭 → 고정 버전(예: gemini-2.5-flash-lite)처럼 폐기되지 않음.
+    NEWS_AI_MODEL: z.string().default("gemini-flash-latest"),
     // Max successful push of the same (user, type) per 5 min before throttling.
     NOTIFICATION_COOLDOWN_5M_MAX: z.coerce.number().default(5),
 

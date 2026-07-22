@@ -55,6 +55,7 @@ function NewsSheet({
     seed?.title ?? d?.title ?? (detail.isLoading ? "불러오는 중…" : "");
   const source = seed?.source ?? d?.source ?? "뉴스";
   const time = seed?.time ?? d?.time ?? "";
+  const ai = seed?.ai ?? d?.ai ?? "";
   const code = seed?.code ?? d?.stock?.code ?? "";
   const dummyStock = code ? findStock(code) : undefined;
   const stockName =
@@ -102,6 +103,25 @@ function NewsSheet({
               marginTop: 8,
             }}
           >
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 4,
+                height: 22,
+                paddingHorizontal: 8,
+                borderRadius: 999,
+                backgroundColor: t.sigAi,
+              }}
+            >
+              <Icon.sparkles color="#fff" size={11} />
+              <Text style={{ fontSize: 11, fontWeight: "700", color: "#fff" }}>
+                AI 요약
+              </Text>
+            </View>
+            <Text style={{ fontSize: 11, color: t.fgSubtle }}>
+              머니로드가 요약함
+            </Text>
             <Pressable
               hitSlop={8}
               onPress={onClose}
@@ -124,6 +144,30 @@ function NewsSheet({
           <Text style={{ fontSize: 12, color: t.fgSubtle, marginTop: 4 }}>
             {source} · {time}
           </Text>
+
+          <View
+            style={{
+              marginTop: 16,
+              padding: 14,
+              borderRadius: 12,
+              backgroundColor: t.bgSubtle,
+            }}
+          >
+            <Text
+              style={{
+                fontSize: 11,
+                fontWeight: "800",
+                color: t.sigAi,
+                letterSpacing: 0.3,
+                marginBottom: 6,
+              }}
+            >
+              핵심 요약
+            </Text>
+            <Text style={{ fontSize: 14, lineHeight: 22, color: t.fgStrong }}>
+              {ai}
+            </Text>
+          </View>
 
           {stockName ? (
             <View

@@ -633,7 +633,7 @@ export function NewsCard({
           <Text style={{ fontSize: 11, color: t.fgSubtle }}>
             {news.source} · {news.time}
           </Text>
-          {showAiChip && news.aiGenerated ? (
+          {showAiChip ? (
             <View
               style={{
                 marginLeft: "auto",

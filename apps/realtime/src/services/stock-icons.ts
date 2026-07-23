@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { Storage } from "@google-cloud/storage";
 import { createDb } from "@moneyroad-app/db/client";
 import { stockMaster, stockResource } from "@moneyroad-app/db/schema";
+import { and, eq, isNull } from "drizzle-orm";
 
 const TOSS_STOCK_ICON_BASE_URL = "https://static.toss.im/png-icons/securities";
 const DEFAULT_CONCURRENCY = 8;
@@ -141,6 +142,27 @@ export async function readStockIconCodesFromDb(
 
   return normalizeStockIconCodes(rows.map(({ code }) => code));
 }
+
+// ----(추가: 아이콘이 아직 없는(ready 리소스 없는) 종목 코드만 — 크론 델타 sync용)----
+export async function readMissingStockIconCodesFromDb(
+  databaseUrl = process.env.DATABASE_URL
+): Promise<string[]> {
+  const rows = await getStockIconDb(databaseUrl)
+    .select({ code: stockMaster.mkscShrnIscd })
+    .from(stockMaster)
+    .leftJoin(
+      stockResource,
+      and(
+        eq(stockResource.stockCode, stockMaster.mkscShrnIscd),
+        eq(stockResource.resourceType, STOCK_ICON_RESOURCE_TYPE),
+        eq(stockResource.status, "ready")
+      )
+    )
+    .where(isNull(stockResource.id));
+
+  return normalizeStockIconCodes(rows.map(({ code }) => code));
+}
+// ----(추가 끝)----
 
 async function fileExists(path: string): Promise<boolean> {
   try {
@@ -386,6 +408,37 @@ export async function syncStockIconResource(
   await upsertStockIconResource(result, options.databaseUrl);
   return result;
 }
+
+// ----(추가: 여러 종목 아이콘을 동시성 제한으로 sync — 크론에서 호출. GCS 업로드 포함)----
+export async function syncStockIconResources(
+  codes: string[],
+  options: StockIconSyncOptions & { concurrency?: number }
+): Promise<{ failed: number; missing: number; ready: number; total: number }> {
+  const normalized = normalizeStockIconCodes(codes);
+  const concurrency = Math.max(1, options.concurrency ?? DEFAULT_CONCURRENCY);
+  const summary = { failed: 0, missing: 0, ready: 0, total: normalized.length };
+  let nextIndex = 0;
+
+  const worker = async (): Promise<void> => {
+    while (nextIndex < normalized.length) {
+      const code = normalized[nextIndex];
+      nextIndex += 1;
+      if (code === undefined) {
+        break;
+      }
+      const result = await syncStockIconResource(code, options);
+      summary[result.status] += 1;
+    }
+  };
+
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, normalized.length) }, () =>
+      worker()
+    )
+  );
+  return summary;
+}
+// ----(추가 끝)----
 
 function createSummary(
   results: StockIconDownloadResult[]

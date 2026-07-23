@@ -36,6 +36,9 @@ export const env = createEnv({
     // Daily stock_master refresh schedule (cron). Default 06:00 Asia/Seoul.
     STOCK_MASTER_CRON: z.string().default("0 6 * * *"),
     STOCK_MASTER_TZ: z.string().default("Asia/Seoul"),
+    // 종목 아이콘 자동 sync 대상 GCS 버킷. 설정 시 stock_master 갱신 크론 직후
+    // "아이콘 없는 종목"만 토스→GCS로 sync한다. 미설정 시 아이콘 자동 sync 비활성.
+    STOCK_ICON_BUCKET: z.string().optional(),
 
     // Watchlist union poll interval. The poller reads user_watchlist and pins
     // the unique stock_code set on QuoteHub so those symbols stay subscribed

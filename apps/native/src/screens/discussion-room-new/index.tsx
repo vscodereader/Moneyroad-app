@@ -12,7 +12,12 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Icon } from "@/components/icons";
-import { BackButton, MrScreen, SegmentedControl } from "@/components/ui";
+import {
+  BackButton,
+  MrScreen,
+  SegmentedControl,
+  StockResourceLogo,
+} from "@/components/ui";
 import { useMrTheme } from "@/hooks/use-mr-theme";
 import { nav } from "@/utils/nav";
 import { orpc } from "@/utils/orpc";
@@ -29,7 +34,12 @@ const SENTIMENT_OPTIONS: { value: Sentiment; label: string }[] = [
 const NAME_MAX = 50;
 const DESCRIPTION_MAX = 200;
 
-type StockPick = { code: string; name: string; market: string };
+type StockPick = {
+  code: string;
+  name: string;
+  market: string;
+  iconUrl?: null | string;
+};
 
 function StockResultRow({
   result,
@@ -55,6 +65,9 @@ function StockResultRow({
         borderTopColor: t.border,
       })}
     >
+      {/* ----(추가: 종목 아이콘)---- */}
+      <StockResourceLogo iconUrl={result.iconUrl} name={result.name} />
+      {/* ----(추가 끝)---- */}
       <View style={{ flex: 1, minWidth: 0 }}>
         <Text style={{ fontSize: 14, fontWeight: "700", color: t.fgStrong }}>
           {result.name}

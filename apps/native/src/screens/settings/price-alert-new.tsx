@@ -10,13 +10,19 @@ import {
 
 import { Icon } from "@/components/icons";
 import { PriceAlertControls } from "@/components/price-alert-controls";
+import { StockResourceLogo } from "@/components/ui";
 import { useLiveQuote } from "@/hooks/use-live-quotes";
 import { useMrTheme } from "@/hooks/use-mr-theme";
 import { SettingsGroup, SettingsScreen } from "@/screens/settings/ui";
 import { fmt } from "@/utils/format";
 import { orpc } from "@/utils/orpc";
 
-type StockPick = { code: string; name: string; market: string };
+type StockPick = {
+  code: string;
+  name: string;
+  market: string;
+  iconUrl?: null | string;
+};
 
 const INPUT_ROW = {
   marginTop: 10,
@@ -125,6 +131,11 @@ function StockPicker({
                 setQuery("");
               }}
               style={({ pressed }) => ({
+                // ----(변경: 아이콘 표시 위해 가로 배치)----
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 12,
+                // ----(변경 끝)----
                 paddingVertical: 12,
                 paddingHorizontal: 14,
                 backgroundColor: pressed ? t.bgSubtle : "transparent",
@@ -132,14 +143,19 @@ function StockPicker({
                 borderTopColor: t.border,
               })}
             >
-              <Text
-                style={{ fontSize: 14, fontWeight: "700", color: t.fgStrong }}
-              >
-                {r.name}
-              </Text>
-              <Text style={{ fontSize: 11, color: t.fgSubtle, marginTop: 2 }}>
-                {r.code} · {r.market}
-              </Text>
+              {/* ----(추가: 종목 아이콘)---- */}
+              <StockResourceLogo iconUrl={r.iconUrl} name={r.name} />
+              {/* ----(추가 끝)---- */}
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text
+                  style={{ fontSize: 14, fontWeight: "700", color: t.fgStrong }}
+                >
+                  {r.name}
+                </Text>
+                <Text style={{ fontSize: 11, color: t.fgSubtle, marginTop: 2 }}>
+                  {r.code} · {r.market}
+                </Text>
+              </View>
             </Pressable>
           ))}
         </View>

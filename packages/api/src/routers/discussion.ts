@@ -2,6 +2,7 @@ import { db } from "@moneyroad-app/db";
 import {
   discussionMessage,
   discussionRoom,
+  discussionRoomFavorite,
   discussionRoomLike,
   discussionRoomMember,
   stockMaster,
@@ -16,7 +17,7 @@ import { adminProcedure, protectedProcedure, publicProcedure } from "../index";
 
 // ── shared types & helpers ───────────────────────────────────────────
 
-const tabSchema = z.enum(["hot", "watch", "recent"]);
+const tabSchema = z.enum(["hot", "watch", "recent", "favorite"]);
 const sentimentSchema = z.enum(["up", "neutral", "down"]);
 
 const MS = { min: 60_000, hour: 3_600_000, day: 86_400_000 } as const;
@@ -56,6 +57,13 @@ function likedExpr(userId: string | null): SQL<boolean> {
     return sql<boolean>`false`;
   }
   return sql<boolean>`EXISTS (SELECT 1 FROM ${discussionRoomLike} WHERE ${discussionRoomLike.roomId} = ${discussionRoom.id} AND ${discussionRoomLike.userId} = ${userId})`;
+}
+
+function favoritedExpr(userId: string | null): SQL<boolean> {
+  if (!userId) {
+    return sql<boolean>`false`;
+  }
+  return sql<boolean>`EXISTS (SELECT 1 FROM ${discussionRoomFavorite} WHERE ${discussionRoomFavorite.roomId} = ${discussionRoom.id} AND ${discussionRoomFavorite.userId} = ${userId})`;
 }
 
 // ── domain functions (transport-agnostic, see docs/adr/0001 #4) ──────
@@ -182,6 +190,43 @@ async function toggleLike(args: {
   return { liked: existing.length === 0, likesCount: row?.count ?? 0 };
 }
 
+/**
+ * Toggle a per-user room favorite (별). Returns the new state.
+ */
+async function toggleFavorite(args: {
+  roomId: number;
+  userId: string;
+}): Promise<{ favorited: boolean }> {
+  const existing = await db
+    .select({ userId: discussionRoomFavorite.userId })
+    .from(discussionRoomFavorite)
+    .where(
+      and(
+        eq(discussionRoomFavorite.userId, args.userId),
+        eq(discussionRoomFavorite.roomId, args.roomId)
+      )
+    )
+    .limit(1);
+
+  if (existing.length > 0) {
+    await db
+      .delete(discussionRoomFavorite)
+      .where(
+        and(
+          eq(discussionRoomFavorite.userId, args.userId),
+          eq(discussionRoomFavorite.roomId, args.roomId)
+        )
+      );
+  } else {
+    await db
+      .insert(discussionRoomFavorite)
+      .values({ userId: args.userId, roomId: args.roomId })
+      .onConflictDoNothing();
+  }
+
+  return { favorited: existing.length === 0 };
+}
+
 // ── router ───────────────────────────────────────────────────────────
 
 export const discussionRouter = {
@@ -197,17 +242,28 @@ export const discussionRouter = {
         tab: tabSchema.default("hot"),
         // Limit to one stock (used by the stock detail screen).
         stockCode: z.string().optional(),
+        // Free-text search. When non-empty, overrides the tab and matches the
+        // room name or its bound stock name (whitespace/case-insensitive).
+        q: z.string().optional(),
       })
     )
     .handler(async ({ context, input }) => {
       const userId = context.session?.user?.id ?? null;
+      const query = input.q?.trim() ?? "";
+      const isSearch = query.length > 0;
       const filters: SQL[] = [];
 
       if (input.stockCode) {
         filters.push(eq(discussionRoom.stockCode, input.stockCode));
       }
 
-      if (input.tab === "watch") {
+      if (isSearch) {
+        // Whitespace-insensitive, case-insensitive partial match on the room
+        // name or its joined stock name. Overrides the tab.
+        filters.push(
+          sql`(replace(lower(${discussionRoom.name}), ' ', '') LIKE replace(lower('%' || ${query} || '%'), ' ', '') OR replace(lower(${stockMaster.htsKorIsnm}), ' ', '') LIKE replace(lower('%' || ${query} || '%'), ' ', ''))`
+        );
+      } else if (input.tab === "watch") {
         if (!userId) {
           return [];
         }
@@ -225,6 +281,12 @@ export const discussionRouter = {
           return [];
         }
         filters.push(inArray(discussionRoom.stockCode, codes));
+      } else if (input.tab === "favorite") {
+        if (!userId) {
+          return [];
+        }
+        // Rooms the signed-in user has favorited (별).
+        filters.push(favoritedExpr(userId));
       }
 
       const c = counts(sql<number>`${discussionRoom.id}`);
@@ -245,6 +307,7 @@ export const discussionRouter = {
           repliesCount: c.repliesCount,
           lastMessageAt: c.lastMessageAt,
           liked: likedExpr(userId),
+          favorited: favoritedExpr(userId),
         })
         .from(discussionRoom)
         .leftJoin(user, eq(discussionRoom.createdBy, user.id))
@@ -257,7 +320,7 @@ export const discussionRouter = {
         filters.length > 0 ? baseQuery.where(and(...filters)) : baseQuery;
 
       let rows: Awaited<typeof filteredQuery>;
-      if (input.tab === "hot") {
+      if (input.tab === "hot" && !isSearch) {
         rows = await filteredQuery.orderBy(
           desc(c.likesCount),
           sql`${c.lastMessageAt} DESC NULLS LAST`
@@ -287,6 +350,7 @@ export const discussionRouter = {
         membersCount: r.membersCount,
         repliesCount: r.repliesCount,
         liked: r.liked,
+        favorited: r.favorited,
       }));
     }),
 
@@ -312,6 +376,7 @@ export const discussionRouter = {
           repliesCount: c.repliesCount,
           lastMessageAt: c.lastMessageAt,
           liked: likedExpr(userId),
+          favorited: favoritedExpr(userId),
         })
         .from(discussionRoom)
         .leftJoin(user, eq(discussionRoom.createdBy, user.id))
@@ -342,6 +407,7 @@ export const discussionRouter = {
         membersCount: row.membersCount,
         repliesCount: row.repliesCount,
         liked: row.liked,
+        favorited: row.favorited,
       };
     }),
 
@@ -434,6 +500,7 @@ export const discussionRouter = {
           sentiment: discussionRoom.sentiment,
           likesCount: c.likesCount,
           repliesCount: c.repliesCount,
+          favorited: favoritedExpr(userId),
           myLastAt,
         })
         .from(discussionRoom)
@@ -453,6 +520,7 @@ export const discussionRouter = {
         sentiment: r.sentiment,
         likesCount: r.likesCount,
         repliesCount: r.repliesCount,
+        favorited: r.favorited,
         time: r.myLastAt ? relativeTime(r.myLastAt) : "",
       }));
     }),
@@ -551,6 +619,16 @@ export const discussionRouter = {
         })
     ),
 
+  toggleFavorite: protectedProcedure
+    .input(z.object({ roomId: z.number().int() }))
+    .handler(
+      async ({ context, input }) =>
+        await toggleFavorite({
+          roomId: input.roomId,
+          userId: context.session.user.id,
+        })
+    ),
+
   /** Explicit leave — removes the user from `discussion_room_member`. */
   leaveRoom: protectedProcedure
     .input(z.object({ roomId: z.number().int() }))
@@ -642,4 +720,5 @@ export const discussionDomain = {
   sendMessage,
   deleteMessage,
   toggleLike,
+  toggleFavorite,
 };

@@ -782,17 +782,143 @@ export type DiscussionRoomRowData = {
   repliesCount: number;
   membersCount: number;
   liked: boolean;
+  favorited: boolean;
 };
+
+function RoomStatsRow({
+  room,
+  onToggleLike,
+  onToggleFavorite,
+}: {
+  room: DiscussionRoomRowData;
+  onToggleLike: () => void;
+  onToggleFavorite?: () => void;
+}) {
+  const { t } = useMrTheme();
+  return (
+    <View
+      style={{
+        flexDirection: "row",
+        gap: 16,
+        marginTop: 10,
+        alignItems: "center",
+      }}
+    >
+      {onToggleFavorite ? (
+        <Pressable
+          hitSlop={6}
+          onPress={onToggleFavorite}
+          style={{ flexDirection: "row", alignItems: "center" }}
+        >
+          <Icon.star
+            color={room.favorited ? t.warning : t.fgMuted}
+            filled={room.favorited}
+            size={15}
+          />
+        </Pressable>
+      ) : null}
+      <Pressable
+        hitSlop={6}
+        onPress={onToggleLike}
+        style={{ flexDirection: "row", alignItems: "center", gap: 4 }}
+      >
+        <Icon.heart
+          color={room.liked ? t.upStrong : t.fgMuted}
+          filled={room.liked}
+          size={15}
+        />
+        <Text
+          style={{
+            fontSize: 12,
+            fontWeight: "700",
+            color: room.liked ? t.upStrong : t.fgMuted,
+          }}
+        >
+          {room.likesCount}
+        </Text>
+      </Pressable>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+        <Icon.reply color={t.fgMuted} size={15} />
+        <Text style={{ fontSize: 12, fontWeight: "700", color: t.fgMuted }}>
+          {room.repliesCount}
+        </Text>
+      </View>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+        <Icon.sigComm color={t.fgMuted} size={13} />
+        <Text style={{ fontSize: 12, fontWeight: "700", color: t.fgMuted }}>
+          {room.membersCount}
+        </Text>
+      </View>
+      {room.sentiment === "neutral" ? null : (
+        <View
+          style={{
+            marginLeft: "auto",
+            paddingHorizontal: 8,
+            paddingVertical: 2,
+            borderRadius: 999,
+            backgroundColor: room.sentiment === "up" ? t.upBg : t.downBg,
+          }}
+        >
+          <Text
+            style={{
+              fontSize: 11,
+              fontWeight: "700",
+              color: room.sentiment === "up" ? t.upStrong : t.downStrong,
+            }}
+          >
+            {room.sentiment === "up" ? "긍정" : "부정"}
+          </Text>
+        </View>
+      )}
+    </View>
+  );
+}
+
+function RoomAdminButtons({
+  onEdit,
+  onDelete,
+}: {
+  onEdit?: () => void;
+  onDelete?: () => void;
+}) {
+  const { t } = useMrTheme();
+  if (!(onEdit || onDelete)) {
+    return null;
+  }
+  return (
+    <View
+      style={{
+        width: 44,
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 4,
+      }}
+    >
+      {onEdit ? (
+        <IconButton onPress={onEdit} size={40}>
+          <Icon.pencil color={t.fgMuted} size={18} />
+        </IconButton>
+      ) : null}
+      {onDelete ? (
+        <IconButton onPress={onDelete} size={40}>
+          <Icon.trash color={t.downStrong} size={18} />
+        </IconButton>
+      ) : null}
+    </View>
+  );
+}
 
 export function DiscussionRoomRow({
   room,
   onToggleLike,
+  onToggleFavorite,
   onPress,
   onEdit,
   onDelete,
 }: {
   room: DiscussionRoomRowData;
   onToggleLike: () => void;
+  onToggleFavorite?: () => void;
   onPress: () => void;
   // 관리자에게만 전달된다(전달될 때만 편집/삭제 버튼 노출).
   onEdit?: () => void;
@@ -814,152 +940,90 @@ export function DiscussionRoomRow({
         borderTopColor: t.border,
       })}
     >
-      <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
-        <View
-          style={{
-            width: 28,
-            height: 28,
-            borderRadius: 999,
-            backgroundColor: stock?.color ?? t.bgMuted,
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <Text
-            style={{
-              fontSize: 12,
-              fontWeight: "700",
-              color: stock?.logoTxt ?? "#fff",
-            }}
-          >
-            {authorName.slice(0, 1)}
-          </Text>
-        </View>
-        <Text style={{ fontSize: 11, color: t.fgStrong, fontWeight: "700" }}>
-          {authorName}
-        </Text>
-        {stockLabel ? (
-          <View
-            style={{
-              paddingHorizontal: 6,
-              paddingVertical: 2,
-              backgroundColor: t.bgSubtle,
-              borderRadius: 4,
-            }}
-          >
-            <Text style={{ fontSize: 10, fontWeight: "700", color: t.fgMuted }}>
-              {stockLabel}
+      <View style={{ flexDirection: "row", gap: 8 }}>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
+            <View
+              style={{
+                width: 28,
+                height: 28,
+                borderRadius: 999,
+                backgroundColor: stock?.color ?? t.bgMuted,
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Text
+                style={{
+                  fontSize: 12,
+                  fontWeight: "700",
+                  color: stock?.logoTxt ?? "#fff",
+                }}
+              >
+                {authorName.slice(0, 1)}
+              </Text>
+            </View>
+            <Text
+              style={{ fontSize: 11, color: t.fgStrong, fontWeight: "700" }}
+            >
+              {authorName}
             </Text>
-          </View>
-        ) : null}
-        <View
-          style={{
-            marginLeft: "auto",
-            flexDirection: "row",
-            alignItems: "center",
-            gap: 2,
-          }}
-        >
-          {onEdit ? (
-            <IconButton onPress={onEdit} size={28}>
-              <Icon.pencil color={t.fgMuted} size={16} />
-            </IconButton>
-          ) : null}
-          {onDelete ? (
-            <IconButton onPress={onDelete} size={28}>
-              <Icon.trash color={t.downStrong} size={16} />
-            </IconButton>
-          ) : null}
-          <Text
-            style={{
-              fontSize: 11,
-              color: t.fgMuted,
-              fontWeight: "600",
-              marginLeft: 2,
-            }}
-          >
-            {room.time}
-          </Text>
-        </View>
-      </View>
-      <Text
-        style={{
-          fontSize: 15,
-          fontWeight: "700",
-          color: t.fgStrong,
-          marginTop: 8,
-          lineHeight: 21,
-        }}
-      >
-        {room.name}
-      </Text>
-      <Text
-        numberOfLines={2}
-        style={{ fontSize: 13, color: t.fgMuted, marginTop: 4, lineHeight: 20 }}
-      >
-        {room.description}
-      </Text>
-      <View
-        style={{
-          flexDirection: "row",
-          gap: 16,
-          marginTop: 10,
-          alignItems: "center",
-        }}
-      >
-        <Pressable
-          hitSlop={6}
-          onPress={onToggleLike}
-          style={{ flexDirection: "row", alignItems: "center", gap: 4 }}
-        >
-          <Icon.thumbsUp
-            color={room.liked ? t.upStrong : t.fgMuted}
-            filled={room.liked}
-            size={15}
-          />
-          <Text
-            style={{
-              fontSize: 12,
-              fontWeight: "700",
-              color: room.liked ? t.upStrong : t.fgMuted,
-            }}
-          >
-            {room.likesCount}
-          </Text>
-        </Pressable>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-          <Icon.reply color={t.fgMuted} size={15} />
-          <Text style={{ fontSize: 12, fontWeight: "700", color: t.fgMuted }}>
-            {room.repliesCount}
-          </Text>
-        </View>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-          <Icon.sigComm color={t.fgMuted} size={13} />
-          <Text style={{ fontSize: 12, fontWeight: "700", color: t.fgMuted }}>
-            {room.membersCount}
-          </Text>
-        </View>
-        {room.sentiment === "neutral" ? null : (
-          <View
-            style={{
-              marginLeft: "auto",
-              paddingHorizontal: 8,
-              paddingVertical: 2,
-              borderRadius: 999,
-              backgroundColor: room.sentiment === "up" ? t.upBg : t.downBg,
-            }}
-          >
+            {stockLabel ? (
+              <View
+                style={{
+                  paddingHorizontal: 6,
+                  paddingVertical: 2,
+                  backgroundColor: t.bgSubtle,
+                  borderRadius: 4,
+                }}
+              >
+                <Text
+                  style={{ fontSize: 10, fontWeight: "700", color: t.fgMuted }}
+                >
+                  {stockLabel}
+                </Text>
+              </View>
+            ) : null}
             <Text
               style={{
                 fontSize: 11,
-                fontWeight: "700",
-                color: room.sentiment === "up" ? t.upStrong : t.downStrong,
+                color: t.fgMuted,
+                fontWeight: "600",
+                marginLeft: "auto",
               }}
             >
-              {room.sentiment === "up" ? "긍정" : "부정"}
+              {room.time}
             </Text>
           </View>
-        )}
+          <Text
+            style={{
+              fontSize: 15,
+              fontWeight: "700",
+              color: t.fgStrong,
+              marginTop: 8,
+              lineHeight: 21,
+            }}
+          >
+            {room.name}
+          </Text>
+          <Text
+            numberOfLines={2}
+            style={{
+              fontSize: 13,
+              color: t.fgMuted,
+              marginTop: 4,
+              lineHeight: 20,
+            }}
+          >
+            {room.description}
+          </Text>
+          <RoomStatsRow
+            onToggleFavorite={onToggleFavorite}
+            onToggleLike={onToggleLike}
+            room={room}
+          />
+        </View>
+        <RoomAdminButtons onDelete={onDelete} onEdit={onEdit} />
       </View>
     </Pressable>
   );

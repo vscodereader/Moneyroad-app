@@ -51,6 +51,19 @@ export const Icon = {
       <Path d="m21 21-4.3-4.3" {...stroke(color)} />
     </Base>
   ),
+  heart: ({
+    size = DEFAULT_SIZE,
+    color = DEFAULT_COLOR,
+    filled,
+  }: IconProps) => (
+    <Base size={size}>
+      <Path
+        d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.29 1.49 4.04 3 5.5l7 7Z"
+        {...stroke(color, 1.8)}
+        fill={filled ? color : "none"}
+      />
+    </Base>
+  ),
   bell: ({ size = DEFAULT_SIZE, color = DEFAULT_COLOR }: IconProps) => (
     <Base size={size}>
       <Path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" {...stroke(color)} />

@@ -110,3 +110,20 @@ export const discussionRoomLike = pgTable(
   },
   (table) => [primaryKey({ columns: [table.userId, table.roomId] })]
 );
+
+// Per-user favorite (별) on a room. Toggled by inserting / deleting this row.
+// The "즐겨찾기" tab filters to rooms the signed-in user has favorited; mirrors
+// the like table one-for-one (docs/rfcs/0004 기능3).
+export const discussionRoomFavorite = pgTable(
+  "discussion_room_favorite",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    roomId: integer("room_id")
+      .notNull()
+      .references(() => discussionRoom.id, { onDelete: "cascade" }),
+    favoritedAt: timestamp("favorited_at").defaultNow().notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.userId, table.roomId] })]
+);

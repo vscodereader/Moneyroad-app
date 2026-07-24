@@ -1,8 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { type Href, router } from "expo-router";
-import { useEffect, useState } from "react";
+import { type Href, router, useNavigation } from "expo-router";
+import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Pressable,
   ScrollView,
   Text,
@@ -80,16 +81,93 @@ function StockResultRow({
   );
 }
 
-export default function CreateDiscussionRoomScreen() {
-  const { t } = useMrTheme();
-  const insets = useSafeAreaInsets();
+type FormSnapshot = {
+  name: string;
+  description: string;
+  sentiment: Sentiment;
+  stockCode: string | null;
+};
+
+function stockPickFromRoom(r: {
+  stockCode: string | null;
+  stockName: string | null;
+}): StockPick | null {
+  return r.stockCode
+    ? { code: r.stockCode, name: r.stockName ?? r.stockCode, market: "" }
+    : null;
+}
+
+// 편집 중 변경사항이 있는 채로 뒤로가기(제스처/헤더/하드웨어) 시 경고.
+// 저장 성공 시 반환된 ref의 current를 true로 두면 경고를 건너뛴다.
+function useUnsavedChangesGuard(enabled: boolean) {
+  const navigation = useNavigation();
+  const allowLeaveRef = useRef(false);
+  useEffect(() => {
+    const sub = navigation.addListener("beforeRemove", (e) => {
+      if (allowLeaveRef.current || !enabled) {
+        return;
+      }
+      e.preventDefault();
+      Alert.alert(
+        "수정한 내용이 반영되지 않았습니다.",
+        "정말 뒤로 가시겠습니까?",
+        [
+          { text: "취소", style: "cancel" },
+          {
+            text: "확인",
+            style: "destructive",
+            onPress: () => {
+              allowLeaveRef.current = true;
+              navigation.dispatch(e.data.action);
+            },
+          },
+        ]
+      );
+    });
+    return sub;
+  }, [navigation, enabled]);
+  return allowLeaveRef;
+}
+
+// 토론방 생성/편집 폼 상태·검증·저장 로직. roomId가 있으면 편집 모드.
+function useDiscussionRoomForm(roomId?: number) {
   const queryClient = useQueryClient();
+  const isEdit =
+    typeof roomId === "number" && Number.isFinite(roomId) && roomId > 0;
+
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [sentiment, setSentiment] = useState<Sentiment>("neutral");
   const [selectedStock, setSelectedStock] = useState<StockPick | null>(null);
   const [stockQuery, setStockQuery] = useState("");
   const [debouncedStockQuery, setDebouncedStockQuery] = useState("");
+
+  // 편집 모드: 기존 방 값을 불러와 폼을 프리필한다(생성 모드에선 비활성).
+  const roomQuery = useQuery({
+    ...orpc.discussion.room.queryOptions({ input: { id: roomId ?? 0 } }),
+    enabled: isEdit,
+  });
+
+  const initialRef = useRef<FormSnapshot | null>(null);
+  const prefilledRef = useRef(false);
+
+  useEffect(() => {
+    if (!(isEdit && roomQuery.data) || prefilledRef.current) {
+      return;
+    }
+    const r = roomQuery.data;
+    prefilledRef.current = true;
+    setName(r.name);
+    setDescription(r.description ?? "");
+    setSentiment(r.sentiment);
+    setSelectedStock(stockPickFromRoom(r));
+    initialRef.current = {
+      name: r.name,
+      description: r.description ?? "",
+      sentiment: r.sentiment,
+      stockCode: r.stockCode ?? null,
+    };
+  }, [isEdit, roomQuery.data]);
 
   useEffect(() => {
     const handle = setTimeout(() => setDebouncedStockQuery(stockQuery), 220);
@@ -103,6 +181,18 @@ export default function CreateDiscussionRoomScreen() {
     enabled: debouncedStockQuery.trim().length >= 1 && !selectedStock,
   });
 
+  const trimmedName = name.trim();
+  const currentStockCode = selectedStock?.code ?? null;
+  const snap = initialRef.current;
+  const isDirty =
+    snap !== null &&
+    (name !== snap.name ||
+      description !== snap.description ||
+      sentiment !== snap.sentiment ||
+      currentStockCode !== snap.stockCode);
+
+  const allowLeaveRef = useUnsavedChangesGuard(isEdit && isDirty);
+
   const createRoom = useMutation(
     orpc.discussion.createRoom.mutationOptions({
       onSuccess: ({ id }) => {
@@ -115,20 +205,92 @@ export default function CreateDiscussionRoomScreen() {
     })
   );
 
-  const trimmedName = name.trim();
-  const canSubmit = trimmedName.length > 0 && !createRoom.isPending;
+  const updateRoom = useMutation(
+    orpc.discussion.updateRoom.mutationOptions({
+      onSuccess: () => {
+        // 저장 성공 → 목록·방 캐시 무효화 후 경고 없이 뒤로.
+        allowLeaveRef.current = true;
+        queryClient.invalidateQueries({
+          queryKey: orpc.discussion.rooms.key(),
+        });
+        queryClient.invalidateQueries({ queryKey: orpc.discussion.room.key() });
+        nav.back();
+      },
+    })
+  );
+
+  const isPending = isEdit ? updateRoom.isPending : createRoom.isPending;
+  const isError = isEdit ? updateRoom.isError : createRoom.isError;
+  const canSubmit =
+    trimmedName.length > 0 && !isPending && (isEdit ? isDirty : true);
 
   const handleSubmit = () => {
     if (!canSubmit) {
       return;
     }
+    if (isEdit && typeof roomId === "number") {
+      updateRoom.mutate({
+        id: roomId,
+        name: trimmedName,
+        description: description.trim(),
+        stockCode: currentStockCode,
+        sentiment,
+      });
+      return;
+    }
     createRoom.mutate({
       name: trimmedName,
       description: description.trim(),
-      stockCode: selectedStock?.code ?? null,
+      stockCode: currentStockCode,
       sentiment,
     });
   };
+
+  return {
+    isEdit,
+    name,
+    setName,
+    description,
+    setDescription,
+    sentiment,
+    setSentiment,
+    selectedStock,
+    setSelectedStock,
+    stockQuery,
+    setStockQuery,
+    stockSearch,
+    isPending,
+    isError,
+    canSubmit,
+    handleSubmit,
+  };
+}
+
+export default function DiscussionRoomFormScreen({
+  roomId,
+}: {
+  roomId?: number;
+}) {
+  const { t } = useMrTheme();
+  const insets = useSafeAreaInsets();
+  const {
+    isEdit,
+    name,
+    setName,
+    description,
+    setDescription,
+    sentiment,
+    setSentiment,
+    selectedStock,
+    setSelectedStock,
+    stockQuery,
+    setStockQuery,
+    stockSearch,
+    isPending,
+    isError,
+    canSubmit,
+    handleSubmit,
+  } = useDiscussionRoomForm(roomId);
 
   return (
     <MrScreen>
@@ -154,7 +316,7 @@ export default function CreateDiscussionRoomScreen() {
             color: t.fgStrong,
           }}
         >
-          새 토론방
+          {isEdit ? "토론방 편집" : "새 토론방"}
         </Text>
       </View>
 
@@ -263,7 +425,9 @@ export default function CreateDiscussionRoomScreen() {
                   {selectedStock.name}
                 </Text>
                 <Text style={{ fontSize: 11, color: t.fgMuted, marginTop: 2 }}>
-                  {selectedStock.code} · {selectedStock.market}
+                  {selectedStock.market
+                    ? `${selectedStock.code} · ${selectedStock.market}`
+                    : selectedStock.code}
                 </Text>
               </View>
               <Pressable
@@ -378,15 +542,15 @@ export default function CreateDiscussionRoomScreen() {
               justifyContent: "center",
             }}
           >
-            {createRoom.isPending ? (
+            {isPending ? (
               <ActivityIndicator color="#fff" />
             ) : (
               <Text style={{ fontSize: 15, fontWeight: "800", color: "#fff" }}>
-                토론방 만들기
+                {isEdit ? "저장" : "토론방 만들기"}
               </Text>
             )}
           </Pressable>
-          {createRoom.isError ? (
+          {isError ? (
             <Text
               style={{
                 marginTop: 10,
@@ -395,7 +559,9 @@ export default function CreateDiscussionRoomScreen() {
                 textAlign: "center",
               }}
             >
-              생성 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.
+              {isEdit
+                ? "저장 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요."
+                : "생성 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요."}
             </Text>
           ) : null}
         </View>

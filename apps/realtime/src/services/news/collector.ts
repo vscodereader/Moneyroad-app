@@ -18,6 +18,7 @@ import {
 import { parseNewsBody, parseNewsTitle } from "./parser";
 import { notifyBreakingNews } from "./push";
 import { matchStockCode } from "./stock-matcher";
+import { syncNewsThumbnail } from "./thumbnail";
 import type { NaverNewsItem, NewsEvent, PreparedNews } from "./types";
 
 /* ----(기본 검색어 목록 확장: 시작)---- */
@@ -92,7 +93,11 @@ async function prepareItem(
   item: NaverNewsItem,
   query: string
 ): Promise<PreparedNews | null> {
-  const { source: crawledSource, content } = await crawlNaverArticle(item.link);
+  const {
+    source: crawledSource,
+    content,
+    ogImage,
+  } = await crawlNaverArticle(item.link);
   const source = crawledSource ?? extractSourceFromUrl(item.originallink);
   const title = parseNewsTitle(item.title);
   const description = parseNewsBody(item.description);
@@ -116,8 +121,17 @@ async function prepareItem(
   });
   const category = pickPrimary(scores);
 
+  const id = crypto.randomUUID();
+  // ----(뉴스 썸네일: og:image → 리사이즈 → GCS 재호스팅. best-effort, 실패 시 null)----
+  // 버킷 env 미설정이거나 og:image 없으면(비-네이버 등) skip → UI 텍스트 폴백.
+  let newsThumbnail: string | null = null;
+  const thumbnailBucket = env.NEWS_THUMBNAIL_BUCKET;
+  if (thumbnailBucket && ogImage) {
+    newsThumbnail = await syncNewsThumbnail(id, ogImage, thumbnailBucket);
+  }
+
   return {
-    id: crypto.randomUUID(),
+    id,
     originallink: item.originallink,
     title,
     link: item.link,
@@ -129,6 +143,7 @@ async function prepareItem(
     tags,
     category,
     stockCode,
+    newsThumbnail,
     // 요약 기능 제거: summary는 더 이상 생성하지 않는다(라벨만).
     summary: null,
     sourceType: "auto",

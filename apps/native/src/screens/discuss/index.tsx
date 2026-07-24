@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useNavigation } from "expo-router";
+import { useEffect, useState } from "react";
 import {
   Pressable,
   RefreshControl,
@@ -28,6 +29,9 @@ const TABS: { k: DiscussTab; l: string }[] = [
 ];
 
 const ROOM_SKELETON_KEYS = ["s1", "s2", "s3", "s4"] as const;
+
+// RFC 0003 D2: 목록 카운트(사람수·말풍선)를 5초마다 폴링 갱신(ADR-0001 폴링 확장).
+const POLL_INTERVAL_MS = 5000;
 
 function EmptyState({ title, body }: { title: string; body: string }) {
   const { t } = useMrTheme();
@@ -66,19 +70,51 @@ function EmptyState({ title, body }: { title: string; body: string }) {
 export default function DiscussScreen() {
   const { t } = useMrTheme();
   const [tab, setTab] = useState<DiscussTab>("watch");
+  // 당겨서 새로고침 스피너는 "사용자가 당길 때"만. 5초 백그라운드 폴링엔 안 뜨게.
+  const [refreshing, setRefreshing] = useState(false);
   const { data: session } = authClient.useSession();
   const isAdmin = session?.user.role === "admin";
   const isAuthed = Boolean(session?.user);
   const queryClient = useQueryClient();
 
+  // 이 화면(토론 탭)을 실제로 보고 있을 때만 폴링. 다른 탭/화면으로 가면 멈춘다.
+  const navigation = useNavigation();
+  const [screenFocused, setScreenFocused] = useState(() =>
+    navigation.isFocused()
+  );
+  useEffect(() => {
+    const offFocus = navigation.addListener("focus", () =>
+      setScreenFocused(true)
+    );
+    const offBlur = navigation.addListener("blur", () =>
+      setScreenFocused(false)
+    );
+    return () => {
+      offFocus();
+      offBlur();
+    };
+  }, [navigation]);
+
   const roomsOptions = orpc.discussion.rooms.queryOptions({ input: { tab } });
-  const roomsQuery = useQuery(roomsOptions);
+  const roomsQuery = useQuery({
+    ...roomsOptions,
+    refetchInterval: screenFocused ? POLL_INTERVAL_MS : false,
+  });
 
   const toggleLike = useMutation(
     orpc.discussion.toggleLike.mutationOptions({
       onSuccess: () => {
         // ADR-0001 #3: no optimistic append — invalidate so server-issued
         // state stays the source of truth (ws migration friendly).
+        queryClient.invalidateQueries({ queryKey: roomsOptions.queryKey });
+      },
+    })
+  );
+
+  // RFC 0003 D3: 관리자 토론방 삭제(하드 삭제 + FK cascade). 확인창 없이 바로 삭제.
+  const deleteRoom = useMutation(
+    orpc.discussion.deleteRoom.mutationOptions({
+      onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: roomsOptions.queryKey });
       },
     })
@@ -100,8 +136,11 @@ export default function DiscussScreen() {
       <ScrollView
         refreshControl={
           <RefreshControl
-            onRefresh={() => roomsQuery.refetch()}
-            refreshing={roomsQuery.isRefetching}
+            onRefresh={() => {
+              setRefreshing(true);
+              roomsQuery.refetch().finally(() => setRefreshing(false));
+            }}
+            refreshing={refreshing}
             tintColor={t.primary}
           />
         }
@@ -139,6 +178,12 @@ export default function DiscussScreen() {
         {rooms.map((r) => (
           <DiscussionRoomRow
             key={r.id}
+            onDelete={
+              isAdmin ? () => deleteRoom.mutate({ id: r.id }) : undefined
+            }
+            onEdit={
+              isAdmin ? () => nav.openEditDiscussionRoom(r.id) : undefined
+            }
             onPress={() => nav.openDiscussionRoom(r.id)}
             onToggleLike={() => handleToggleLike(r.id)}
             room={r}

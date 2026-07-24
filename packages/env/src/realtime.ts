@@ -39,6 +39,10 @@ export const env = createEnv({
     // 종목 아이콘 자동 sync 대상 GCS 버킷. 설정 시 stock_master 갱신 크론 직후
     // "아이콘 없는 종목"만 토스→GCS로 sync한다. 미설정 시 아이콘 자동 sync 비활성.
     STOCK_ICON_BUCKET: z.string().optional(),
+    // 뉴스 자동 기사 썸네일(og:image)을 재호스팅할 GCS 버킷. 설정 시 수집기가
+    // 네이버 기사 대표 이미지를 다운로드→리사이즈→업로드하고 news_thumbnail에
+    // 공개 URL을 저장한다. 미설정 시 썸네일 수집 skip(전부 텍스트 폴백).
+    NEWS_THUMBNAIL_BUCKET: z.string().optional(),
 
     // Watchlist union poll interval. The poller reads user_watchlist and pins
     // the unique stock_code set on QuoteHub so those symbols stay subscribed

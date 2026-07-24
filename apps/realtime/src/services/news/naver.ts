@@ -21,6 +21,9 @@ const RE_SOURCE_PRESS = /class="[^"]*press_logo[^"]*"[^>]*alt="([^"]+)"/;
 const RE_CONTENT_DIC = /<div[^>]+id="dic_area"[^>]*>([\s\S]*?)<\/div>/;
 const RE_CONTENT_BODY = /<div[^>]+id="articeBody"[^>]*>([\s\S]*?)<\/div>/;
 const RE_BRACKET_KEYWORD = /[[(【「『]([가-힣a-zA-Z0-9·\s]+)[\])】」』]/g;
+// 기사 대표 이미지(og:image) — 뉴스 썸네일 소스. property→content 순서(네이버 표준).
+const RE_OG_IMAGE =
+  /<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i;
 
 const CRAWL_USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
@@ -75,12 +78,14 @@ export function extractSourceFromUrl(originallink: string): string | null {
   }
 }
 
-/** Crawls a Naver news page for the press name and article body. */
-export async function crawlNaverArticle(
-  link: string
-): Promise<{ source: string | null; content: string | null }> {
+/** Crawls a Naver news page for the press name, article body, and og:image. */
+export async function crawlNaverArticle(link: string): Promise<{
+  source: string | null;
+  content: string | null;
+  ogImage: string | null;
+}> {
   if (!link.includes("news.naver.com")) {
-    return { source: null, content: null };
+    return { source: null, content: null, ogImage: null };
   }
   try {
     const res = await globalThis.fetch(link, {
@@ -88,7 +93,7 @@ export async function crawlNaverArticle(
       signal: AbortSignal.timeout(CRAWL_TIMEOUT_MS),
     });
     if (!res.ok) {
-      return { source: null, content: null };
+      return { source: null, content: null, ogImage: null };
     }
 
     const html = await res.text();
@@ -114,9 +119,12 @@ export async function crawlNaverArticle(
       }
     }
 
-    return { source, content };
+    // ----(뉴스 썸네일: 대표 이미지 og:image 추출)----
+    const ogImage = html.match(RE_OG_IMAGE)?.[1] ?? null;
+
+    return { source, content, ogImage };
   } catch {
-    return { source: null, content: null };
+    return { source: null, content: null, ogImage: null };
   }
 }
 

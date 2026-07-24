@@ -62,6 +62,14 @@ export const discussionMessage = pgTable(
     // Soft delete: rows survive moderation; client renders the placeholder
     // "삭제된 메시지입니다" when deletedAt is non-null.
     deletedAt: timestamp("deleted_at"),
+    // Admin blind (가림): message is masked for everyone but the row survives.
+    // Client renders a "가려진 메시지입니다" placeholder + blindReason when
+    // blindedAt is non-null. Independent of deletedAt (docs/rfcs/0004 기능2).
+    blindedAt: timestamp("blinded_at"),
+    blindedBy: text("blinded_by").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    blindReason: text("blind_reason"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (table) => [

@@ -42,7 +42,7 @@ function counts(roomIdRef: SQL<number>) {
   return {
     likesCount: sql<number>`(SELECT COUNT(*)::int FROM ${discussionRoomLike} WHERE ${discussionRoomLike.roomId} = ${roomIdRef})`,
     membersCount: sql<number>`(SELECT COUNT(*)::int FROM ${discussionRoomMember} WHERE ${discussionRoomMember.roomId} = ${roomIdRef})`,
-    repliesCount: sql<number>`(SELECT COUNT(*)::int FROM ${discussionMessage} WHERE ${discussionMessage.roomId} = ${roomIdRef})`,
+    repliesCount: sql<number>`(SELECT COUNT(*)::int FROM ${discussionMessage} WHERE ${discussionMessage.roomId} = ${roomIdRef} AND ${discussionMessage.deletedAt} IS NULL AND ${discussionMessage.blindedAt} IS NULL)`,
     // Raw sql subquery: pg returns a tz-naive string, not a Date. Decode it the
     // same way drizzle decodes a `timestamp` column (treat as UTC) so callers can
     // safely call `.toISOString()` / pass it to `relativeTime`.
@@ -145,6 +145,79 @@ async function deleteMessage(args: {
     .update(discussionMessage)
     .set({ deletedAt: new Date() })
     .where(eq(discussionMessage.id, args.messageId));
+}
+
+/**
+ * Admin bulk blind (가림). Masks the given messages for everyone; rows survive.
+ * Scoped to the room and idempotent (skips already-blinded rows).
+ */
+async function hideMessages(args: {
+  roomId: number;
+  messageIds: number[];
+  actorId: string;
+  reason: string;
+}): Promise<void> {
+  if (args.messageIds.length === 0) {
+    return;
+  }
+  await db
+    .update(discussionMessage)
+    .set({
+      blindedAt: new Date(),
+      blindedBy: args.actorId,
+      blindReason: args.reason,
+    })
+    .where(
+      and(
+        inArray(discussionMessage.id, args.messageIds),
+        eq(discussionMessage.roomId, args.roomId),
+        isNull(discussionMessage.blindedAt)
+      )
+    );
+}
+
+/**
+ * Admin bulk un-blind — clears the three blind fields. Scoped to the room.
+ */
+async function unhideMessages(args: {
+  roomId: number;
+  messageIds: number[];
+}): Promise<void> {
+  if (args.messageIds.length === 0) {
+    return;
+  }
+  await db
+    .update(discussionMessage)
+    .set({ blindedAt: null, blindedBy: null, blindReason: null })
+    .where(
+      and(
+        inArray(discussionMessage.id, args.messageIds),
+        eq(discussionMessage.roomId, args.roomId)
+      )
+    );
+}
+
+/**
+ * Admin bulk soft-delete. Mirrors deleteMessage but over a set; scoped to the
+ * room and idempotent (skips already-deleted rows).
+ */
+async function deleteMessages(args: {
+  roomId: number;
+  messageIds: number[];
+}): Promise<void> {
+  if (args.messageIds.length === 0) {
+    return;
+  }
+  await db
+    .update(discussionMessage)
+    .set({ deletedAt: new Date() })
+    .where(
+      and(
+        inArray(discussionMessage.id, args.messageIds),
+        eq(discussionMessage.roomId, args.roomId),
+        isNull(discussionMessage.deletedAt)
+      )
+    );
 }
 
 /**
@@ -442,6 +515,8 @@ export const discussionRouter = {
           content: discussionMessage.content,
           createdAt: discussionMessage.createdAt,
           deletedAt: discussionMessage.deletedAt,
+          blindedAt: discussionMessage.blindedAt,
+          blindReason: discussionMessage.blindReason,
         })
         .from(discussionMessage)
         .innerJoin(user, eq(discussionMessage.userId, user.id))
@@ -460,9 +535,12 @@ export const discussionRouter = {
           userId: m.userId,
           userName: m.userName,
           userImage: m.userImage,
-          content: m.deletedAt ? null : m.content,
+          // Mask content when soft-deleted OR admin-blinded.
+          content: m.deletedAt || m.blindedAt ? null : m.content,
           createdAt: m.createdAt.toISOString(),
           deletedAt: m.deletedAt?.toISOString() ?? null,
+          blindedAt: m.blindedAt?.toISOString() ?? null,
+          blindReason: m.blindReason ?? null,
         })),
         nextCursor: hasMore ? (slice[0]?.id ?? null) : null,
       };
@@ -720,6 +798,60 @@ export const discussionRouter = {
       refreshRealtimeDiscussion("discussion.deleteRoom");
       return { ok: true };
     }),
+
+  /** Admin bulk blind (가림) — masks the selected messages for everyone. */
+  hideMessages: adminProcedure
+    .input(
+      z.object({
+        roomId: z.number().int(),
+        messageIds: z.array(z.number().int()).min(1),
+        reason: z.string().min(1).max(200),
+      })
+    )
+    .handler(async ({ context, input }) => {
+      await hideMessages({
+        roomId: input.roomId,
+        messageIds: input.messageIds,
+        actorId: context.session.user.id,
+        reason: input.reason.trim(),
+      });
+      refreshRealtimeDiscussion("discussion.hideMessages");
+      return { ok: true };
+    }),
+
+  /** Admin bulk un-blind — restores the selected messages. */
+  unhideMessages: adminProcedure
+    .input(
+      z.object({
+        roomId: z.number().int(),
+        messageIds: z.array(z.number().int()).min(1),
+      })
+    )
+    .handler(async ({ input }) => {
+      await unhideMessages({
+        roomId: input.roomId,
+        messageIds: input.messageIds,
+      });
+      refreshRealtimeDiscussion("discussion.unhideMessages");
+      return { ok: true };
+    }),
+
+  /** Admin bulk soft-delete. */
+  deleteMessages: adminProcedure
+    .input(
+      z.object({
+        roomId: z.number().int(),
+        messageIds: z.array(z.number().int()).min(1),
+      })
+    )
+    .handler(async ({ input }) => {
+      await deleteMessages({
+        roomId: input.roomId,
+        messageIds: input.messageIds,
+      });
+      refreshRealtimeDiscussion("discussion.deleteMessages");
+      return { ok: true };
+    }),
 };
 
 // Re-export domain functions so future ws handlers can call them without
@@ -727,6 +859,9 @@ export const discussionRouter = {
 export const discussionDomain = {
   sendMessage,
   deleteMessage,
+  hideMessages,
+  unhideMessages,
+  deleteMessages,
   toggleLike,
   toggleFavorite,
 };

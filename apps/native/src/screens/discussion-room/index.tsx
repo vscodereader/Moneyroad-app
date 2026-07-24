@@ -24,6 +24,12 @@ import { changeColor, fmt } from "@/utils/format";
 import { nav } from "@/utils/nav";
 import { orpc } from "@/utils/orpc";
 import type { MrTokens } from "@/utils/theme";
+import { AdminMessageActionSheet } from "./components/admin-message-action-sheet";
+import { BlindReasonSheet } from "./components/blind-reason-sheet";
+import { MessageCheckbox } from "./components/message-checkbox";
+import { SelectionBar } from "./components/selection-bar";
+
+type SelectionMode = "hide" | "delete";
 
 const AVATAR_PALETTE = [
   "#256EF4",
@@ -62,6 +68,8 @@ type Message = {
   content: string | null;
   createdAt: string;
   deletedAt: string | null;
+  blindedAt: string | null;
+  blindReason: string | null;
 };
 
 type RoomData = {
@@ -139,12 +147,99 @@ function MessageAvatar({ userName }: { userName: string }) {
   );
 }
 
+function bubbleText(message: Message, isDeleted: boolean, isBlinded: boolean) {
+  if (isDeleted) {
+    return "삭제된 메시지입니다";
+  }
+  if (isBlinded) {
+    return `이 메시지는 '${message.blindReason ?? ""}' 사유로 가림 처리되었습니다.`;
+  }
+  return message.content ?? "";
+}
+
+function MessageBubbleBody({
+  message,
+  isSelf,
+  isMasked,
+  isDeleted,
+  isBlinded,
+  bubbleBg,
+  textColor,
+  inSelection,
+  onLongPress,
+  onToggleSelect,
+  t,
+}: {
+  message: Message;
+  isSelf: boolean;
+  isMasked: boolean;
+  isDeleted: boolean;
+  isBlinded: boolean;
+  bubbleBg: string;
+  textColor: string;
+  inSelection: boolean;
+  onLongPress: () => void;
+  onToggleSelect: () => void;
+  t: MrTokens;
+}) {
+  return (
+    <View
+      style={{
+        alignItems: isSelf ? "flex-end" : "flex-start",
+        gap: 2,
+        flexShrink: 1,
+      }}
+    >
+      <Pressable
+        disabled={isMasked}
+        onLongPress={inSelection ? undefined : onLongPress}
+        onPress={inSelection ? onToggleSelect : undefined}
+        style={{
+          paddingVertical: 8,
+          paddingHorizontal: 12,
+          borderTopLeftRadius: isSelf ? 14 : 4,
+          borderTopRightRadius: 14,
+          borderBottomRightRadius: 14,
+          borderBottomLeftRadius: 14,
+          backgroundColor: bubbleBg,
+          borderWidth: isSelf || isMasked ? 0 : 1,
+          borderColor: t.border,
+        }}
+      >
+        <Text
+          style={{
+            fontSize: 13,
+            lineHeight: 20,
+            color: textColor,
+            fontStyle: isMasked ? "italic" : "normal",
+          }}
+        >
+          {bubbleText(message, isDeleted, isBlinded)}
+        </Text>
+      </Pressable>
+      <Text
+        style={{
+          fontSize: 10,
+          color: t.fgSubtle,
+          fontWeight: "500",
+          paddingHorizontal: 4,
+        }}
+      >
+        {hhmm(message.createdAt)}
+      </Text>
+    </View>
+  );
+}
+
 function MessageBubble({
   message,
   showHeader,
   isSelf,
   isHost,
   onLongPress,
+  selectionMode,
+  isSelected,
+  onToggleSelect,
   t,
 }: {
   message: Message;
@@ -152,78 +247,66 @@ function MessageBubble({
   isSelf: boolean;
   isHost: boolean;
   onLongPress: () => void;
+  selectionMode: SelectionMode | null;
+  isSelected: boolean;
+  onToggleSelect: () => void;
   t: MrTokens;
 }) {
   const isDeleted = Boolean(message.deletedAt);
-  const bubbleBg = isDeleted ? t.bgSubtle : isSelf ? t.primary : t.bg;
-  const textColor = isDeleted ? t.fgSubtle : isSelf ? "#fff" : t.fgStrong;
+  // isDeleted 스타일 브랜치를 미러한 가림(blind) 처리. blindedAt 있으면 말풍선은
+  // 유지하되 사유 안내문을 이탤릭·subtle로 렌더한다(docs/rfcs/0004 기능2).
+  const isBlinded = Boolean(message.blindedAt);
+  const isMasked = isDeleted || isBlinded;
+  const bubbleBg = isMasked ? t.bgSubtle : isSelf ? t.primary : t.bg;
+  const textColor = isMasked ? t.fgSubtle : isSelf ? "#fff" : t.fgStrong;
   const showAvatar = !isSelf && showHeader;
   const showAvatarSpacer = !(isSelf || showHeader);
+  const inSelection = selectionMode !== null;
 
   return (
-    <View
-      style={{
-        paddingHorizontal: 12,
-        paddingVertical: 2,
-        alignItems: isSelf ? "flex-end" : "flex-start",
-      }}
-    >
-      {showHeader && !isSelf ? (
-        <MessageHeader isHost={isHost} t={t} userName={message.userName} />
+    <View style={{ flexDirection: "row", alignItems: "center" }}>
+      {inSelection ? (
+        <MessageCheckbox
+          checked={isSelected}
+          disabled={isMasked}
+          onPress={onToggleSelect}
+          t={t}
+        />
       ) : null}
       <View
         style={{
-          flexDirection: "row",
-          gap: 8,
-          alignItems: "flex-end",
-          maxWidth: "82%",
+          flex: 1,
+          paddingHorizontal: 12,
+          paddingVertical: 2,
+          alignItems: isSelf ? "flex-end" : "flex-start",
         }}
       >
-        {showAvatar ? <MessageAvatar userName={message.userName} /> : null}
-        {showAvatarSpacer ? <View style={{ width: 28 }} /> : null}
+        {showHeader && !isSelf ? (
+          <MessageHeader isHost={isHost} t={t} userName={message.userName} />
+        ) : null}
         <View
           style={{
-            alignItems: isSelf ? "flex-end" : "flex-start",
-            gap: 2,
-            flexShrink: 1,
+            flexDirection: "row",
+            gap: 8,
+            alignItems: "flex-end",
+            maxWidth: "82%",
           }}
         >
-          <Pressable
-            disabled={isDeleted}
+          {showAvatar ? <MessageAvatar userName={message.userName} /> : null}
+          {showAvatarSpacer ? <View style={{ width: 28 }} /> : null}
+          <MessageBubbleBody
+            bubbleBg={bubbleBg}
+            inSelection={inSelection}
+            isBlinded={isBlinded}
+            isDeleted={isDeleted}
+            isMasked={isMasked}
+            isSelf={isSelf}
+            message={message}
             onLongPress={onLongPress}
-            style={{
-              paddingVertical: 8,
-              paddingHorizontal: 12,
-              borderTopLeftRadius: isSelf ? 14 : 4,
-              borderTopRightRadius: 14,
-              borderBottomRightRadius: 14,
-              borderBottomLeftRadius: 14,
-              backgroundColor: bubbleBg,
-              borderWidth: isSelf || isDeleted ? 0 : 1,
-              borderColor: t.border,
-            }}
-          >
-            <Text
-              style={{
-                fontSize: 13,
-                lineHeight: 20,
-                color: textColor,
-                fontStyle: isDeleted ? "italic" : "normal",
-              }}
-            >
-              {isDeleted ? "삭제된 메시지입니다" : (message.content ?? "")}
-            </Text>
-          </Pressable>
-          <Text
-            style={{
-              fontSize: 10,
-              color: t.fgSubtle,
-              fontWeight: "500",
-              paddingHorizontal: 4,
-            }}
-          >
-            {hhmm(message.createdAt)}
-          </Text>
+            onToggleSelect={onToggleSelect}
+            t={t}
+            textColor={textColor}
+          />
         </View>
       </View>
     </View>
@@ -271,6 +354,8 @@ function RoomHeader({
   stockLabel,
   canLeave,
   onLeave,
+  selectionCount,
+  onCancelSelection,
   t,
   topInset,
 }: {
@@ -279,24 +364,50 @@ function RoomHeader({
   stockLabel: string | null;
   canLeave: boolean;
   onLeave: () => void;
+  selectionCount: number | null;
+  onCancelSelection: () => void;
   t: MrTokens;
   topInset: number;
 }) {
   const live = useLiveQuote(room.stockCode ?? "");
+  const headerBase = {
+    paddingTop: topInset + 8,
+    paddingBottom: 8,
+    paddingHorizontal: 16,
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    gap: 8,
+    backgroundColor: t.bg,
+    borderBottomWidth: 1,
+    borderBottomColor: t.border,
+  };
+  // 선택모드일 때는 헤더를 "N개 선택 · 취소"로 대체한다.
+  if (selectionCount !== null) {
+    return (
+      <View style={headerBase}>
+        <IconButton onPress={onCancelSelection}>
+          <Icon.close color={t.fgStrong} size={20} />
+        </IconButton>
+        <Text
+          style={{
+            flex: 1,
+            fontSize: 15,
+            fontWeight: "800",
+            color: t.fgStrong,
+          }}
+        >
+          {selectionCount}개 선택
+        </Text>
+        <Pressable hitSlop={8} onPress={onCancelSelection}>
+          <Text style={{ fontSize: 14, fontWeight: "700", color: t.primary }}>
+            취소
+          </Text>
+        </Pressable>
+      </View>
+    );
+  }
   return (
-    <View
-      style={{
-        paddingTop: topInset + 8,
-        paddingBottom: 8,
-        paddingHorizontal: 16,
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 8,
-        backgroundColor: t.bg,
-        borderBottomWidth: 1,
-        borderBottomColor: t.border,
-      }}
-    >
+    <View style={headerBase}>
       <IconButton onPress={nav.back}>
         <Icon.chevLeft color={t.fgStrong} size={24} />
       </IconButton>
@@ -585,6 +696,9 @@ function MessageList({
   hostUserId,
   scrollRef,
   onLongPress,
+  selectionMode,
+  selectedIds,
+  onToggleSelect,
   isPending,
   isEmpty,
   t,
@@ -594,6 +708,9 @@ function MessageList({
   hostUserId: string | null;
   scrollRef: React.RefObject<ScrollView | null>;
   onLongPress: (m: Message) => void;
+  selectionMode: SelectionMode | null;
+  selectedIds: Set<number>;
+  onToggleSelect: (id: number) => void;
   isPending: boolean;
   isEmpty: boolean;
   t: MrTokens;
@@ -646,10 +763,13 @@ function MessageList({
         return (
           <MessageBubble
             isHost={isHost}
+            isSelected={selectedIds.has(m.id)}
             isSelf={isSelf}
             key={m.id}
             message={m}
             onLongPress={() => onLongPress(m)}
+            onToggleSelect={() => onToggleSelect(m.id)}
+            selectionMode={selectionMode}
             showHeader={showHeader}
             t={t}
           />
@@ -704,6 +824,17 @@ function useDiscussionRoom(roomId: number, isValid: boolean) {
       onSuccess: invalidateAfterMessageChange,
     })
   );
+  // Admin bulk 가림/삭제 (docs/rfcs/0004 기능2).
+  const hideMessagesMutation = useMutation(
+    orpc.discussion.hideMessages.mutationOptions({
+      onSuccess: invalidateAfterMessageChange,
+    })
+  );
+  const deleteMessagesMutation = useMutation(
+    orpc.discussion.deleteMessages.mutationOptions({
+      onSuccess: invalidateAfterMessageChange,
+    })
+  );
   const leaveMutation = useMutation(
     orpc.discussion.leaveRoom.mutationOptions({
       onSuccess: () => {
@@ -721,6 +852,8 @@ function useDiscussionRoom(roomId: number, isValid: boolean) {
     messagesQuery,
     sendMutation,
     deleteMutation,
+    hideMessagesMutation,
+    deleteMessagesMutation,
     leaveMutation,
   };
 }
@@ -763,6 +896,8 @@ export default function DiscussionRoomScreen() {
     messagesQuery,
     sendMutation,
     deleteMutation,
+    hideMessagesMutation,
+    deleteMessagesMutation,
     leaveMutation,
   } = useDiscussionRoom(roomId, isValidRoomId);
 
@@ -772,6 +907,16 @@ export default function DiscussionRoomScreen() {
   const [draft, setDraft] = useState("");
   const scrollRef = useRef<ScrollView>(null);
   const initialScrollDone = useRef(false);
+
+  // Admin 가림/삭제 UX 상태 (docs/rfcs/0004 기능2).
+  // actionMessage: 롱프레스로 액션시트를 띄운 대상 메시지.
+  // selectionMode: null이면 선택모드 아님. selectedIds: 선택된 메시지 id 집합.
+  const [actionMessage, setActionMessage] = useState<Message | null>(null);
+  const [selectionMode, setSelectionMode] = useState<SelectionMode | null>(
+    null
+  );
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [reasonSheetOpen, setReasonSheetOpen] = useState(false);
 
   // Initial scroll-to-end once messages first load. Subsequent polls do NOT
   // auto-scroll — users reading older messages shouldn't be yanked.
@@ -803,9 +948,15 @@ export default function DiscussionRoomScreen() {
   };
 
   const handleLongPress = (message: Message) => {
-    if (message.deletedAt) {
+    if (message.deletedAt || message.blindedAt) {
       return;
     }
+    // Admin이 남의 메시지를 롱프레스하면 [숨김][삭제] 액션시트를 연다.
+    if (isAdmin && message.userId !== currentUserId) {
+      setActionMessage(message);
+      return;
+    }
+    // 본인 메시지/비관리자는 기존 단건삭제 Alert 유지.
     const canDelete = currentUserId === message.userId || isAdmin;
     if (!canDelete) {
       return;
@@ -818,6 +969,61 @@ export default function DiscussionRoomScreen() {
         onPress: () => deleteMutation.mutate({ messageId: message.id }),
       },
     ]);
+  };
+
+  const exitSelection = () => {
+    setSelectionMode(null);
+    setSelectedIds(new Set());
+    setReasonSheetOpen(false);
+  };
+
+  const enterSelection = (mode: SelectionMode) => {
+    const seed = actionMessage
+      ? new Set([actionMessage.id])
+      : new Set<number>();
+    setSelectionMode(mode);
+    setSelectedIds(seed);
+    setActionMessage(null);
+  };
+
+  const toggleSelect = (id: number) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const submitSelection = () => {
+    const messageIds = [...selectedIds];
+    if (messageIds.length === 0) {
+      return;
+    }
+    if (selectionMode === "delete") {
+      deleteMessagesMutation.mutate(
+        { roomId, messageIds },
+        { onSuccess: exitSelection }
+      );
+      return;
+    }
+    // 숨김: 사유 picker 시트를 연다. 저장 시 hideMessages 호출.
+    setReasonSheetOpen(true);
+  };
+
+  const saveBlindReason = (reason: string) => {
+    const messageIds = [...selectedIds];
+    if (messageIds.length === 0) {
+      setReasonSheetOpen(false);
+      return;
+    }
+    hideMessagesMutation.mutate(
+      { roomId, messageIds, reason },
+      { onSuccess: exitSelection }
+    );
   };
 
   const handleLeave = () => {
@@ -857,14 +1063,17 @@ export default function DiscussionRoomScreen() {
   const stockLabel = room.stockName ?? mockStock?.name ?? null;
   const messages = messagesQuery.data?.messages ?? [];
   const isLoggedIn = Boolean(session?.user);
+  const inSelection = selectionMode !== null;
 
   return (
     <MrScreen>
       <RoomHeader
         canLeave={isLoggedIn}
         mockStock={mockStock}
+        onCancelSelection={exitSelection}
         onLeave={handleLeave}
         room={room}
+        selectionCount={inSelection ? selectedIds.size : null}
         stockLabel={stockLabel}
         t={t}
         topInset={insets.top}
@@ -883,22 +1092,99 @@ export default function DiscussionRoomScreen() {
             isPending={messagesQuery.isPending}
             messages={messages}
             onLongPress={handleLongPress}
+            onToggleSelect={toggleSelect}
             scrollRef={scrollRef}
+            selectedIds={selectedIds}
+            selectionMode={selectionMode}
             t={t}
           />
           {isLoggedIn ? null : <GuestOverlay t={t} />}
         </View>
-        {isLoggedIn ? (
-          <Composer
-            bottomInset={insets.bottom}
-            draft={draft}
-            isSending={sendMutation.isPending}
-            onSend={handleSend}
-            setDraft={setDraft}
-            t={t}
-          />
-        ) : null}
+        {renderBottom({
+          inSelection,
+          selectionMode,
+          selectedCount: selectedIds.size,
+          isLoggedIn,
+          isSubmitPending:
+            hideMessagesMutation.isPending || deleteMessagesMutation.isPending,
+          onSubmit: submitSelection,
+          draft,
+          setDraft,
+          onSend: handleSend,
+          isSending: sendMutation.isPending,
+          bottomInset: insets.bottom,
+          t,
+        })}
       </KeyboardAvoidingView>
+      <AdminMessageActionSheet
+        onClose={() => setActionMessage(null)}
+        onDelete={() => enterSelection("delete")}
+        onHide={() => enterSelection("hide")}
+        t={t}
+        visible={actionMessage !== null}
+      />
+      <BlindReasonSheet
+        count={selectedIds.size}
+        onCancel={() => setReasonSheetOpen(false)}
+        onSave={saveBlindReason}
+        t={t}
+        visible={reasonSheetOpen}
+      />
     </MrScreen>
   );
+}
+
+// 하단 영역: 선택모드면 pill(SelectionBar), 아니면 로그인 시 Composer.
+function renderBottom({
+  inSelection,
+  selectionMode,
+  selectedCount,
+  isLoggedIn,
+  isSubmitPending,
+  onSubmit,
+  draft,
+  setDraft,
+  onSend,
+  isSending,
+  bottomInset,
+  t,
+}: {
+  inSelection: boolean;
+  selectionMode: SelectionMode | null;
+  selectedCount: number;
+  isLoggedIn: boolean;
+  isSubmitPending: boolean;
+  onSubmit: () => void;
+  draft: string;
+  setDraft: (v: string) => void;
+  onSend: () => void;
+  isSending: boolean;
+  bottomInset: number;
+  t: MrTokens;
+}) {
+  if (inSelection && selectionMode) {
+    return (
+      <SelectionBar
+        bottomInset={bottomInset}
+        count={selectedCount}
+        isPending={isSubmitPending}
+        mode={selectionMode}
+        onSubmit={onSubmit}
+        t={t}
+      />
+    );
+  }
+  if (isLoggedIn) {
+    return (
+      <Composer
+        bottomInset={bottomInset}
+        draft={draft}
+        isSending={isSending}
+        onSend={onSend}
+        setDraft={setDraft}
+        t={t}
+      />
+    );
+  }
+  return null;
 }

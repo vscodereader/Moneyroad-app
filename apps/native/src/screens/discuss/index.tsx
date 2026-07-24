@@ -1,6 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useNavigation } from "expo-router";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   Pressable,
   RefreshControl,
@@ -16,6 +15,7 @@ import {
 } from "@/components/cards";
 import { Icon } from "@/components/icons";
 import { Chip, IconButton, MrHeader, MrScreen } from "@/components/ui";
+import { useDiscussionListStream } from "@/hooks/use-discussion-list-stream";
 import { useMrTheme } from "@/hooks/use-mr-theme";
 import { authClient } from "@/lib/auth-client";
 import { nav } from "@/utils/nav";
@@ -31,9 +31,6 @@ const TABS: { k: DiscussTab; l: string }[] = [
 ];
 
 const ROOM_SKELETON_KEYS = ["s1", "s2", "s3", "s4"] as const;
-
-// RFC 0003 D2: 목록 카운트(사람수·말풍선)를 5초마다 폴링 갱신(ADR-0001 폴링 확장).
-const POLL_INTERVAL_MS = 5000;
 
 function EmptyState({ title, body }: { title: string; body: string }) {
   const { t } = useMrTheme();
@@ -84,32 +81,14 @@ export default function DiscussScreen() {
   const isAuthed = Boolean(session?.user);
   const queryClient = useQueryClient();
 
-  // 이 화면(토론 탭)을 실제로 보고 있을 때만 폴링. 다른 탭/화면으로 가면 멈춘다.
-  const navigation = useNavigation();
-  const [screenFocused, setScreenFocused] = useState(() =>
-    navigation.isFocused()
-  );
-  useEffect(() => {
-    const offFocus = navigation.addListener("focus", () =>
-      setScreenFocused(true)
-    );
-    const offBlur = navigation.addListener("blur", () =>
-      setScreenFocused(false)
-    );
-    return () => {
-      offFocus();
-      offBlur();
-    };
-  }, [navigation]);
+  // RFC 0004: 목록 폴링을 SSE 구독으로 교체. 이벤트 수신 시 rooms 쿼리를 무효화한다.
+  useDiscussionListStream();
 
   const trimmedQuery = query.trim();
   const roomsOptions = orpc.discussion.rooms.queryOptions({
     input: { tab, q: trimmedQuery ? trimmedQuery : undefined },
   });
-  const roomsQuery = useQuery({
-    ...roomsOptions,
-    refetchInterval: screenFocused ? POLL_INTERVAL_MS : false,
-  });
+  const roomsQuery = useQuery(roomsOptions);
 
   const toggleLike = useMutation(
     orpc.discussion.toggleLike.mutationOptions({

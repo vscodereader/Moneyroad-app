@@ -14,6 +14,7 @@ import { and, desc, eq, inArray, isNull, lt, type SQL, sql } from "drizzle-orm";
 import z from "zod";
 
 import { adminProcedure, protectedProcedure, publicProcedure } from "../index";
+import { refreshRealtimeDiscussion } from "../lib/realtime-trigger";
 
 // ── shared types & helpers ───────────────────────────────────────────
 
@@ -592,6 +593,7 @@ export const discussionRouter = {
         userId: context.session.user.id,
         content: input.content.trim(),
       });
+      refreshRealtimeDiscussion("discussion.send");
       return {
         id: result.id,
         createdAt: result.createdAt.toISOString(),
@@ -606,18 +608,20 @@ export const discussionRouter = {
         actorUserId: context.session.user.id,
         actorRole: context.session.user.role ?? "user",
       });
+      refreshRealtimeDiscussion("discussion.deleteMessage");
       return { ok: true };
     }),
 
   toggleLike: protectedProcedure
     .input(z.object({ roomId: z.number().int() }))
-    .handler(
-      async ({ context, input }) =>
-        await toggleLike({
-          roomId: input.roomId,
-          userId: context.session.user.id,
-        })
-    ),
+    .handler(async ({ context, input }) => {
+      const result = await toggleLike({
+        roomId: input.roomId,
+        userId: context.session.user.id,
+      });
+      refreshRealtimeDiscussion("discussion.toggleLike");
+      return result;
+    }),
 
   toggleFavorite: protectedProcedure
     .input(z.object({ roomId: z.number().int() }))
@@ -641,6 +645,7 @@ export const discussionRouter = {
             eq(discussionRoomMember.roomId, input.roomId)
           )
         );
+      refreshRealtimeDiscussion("discussion.leaveRoom");
       return { ok: true };
     }),
 
@@ -669,6 +674,7 @@ export const discussionRouter = {
       if (!room) {
         throw new Error("토론방 생성 실패");
       }
+      refreshRealtimeDiscussion("discussion.createRoom");
       return { id: room.id };
     }),
 
@@ -703,6 +709,7 @@ export const discussionRouter = {
         .update(discussionRoom)
         .set(patch)
         .where(eq(discussionRoom.id, input.id));
+      refreshRealtimeDiscussion("discussion.updateRoom");
       return { ok: true };
     }),
 
@@ -710,6 +717,7 @@ export const discussionRouter = {
     .input(z.object({ id: z.number().int() }))
     .handler(async ({ input }) => {
       await db.delete(discussionRoom).where(eq(discussionRoom.id, input.id));
+      refreshRealtimeDiscussion("discussion.deleteRoom");
       return { ok: true };
     }),
 };

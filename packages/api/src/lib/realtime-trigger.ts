@@ -86,3 +86,45 @@ export function refreshRealtimeNews(reason: string): void {
       });
     });
 }
+
+const DISCUSSION_TRIGGER_PATH = "/internal/refresh-discussion-list";
+
+/**
+ * Fire-and-forget nudge to the realtime service so it broadcasts a
+ * "discussion" event to every connected client (→ they refetch the room list
+ * at once) right after a discussion list mutation — instead of waiting for a
+ * manual refresh (RFC 0004 feature 1).
+ *
+ * ⚠️ This is NOT `refreshRealtimeNews`/`refreshRealtimePins`: it hits a
+ * separate `/internal/refresh-discussion-list` endpoint (discussion room list
+ * only). Best-effort — never blocks, swallows every failure after logging.
+ */
+export function refreshRealtimeDiscussion(reason: string): void {
+  const url = `${env.REALTIME_INTERNAL_URL}${DISCUSSION_TRIGGER_PATH}`;
+  fetch(url, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-internal-secret": env.STREAM_TOKEN_SECRET,
+    },
+    body: JSON.stringify({ reason }),
+    signal: AbortSignal.timeout(TIMEOUT_MS),
+  })
+    .then((res) => {
+      if (!res.ok) {
+        log.warn({
+          realtimeTrigger: {
+            event: "refresh_discussion_rejected",
+            status: res.status,
+            reason,
+          },
+        });
+      }
+    })
+    .catch((error) => {
+      log.warn({
+        realtimeTrigger: { event: "refresh_discussion_failed", reason },
+        error,
+      });
+    });
+}

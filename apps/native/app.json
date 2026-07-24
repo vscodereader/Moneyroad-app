@@ -11,7 +11,7 @@
     "slug": "moneyroad-app",
     "version": "1.0.4",
     "icon": "./assets/images/icon.png",
-    "plugins": ["expo-font", "expo-notifications"],
+    "plugins": ["expo-font", "expo-notifications", "expo-image"],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true

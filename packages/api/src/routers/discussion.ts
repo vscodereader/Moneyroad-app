@@ -1,11 +1,13 @@
 import { db } from "@moneyroad-app/db";
 import {
   discussionMessage,
+  discussionMessageImage,
   discussionRoom,
   discussionRoomBlock,
   discussionRoomFavorite,
   discussionRoomLike,
   discussionRoomMember,
+  moneyroadImage,
   stockMaster,
   user,
   userWatchlist,
@@ -87,15 +89,51 @@ function toHours(value: number, unit: "hour" | "day"): number {
 
 // ── domain functions (transport-agnostic, see docs/adr/0001 #4) ──────
 
+// Max images per image message (docs/rfcs/0004 기능5).
+const MAX_MESSAGE_IMAGES = 8;
+
+type MessageType = "text" | "image" | "file";
+interface FileRef {
+  bucket: string;
+  key: string;
+  mime: string;
+  name: string;
+  size: number;
+}
+
 /**
  * Insert a message. First send into a room implicitly joins the user
  * (docs/adr/0002). Future ws handlers call this same function.
+ *
+ * Attachments (docs/rfcs/0004 기능5): pass `imageIds` (already uploaded via
+ * POST /upload/chat-image, must belong to the sender) for an image message, or
+ * `file` (from POST /upload/chat-file) for a file message. The message `type`
+ * is derived from what's attached; text messages are unchanged.
  */
 async function sendMessage(args: {
   roomId: number;
   userId: string;
   content: string;
+  imageIds?: number[];
+  file?: FileRef;
 }): Promise<{ id: number; createdAt: Date }> {
+  const imageIds = args.imageIds ?? [];
+  let type: MessageType = "text";
+  if (args.file) {
+    type = "file";
+  } else if (imageIds.length > 0) {
+    type = "image";
+  }
+
+  if (imageIds.length > MAX_MESSAGE_IMAGES) {
+    throw new ORPCError("BAD_REQUEST", {
+      message: `이미지는 최대 ${MAX_MESSAGE_IMAGES}장까지 가능합니다.`,
+    });
+  }
+  if (type === "text" && args.content.length === 0) {
+    throw new ORPCError("BAD_REQUEST", { message: "빈 메시지입니다." });
+  }
+
   const room = await db
     .select({ id: discussionRoom.id })
     .from(discussionRoom)
@@ -137,27 +175,66 @@ async function sendMessage(args: {
     throw new ORPCError("FORBIDDEN", { message: "뮤트 상태입니다." });
   }
 
+  // Attachments must reference the sender's own uploads (prevents linking
+  // someone else's private image / storage object).
+  if (type === "image") {
+    const owned = await db
+      .select({ id: moneyroadImage.id })
+      .from(moneyroadImage)
+      .where(
+        and(
+          inArray(moneyroadImage.id, imageIds),
+          eq(moneyroadImage.uploaderId, args.userId)
+        )
+      );
+    if (owned.length !== imageIds.length) {
+      throw new ORPCError("BAD_REQUEST", {
+        message: "첨부한 이미지를 찾을 수 없습니다.",
+      });
+    }
+  }
+
   // Implicit join.
   await db
     .insert(discussionRoomMember)
     .values({ userId: args.userId, roomId: args.roomId })
     .onConflictDoNothing();
 
-  const [row] = await db
-    .insert(discussionMessage)
-    .values({
-      roomId: args.roomId,
-      userId: args.userId,
-      content: args.content,
-    })
-    .returning({
-      id: discussionMessage.id,
-      createdAt: discussionMessage.createdAt,
-    });
+  const row = await db.transaction(async (tx) => {
+    const [inserted] = await tx
+      .insert(discussionMessage)
+      .values({
+        roomId: args.roomId,
+        userId: args.userId,
+        content: args.content,
+        type,
+        fileBucket: args.file?.bucket ?? null,
+        fileKey: args.file?.key ?? null,
+        fileMime: args.file?.mime ?? null,
+        fileSize: args.file?.size ?? null,
+        fileName: args.file?.name ?? null,
+      })
+      .returning({
+        id: discussionMessage.id,
+        createdAt: discussionMessage.createdAt,
+      });
 
-  if (!row) {
-    throw new Error("메시지 저장 실패");
-  }
+    if (!inserted) {
+      throw new Error("메시지 저장 실패");
+    }
+
+    if (type === "image") {
+      await tx.insert(discussionMessageImage).values(
+        imageIds.map((imageId, index) => ({
+          messageId: inserted.id,
+          imageId,
+          sortOrder: index,
+        }))
+      );
+    }
+    return inserted;
+  });
+
   return row;
 }
 
@@ -735,6 +812,10 @@ export const discussionRouter = {
           userName: user.name,
           userImage: user.image,
           content: discussionMessage.content,
+          type: discussionMessage.type,
+          fileMime: discussionMessage.fileMime,
+          fileSize: discussionMessage.fileSize,
+          fileName: discussionMessage.fileName,
           createdAt: discussionMessage.createdAt,
           deletedAt: discussionMessage.deletedAt,
           blindedAt: discussionMessage.blindedAt,
@@ -751,19 +832,70 @@ export const discussionRouter = {
       // Oldest first for append-friendly rendering.
       slice.reverse();
 
+      // Batch-load image attachments for the visible image messages, ordered by
+      // sortOrder. Masked (deleted/blinded) messages are excluded — their
+      // attachments must not resolve (docs/rfcs/0004 기능5).
+      const imageMessageIds = slice
+        .filter((m) => m.type === "image" && !(m.deletedAt || m.blindedAt))
+        .map((m) => m.id);
+      const imagesByMessage = new Map<
+        number,
+        { imageId: number; url: string }[]
+      >();
+      if (imageMessageIds.length > 0) {
+        const links = await db
+          .select({
+            messageId: discussionMessageImage.messageId,
+            imageId: discussionMessageImage.imageId,
+          })
+          .from(discussionMessageImage)
+          .where(inArray(discussionMessageImage.messageId, imageMessageIds))
+          .orderBy(
+            discussionMessageImage.messageId,
+            discussionMessageImage.sortOrder
+          );
+        for (const link of links) {
+          const list = imagesByMessage.get(link.messageId) ?? [];
+          list.push({
+            imageId: link.imageId,
+            url: `/media/chat-image/${link.imageId}`,
+          });
+          imagesByMessage.set(link.messageId, list);
+        }
+      }
+
       return {
-        messages: slice.map((m) => ({
-          id: m.id,
-          userId: m.userId,
-          userName: m.userName,
-          userImage: m.userImage,
-          // Mask content when soft-deleted OR admin-blinded.
-          content: m.deletedAt || m.blindedAt ? null : m.content,
-          createdAt: m.createdAt.toISOString(),
-          deletedAt: m.deletedAt?.toISOString() ?? null,
-          blindedAt: m.blindedAt?.toISOString() ?? null,
-          blindReason: m.blindReason ?? null,
-        })),
+        messages: slice.map((m) => {
+          const masked = Boolean(m.deletedAt || m.blindedAt);
+          return {
+            id: m.id,
+            userId: m.userId,
+            userName: m.userName,
+            userImage: m.userImage,
+            // Mask content when soft-deleted OR admin-blinded.
+            content: masked ? null : m.content,
+            type: m.type,
+            // Attachment projections — null unless the message carries that kind
+            // and is not masked.
+            images:
+              m.type === "image" && !masked
+                ? (imagesByMessage.get(m.id) ?? [])
+                : null,
+            file:
+              m.type === "file" && !masked
+                ? {
+                    url: `/media/chat-file/${m.id}`,
+                    name: m.fileName ?? "",
+                    mime: m.fileMime ?? "application/octet-stream",
+                    size: m.fileSize ?? 0,
+                  }
+                : null,
+            createdAt: m.createdAt.toISOString(),
+            deletedAt: m.deletedAt?.toISOString() ?? null,
+            blindedAt: m.blindedAt?.toISOString() ?? null,
+            blindReason: m.blindReason ?? null,
+          };
+        }),
         nextCursor: hasMore ? (slice[0]?.id ?? null) : null,
       };
     }),
@@ -882,16 +1014,45 @@ export const discussionRouter = {
 
   send: protectedProcedure
     .input(
-      z.object({
-        roomId: z.number().int(),
-        content: z.string().min(1).max(1000),
-      })
+      z
+        .object({
+          roomId: z.number().int(),
+          // Empty allowed only when an attachment is present (checked below).
+          content: z.string().max(1000).default(""),
+          // Explicit kind is optional — the actual type is derived from what's
+          // attached (docs/rfcs/0004 기능5).
+          type: z.enum(["text", "image", "file"]).optional(),
+          // Image message: ids from POST /upload/chat-image (sender's own).
+          imageIds: z
+            .array(z.number().int())
+            .max(MAX_MESSAGE_IMAGES)
+            .optional(),
+          // File message: ref returned by POST /upload/chat-file.
+          file: z
+            .object({
+              bucket: z.string().min(1),
+              key: z.string().min(1),
+              mime: z.string().min(1),
+              size: z.number().int().nonnegative(),
+              name: z.string().min(1),
+            })
+            .optional(),
+        })
+        .refine(
+          (v) =>
+            v.content.trim().length > 0 ||
+            (v.imageIds?.length ?? 0) > 0 ||
+            v.file !== undefined,
+          { message: "내용 또는 첨부가 필요합니다." }
+        )
     )
     .handler(async ({ context, input }) => {
       const result = await sendMessage({
         roomId: input.roomId,
         userId: context.session.user.id,
         content: input.content.trim(),
+        imageIds: input.imageIds,
+        file: input.file,
       });
       refreshRealtimeDiscussion("discussion.send");
       return {

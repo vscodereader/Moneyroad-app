@@ -1,9 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import * as DocumentPicker from "expo-document-picker";
 import { useLocalSearchParams } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Linking,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -19,15 +21,26 @@ import { IconButton, MrScreen, StockLogo } from "@/components/ui";
 import { useLiveQuote } from "@/hooks/use-live-quotes";
 import { useMrTheme } from "@/hooks/use-mr-theme";
 import { authClient } from "@/lib/auth-client";
+import { mediaUrl, uploadChatFile, uploadChatImage } from "@/lib/chat-upload";
 import { findStock, type Stock } from "@/utils/data";
 import { changeColor, fmt } from "@/utils/format";
 import { nav } from "@/utils/nav";
 import { orpc } from "@/utils/orpc";
 import type { MrTokens } from "@/utils/theme";
 import { AdminMessageActionSheet } from "./components/admin-message-action-sheet";
+import { AttachMenu } from "./components/attach-menu";
 import { BlindReasonSheet } from "./components/blind-reason-sheet";
+import { type BubbleFile, FileBubble } from "./components/file-bubble";
+import {
+  type BubbleImage,
+  ImageGridBubble,
+} from "./components/image-grid-bubble";
 import { MemberListSheet } from "./components/member-list-sheet";
 import { MessageCheckbox } from "./components/message-checkbox";
+import {
+  PhotoGridPicker,
+  type PickedPhoto,
+} from "./components/photo-grid-picker";
 import { SelectionBar } from "./components/selection-bar";
 
 type SelectionMode = "hide" | "delete";
@@ -67,6 +80,11 @@ type Message = {
   userName: string;
   userImage: string | null;
   content: string | null;
+  // Attachment kind + payloads (docs/rfcs/0004 기능5). image/file carry a
+  // non-null array/object only while visible (server masks deleted/blinded).
+  type: "text" | "image" | "file";
+  images: BubbleImage[] | null;
+  file: BubbleFile | null;
   createdAt: string;
   deletedAt: string | null;
   blindedAt: string | null;
@@ -158,6 +176,66 @@ function bubbleText(message: Message, isDeleted: boolean, isBlinded: boolean) {
   return message.content ?? "";
 }
 
+type BubbleKind = "image" | "file" | "text";
+
+// Which visual the bubble renders. Masked (deleted/blinded) messages always
+// fall back to placeholder text; the server nulls their attachments anyway.
+function bubbleKind(message: Message, isMasked: boolean): BubbleKind {
+  if (isMasked) {
+    return "text";
+  }
+  if (
+    message.type === "image" &&
+    message.images != null &&
+    message.images.length > 0
+  ) {
+    return "image";
+  }
+  if (message.type === "file" && message.file != null) {
+    return "file";
+  }
+  return "text";
+}
+
+function BubbleContent({
+  message,
+  kind,
+  isSelf,
+  isMasked,
+  isDeleted,
+  isBlinded,
+  textColor,
+  t,
+}: {
+  message: Message;
+  kind: BubbleKind;
+  isSelf: boolean;
+  isMasked: boolean;
+  isDeleted: boolean;
+  isBlinded: boolean;
+  textColor: string;
+  t: MrTokens;
+}) {
+  if (kind === "image" && message.images) {
+    return <ImageGridBubble images={message.images} t={t} />;
+  }
+  if (kind === "file" && message.file) {
+    return <FileBubble file={message.file} isSelf={isSelf} t={t} />;
+  }
+  return (
+    <Text
+      style={{
+        fontSize: 13,
+        lineHeight: 20,
+        color: textColor,
+        fontStyle: isMasked ? "italic" : "normal",
+      }}
+    >
+      {bubbleText(message, isDeleted, isBlinded)}
+    </Text>
+  );
+}
+
 function MessageBubbleBody({
   message,
   isSelf,
@@ -169,6 +247,7 @@ function MessageBubbleBody({
   inSelection,
   onLongPress,
   onToggleSelect,
+  onOpenFile,
   t,
 }: {
   message: Message;
@@ -181,8 +260,35 @@ function MessageBubbleBody({
   inSelection: boolean;
   onLongPress: () => void;
   onToggleSelect: () => void;
+  onOpenFile: () => void;
   t: MrTokens;
 }) {
+  const kind = bubbleKind(message, isMasked);
+  const isAttachment = kind !== "text";
+
+  // In selection mode a tap always toggles; otherwise a file bubble opens.
+  let onPress: (() => void) | undefined;
+  if (inSelection) {
+    onPress = onToggleSelect;
+  } else if (kind === "file") {
+    onPress = onOpenFile;
+  }
+
+  // Attachments carry their own visual; text keeps the rounded bubble chrome.
+  const chrome = isAttachment
+    ? undefined
+    : {
+        paddingVertical: 8,
+        paddingHorizontal: 12,
+        borderTopLeftRadius: isSelf ? 14 : 4,
+        borderTopRightRadius: 14,
+        borderBottomRightRadius: 14,
+        borderBottomLeftRadius: 14,
+        backgroundColor: bubbleBg,
+        borderWidth: isSelf || isMasked ? 0 : 1,
+        borderColor: t.border,
+      };
+
   return (
     <View
       style={{
@@ -194,29 +300,19 @@ function MessageBubbleBody({
       <Pressable
         disabled={isMasked}
         onLongPress={inSelection ? undefined : onLongPress}
-        onPress={inSelection ? onToggleSelect : undefined}
-        style={{
-          paddingVertical: 8,
-          paddingHorizontal: 12,
-          borderTopLeftRadius: isSelf ? 14 : 4,
-          borderTopRightRadius: 14,
-          borderBottomRightRadius: 14,
-          borderBottomLeftRadius: 14,
-          backgroundColor: bubbleBg,
-          borderWidth: isSelf || isMasked ? 0 : 1,
-          borderColor: t.border,
-        }}
+        onPress={onPress}
+        style={chrome}
       >
-        <Text
-          style={{
-            fontSize: 13,
-            lineHeight: 20,
-            color: textColor,
-            fontStyle: isMasked ? "italic" : "normal",
-          }}
-        >
-          {bubbleText(message, isDeleted, isBlinded)}
-        </Text>
+        <BubbleContent
+          isBlinded={isBlinded}
+          isDeleted={isDeleted}
+          isMasked={isMasked}
+          isSelf={isSelf}
+          kind={kind}
+          message={message}
+          t={t}
+          textColor={textColor}
+        />
       </Pressable>
       <Text
         style={{
@@ -241,6 +337,7 @@ function MessageBubble({
   selectionMode,
   isSelected,
   onToggleSelect,
+  onOpenFile,
   t,
 }: {
   message: Message;
@@ -251,6 +348,7 @@ function MessageBubble({
   selectionMode: SelectionMode | null;
   isSelected: boolean;
   onToggleSelect: () => void;
+  onOpenFile: () => void;
   t: MrTokens;
 }) {
   const isDeleted = Boolean(message.deletedAt);
@@ -304,6 +402,7 @@ function MessageBubble({
             isSelf={isSelf}
             message={message}
             onLongPress={onLongPress}
+            onOpenFile={onOpenFile}
             onToggleSelect={onToggleSelect}
             t={t}
             textColor={textColor}
@@ -573,14 +672,18 @@ function Composer({
   draft,
   setDraft,
   onSend,
+  onAttach,
   isSending,
+  attachDisabled,
   t,
   bottomInset,
 }: {
   draft: string;
   setDraft: (v: string) => void;
   onSend: () => void;
+  onAttach: () => void;
   isSending: boolean;
+  attachDisabled: boolean;
   t: MrTokens;
   bottomInset: number;
 }) {
@@ -599,6 +702,20 @@ function Composer({
         alignItems: "center",
       }}
     >
+      <Pressable
+        disabled={attachDisabled}
+        onPress={onAttach}
+        style={{
+          width: 36,
+          height: 36,
+          borderRadius: 999,
+          alignItems: "center",
+          justifyContent: "center",
+          backgroundColor: t.bgSubtle,
+        }}
+      >
+        <Icon.plus color={attachDisabled ? t.fgSubtle : t.fgMuted} size={22} />
+      </Pressable>
       <View
         style={{
           flex: 1,
@@ -709,6 +826,7 @@ function MessageList({
   selectionMode,
   selectedIds,
   onToggleSelect,
+  onOpenFile,
   isPending,
   isEmpty,
   t,
@@ -721,6 +839,7 @@ function MessageList({
   selectionMode: SelectionMode | null;
   selectedIds: Set<number>;
   onToggleSelect: (id: number) => void;
+  onOpenFile: (m: Message) => void;
   isPending: boolean;
   isEmpty: boolean;
   t: MrTokens;
@@ -778,6 +897,7 @@ function MessageList({
             key={m.id}
             message={m}
             onLongPress={() => onLongPress(m)}
+            onOpenFile={() => onOpenFile(m)}
             onToggleSelect={() => onToggleSelect(m.id)}
             selectionMode={selectionMode}
             showHeader={showHeader}
@@ -929,6 +1049,10 @@ export default function DiscussionRoomScreen() {
   const [reasonSheetOpen, setReasonSheetOpen] = useState(false);
   // 관리자 멤버 목록 시트(RFC 0004 기능4).
   const [membersOpen, setMembersOpen] = useState(false);
+  // 첨부(RFC 0004 기능5): [+] 메뉴 / 앨범 그리드 / 업로드 진행 상태.
+  const [attachMenuOpen, setAttachMenuOpen] = useState(false);
+  const [photoGridOpen, setPhotoGridOpen] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
 
   // Initial scroll-to-end once messages first load. Subsequent polls do NOT
   // auto-scroll — users reading older messages shouldn't be yanked.
@@ -957,6 +1081,113 @@ export default function DiscussionRoomScreen() {
         },
       }
     );
+  };
+
+  const scrollToEnd = () => {
+    requestAnimationFrame(() => {
+      scrollRef.current?.scrollToEnd({ animated: true });
+    });
+  };
+
+  // 파일 말풍선 탭 → 접근 검증 프록시 URL을 브라우저로 연다(RFC 0004 기능5).
+  const handleOpenFile = (message: Message) => {
+    if (message.file) {
+      Linking.openURL(mediaUrl(message.file.url)).catch(() => {
+        Alert.alert("열기 실패", "파일을 열 수 없어요.");
+      });
+    }
+  };
+
+  // 문서 피커(단일) → /upload/chat-file → file 메시지 전송. 광범위 저장소 권한 X.
+  const handlePickFile = async () => {
+    setAttachMenuOpen(false);
+    let result: DocumentPicker.DocumentPickerResult;
+    try {
+      result = await DocumentPicker.getDocumentAsync({
+        multiple: false,
+        copyToCacheDirectory: true,
+      });
+    } catch {
+      Alert.alert("전송 실패", "파일을 불러오지 못했어요.");
+      return;
+    }
+    const asset = result.canceled ? null : result.assets[0];
+    if (!(asset && isValidRoomId)) {
+      return;
+    }
+    setIsUploading(true);
+    try {
+      const ref = await uploadChatFile({
+        uri: asset.uri,
+        name: asset.name,
+        mime: asset.mimeType ?? "application/octet-stream",
+      });
+      await sendMutation.mutateAsync({ roomId, file: ref });
+      scrollToEnd();
+    } catch (err) {
+      Alert.alert(
+        "전송 실패",
+        err instanceof Error ? err.message : "파일을 보내지 못했어요."
+      );
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  // 선택 이미지 업로드 후 성공분만 하나의 image 메시지로 전송. 부분 실패는
+  // 재시도 가능(실패분만 다시 시도)(RFC 0004 기능5).
+  const uploadAndSendPhotos = async (photos: PickedPhoto[]) => {
+    if (photos.length === 0) {
+      return;
+    }
+    setIsUploading(true);
+    try {
+      const results = await Promise.all(
+        photos.map(async (p) => {
+          try {
+            const id = await uploadChatImage({
+              uri: p.uri,
+              name: p.name,
+              mime: p.mime,
+            });
+            return { ok: true as const, id };
+          } catch {
+            return { ok: false as const, photo: p };
+          }
+        })
+      );
+      const imageIds: number[] = [];
+      const failed: PickedPhoto[] = [];
+      for (const r of results) {
+        if (r.ok) {
+          imageIds.push(r.id);
+        } else {
+          failed.push(r.photo);
+        }
+      }
+      if (imageIds.length > 0) {
+        await sendMutation.mutateAsync({ roomId, imageIds });
+        scrollToEnd();
+      }
+      if (failed.length > 0) {
+        const onlyFailures = imageIds.length === 0;
+        Alert.alert(
+          onlyFailures ? "업로드 실패" : "일부 업로드 실패",
+          `${failed.length}장을 보내지 못했어요.`,
+          [
+            { text: "취소", style: "cancel" },
+            { text: "재시도", onPress: () => uploadAndSendPhotos(failed) },
+          ]
+        );
+      }
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleConfirmPhotos = (photos: PickedPhoto[]) => {
+    setPhotoGridOpen(false);
+    uploadAndSendPhotos(photos);
   };
 
   const handleLongPress = (message: Message) => {
@@ -1134,6 +1365,7 @@ export default function DiscussionRoomScreen() {
             isPending={messagesQuery.isPending}
             messages={messages}
             onLongPress={handleLongPress}
+            onOpenFile={handleOpenFile}
             onToggleSelect={toggleSelect}
             scrollRef={scrollRef}
             selectedIds={selectedIds}
@@ -1153,7 +1385,9 @@ export default function DiscussionRoomScreen() {
           draft,
           setDraft,
           onSend: handleSend,
-          isSending: sendMutation.isPending,
+          onAttach: () => setAttachMenuOpen(true),
+          isSending: sendMutation.isPending || isUploading,
+          attachDisabled: isUploading,
           bottomInset: insets.bottom,
           t,
         })}
@@ -1179,6 +1413,22 @@ export default function DiscussionRoomScreen() {
         t={t}
         visible={membersOpen}
       />
+      <AttachMenu
+        onClose={() => setAttachMenuOpen(false)}
+        onPickFile={handlePickFile}
+        onPickPhotos={() => {
+          setAttachMenuOpen(false);
+          setPhotoGridOpen(true);
+        }}
+        t={t}
+        visible={attachMenuOpen}
+      />
+      <PhotoGridPicker
+        onClose={() => setPhotoGridOpen(false)}
+        onConfirm={handleConfirmPhotos}
+        t={t}
+        visible={photoGridOpen}
+      />
     </MrScreen>
   );
 }
@@ -1194,7 +1444,9 @@ function renderBottom({
   draft,
   setDraft,
   onSend,
+  onAttach,
   isSending,
+  attachDisabled,
   bottomInset,
   t,
 }: {
@@ -1207,7 +1459,9 @@ function renderBottom({
   draft: string;
   setDraft: (v: string) => void;
   onSend: () => void;
+  onAttach: () => void;
   isSending: boolean;
+  attachDisabled: boolean;
   bottomInset: number;
   t: MrTokens;
 }) {
@@ -1226,9 +1480,11 @@ function renderBottom({
   if (isLoggedIn) {
     return (
       <Composer
+        attachDisabled={attachDisabled}
         bottomInset={bottomInset}
         draft={draft}
         isSending={isSending}
+        onAttach={onAttach}
         onSend={onSend}
         setDraft={setDraft}
         t={t}

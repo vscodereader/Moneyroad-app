@@ -114,6 +114,25 @@ export const Icon = {
       <Line x1="3" x2="21" y1="18" y2="18" {...stroke(color)} />
     </Base>
   ),
+  file: ({ size = DEFAULT_SIZE, color = DEFAULT_COLOR }: IconProps) => (
+    <Base size={size}>
+      <Path
+        d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"
+        {...stroke(color)}
+      />
+      <Polyline points="14 2 14 8 20 8" {...stroke(color)} />
+    </Base>
+  ),
+  image: ({ size = DEFAULT_SIZE, color = DEFAULT_COLOR }: IconProps) => (
+    <Base size={size}>
+      <Path
+        d="M3 5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"
+        {...stroke(color)}
+      />
+      <Circle cx="8.5" cy="8.5" r="1.5" {...stroke(color)} />
+      <Polyline points="21 15 16 10 5 21" {...stroke(color)} />
+    </Base>
+  ),
   trash: ({ size = DEFAULT_SIZE, color = DEFAULT_COLOR }: IconProps) => (
     <Base size={size}>
       <Polyline points="3 6 5 6 21 6" {...stroke(color)} />

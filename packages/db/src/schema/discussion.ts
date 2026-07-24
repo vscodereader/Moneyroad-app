@@ -10,6 +10,7 @@ import {
 } from "drizzle-orm/pg-core";
 
 import { user } from "./auth";
+import { moneyroadImage } from "./image";
 import { stockMaster } from "./stock-master";
 
 // Admin-set tone on a room. Default "neutral" → ThreadRow hides the pill.
@@ -18,6 +19,15 @@ export const discussionSentiment = pgEnum("discussion_sentiment", [
   "up",
   "neutral",
   "down",
+]);
+
+// Message payload kind. "text" is the default; "image"/"file" carry an
+// attachment (docs/rfcs/0004 기능5). Image messages additionally link rows in
+// discussion_message_image; file messages use the file* columns below.
+export const discussionMessageType = pgEnum("discussion_message_type", [
+  "text",
+  "image",
+  "file",
 ]);
 
 export const discussionRoom = pgTable(
@@ -59,6 +69,18 @@ export const discussionMessage = pgTable(
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
     content: text("content").notNull(),
+    // Payload kind (docs/rfcs/0004 기능5). "text" for plain messages; "image"
+    // links rows in discussion_message_image; "file" populates the file*
+    // columns below.
+    type: discussionMessageType("type").notNull().default("text"),
+    // Attachment metadata for FILE messages (all NULL for text/image). Mirrors
+    // the bucket/objectKey pointer model of stock_resource: the row references
+    // bytes in object storage rather than storing them inline.
+    fileBucket: text("file_bucket"),
+    fileKey: text("file_key"),
+    fileMime: text("file_mime"),
+    fileSize: integer("file_size"),
+    fileName: text("file_name"),
     // Soft delete: rows survive moderation; client renders the placeholder
     // "삭제된 메시지입니다" when deletedAt is non-null.
     deletedAt: timestamp("deleted_at"),
@@ -146,6 +168,24 @@ export const discussionRoomLike = pgTable(
     likedAt: timestamp("liked_at").defaultNow().notNull(),
   },
   (table) => [primaryKey({ columns: [table.userId, table.roomId] })]
+);
+
+// Ordered attachments for an IMAGE message. Join table between
+// discussion_message and moneyroad_image; sortOrder preserves the client's
+// display order (docs/rfcs/0004 기능5). Composite PK forbids linking the same
+// image to a message twice.
+export const discussionMessageImage = pgTable(
+  "discussion_message_image",
+  {
+    messageId: integer("message_id")
+      .notNull()
+      .references(() => discussionMessage.id, { onDelete: "cascade" }),
+    imageId: integer("image_id")
+      .notNull()
+      .references(() => moneyroadImage.id, { onDelete: "cascade" }),
+    sortOrder: integer("sort_order").notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.messageId, table.imageId] })]
 );
 
 // Per-user favorite (별) on a room. Toggled by inserting / deleting this row.

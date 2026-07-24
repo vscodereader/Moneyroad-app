@@ -26,6 +26,7 @@ import { orpc } from "@/utils/orpc";
 import type { MrTokens } from "@/utils/theme";
 import { AdminMessageActionSheet } from "./components/admin-message-action-sheet";
 import { BlindReasonSheet } from "./components/blind-reason-sheet";
+import { MemberListSheet } from "./components/member-list-sheet";
 import { MessageCheckbox } from "./components/message-checkbox";
 import { SelectionBar } from "./components/selection-bar";
 
@@ -354,6 +355,8 @@ function RoomHeader({
   stockLabel,
   canLeave,
   onLeave,
+  isAdmin,
+  onOpenMembers,
   selectionCount,
   onCancelSelection,
   t,
@@ -364,6 +367,8 @@ function RoomHeader({
   stockLabel: string | null;
   canLeave: boolean;
   onLeave: () => void;
+  isAdmin: boolean;
+  onOpenMembers: () => void;
   selectionCount: number | null;
   onCancelSelection: () => void;
   t: MrTokens;
@@ -464,6 +469,11 @@ function RoomHeader({
           </View>
         </View>
       </Pressable>
+      {isAdmin ? (
+        <IconButton onPress={onOpenMembers}>
+          <Icon.menu color={t.fgStrong} size={22} />
+        </IconButton>
+      ) : null}
       {canLeave ? (
         <IconButton onPress={onLeave}>
           <Icon.close color={t.fgStrong} size={20} />
@@ -917,6 +927,8 @@ export default function DiscussionRoomScreen() {
   );
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [reasonSheetOpen, setReasonSheetOpen] = useState(false);
+  // 관리자 멤버 목록 시트(RFC 0004 기능4).
+  const [membersOpen, setMembersOpen] = useState(false);
 
   // Initial scroll-to-end once messages first load. Subsequent polls do NOT
   // auto-scroll — users reading older messages shouldn't be yanked.
@@ -1065,13 +1077,43 @@ export default function DiscussionRoomScreen() {
   const isLoggedIn = Boolean(session?.user);
   const inSelection = selectionMode !== null;
 
+  // 차단된 방(RFC 0004 기능4): 메시지/입력창 대신 안내만 노출한다.
+  if (room.blocked) {
+    return (
+      <MrScreen>
+        <RoomHeader
+          canLeave={isLoggedIn}
+          isAdmin={false}
+          mockStock={mockStock}
+          onCancelSelection={exitSelection}
+          onLeave={handleLeave}
+          onOpenMembers={() => setMembersOpen(true)}
+          room={room}
+          selectionCount={null}
+          stockLabel={stockLabel}
+          t={t}
+          topInset={insets.top}
+        />
+        <View
+          style={{ flex: 1, alignItems: "center", justifyContent: "center" }}
+        >
+          <Text style={{ fontSize: 14, fontWeight: "700", color: t.fgMuted }}>
+            차단된 방입니다
+          </Text>
+        </View>
+      </MrScreen>
+    );
+  }
+
   return (
     <MrScreen>
       <RoomHeader
         canLeave={isLoggedIn}
+        isAdmin={isAdmin}
         mockStock={mockStock}
         onCancelSelection={exitSelection}
         onLeave={handleLeave}
+        onOpenMembers={() => setMembersOpen(true)}
         room={room}
         selectionCount={inSelection ? selectedIds.size : null}
         stockLabel={stockLabel}
@@ -1129,6 +1171,13 @@ export default function DiscussionRoomScreen() {
         onSave={saveBlindReason}
         t={t}
         visible={reasonSheetOpen}
+      />
+      <MemberListSheet
+        isAdmin={isAdmin}
+        onClose={() => setMembersOpen(false)}
+        roomId={roomId}
+        t={t}
+        visible={membersOpen}
       />
     </MrScreen>
   );

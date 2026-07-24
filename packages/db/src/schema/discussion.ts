@@ -98,6 +98,35 @@ export const discussionRoomMember = pgTable(
       .notNull()
       .references(() => discussionRoom.id, { onDelete: "cascade" }),
     joinedAt: timestamp("joined_at").defaultNow().notNull(),
+    // Temporary mute (뮤트): while mutedUntil is in the future the member may
+    // read but cannot post. Cleared on unmute (docs/rfcs/0004 기능4). Total
+    // duration is capped at 1 day by the api layer.
+    mutedUntil: timestamp("muted_until"),
+    mutedBy: text("muted_by").references(() => user.id, {
+      onDelete: "set null",
+    }),
+  },
+  (table) => [primaryKey({ columns: [table.userId, table.roomId] })]
+);
+
+// Per-room block (차단): a user removed from the room and barred from posting
+// until blockedUntil. Mirrors the member table; the member row is deleted on
+// block and this row gates re-entry (docs/rfcs/0004 기능4). Total duration is
+// capped at 7 days by the api layer.
+export const discussionRoomBlock = pgTable(
+  "discussion_room_block",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    roomId: integer("room_id")
+      .notNull()
+      .references(() => discussionRoom.id, { onDelete: "cascade" }),
+    blockedBy: text("blocked_by").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    blockedAt: timestamp("blocked_at").defaultNow().notNull(),
+    blockedUntil: timestamp("blocked_until").notNull(),
   },
   (table) => [primaryKey({ columns: [table.userId, table.roomId] })]
 );

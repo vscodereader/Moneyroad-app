@@ -107,6 +107,13 @@ export const Icon = {
       <Line x1="5" x2="19" y1="12" y2="12" {...stroke(color)} />
     </Base>
   ),
+  menu: ({ size = DEFAULT_SIZE, color = DEFAULT_COLOR }: IconProps) => (
+    <Base size={size}>
+      <Line x1="3" x2="21" y1="6" y2="6" {...stroke(color)} />
+      <Line x1="3" x2="21" y1="12" y2="12" {...stroke(color)} />
+      <Line x1="3" x2="21" y1="18" y2="18" {...stroke(color)} />
+    </Base>
+  ),
   trash: ({ size = DEFAULT_SIZE, color = DEFAULT_COLOR }: IconProps) => (
     <Base size={size}>
       <Polyline points="3 6 5 6 21 6" {...stroke(color)} />

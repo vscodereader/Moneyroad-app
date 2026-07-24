@@ -2,6 +2,7 @@ import { db } from "@moneyroad-app/db";
 import {
   discussionMessage,
   discussionRoom,
+  discussionRoomBlock,
   discussionRoomFavorite,
   discussionRoomLike,
   discussionRoomMember,
@@ -67,6 +68,23 @@ function favoritedExpr(userId: string | null): SQL<boolean> {
   return sql<boolean>`EXISTS (SELECT 1 FROM ${discussionRoomFavorite} WHERE ${discussionRoomFavorite.roomId} = ${discussionRoom.id} AND ${discussionRoomFavorite.userId} = ${userId})`;
 }
 
+// Whether the user has an active (not-yet-expired) block on the current room.
+function blockedExpr(userId: string | null): SQL<boolean> {
+  if (!userId) {
+    return sql<boolean>`false`;
+  }
+  return sql<boolean>`EXISTS (SELECT 1 FROM ${discussionRoomBlock} WHERE ${discussionRoomBlock.roomId} = ${discussionRoom.id} AND ${discussionRoomBlock.userId} = ${userId} AND ${discussionRoomBlock.blockedUntil} > now())`;
+}
+
+// Duration caps (docs/rfcs/0004 기능4). value+unit are collapsed to hours here.
+const MUTE_MAX_HOURS = 24; // 1일
+const BLOCK_MAX_HOURS = 168; // 7일
+const HOURS_PER_DAY = 24;
+
+function toHours(value: number, unit: "hour" | "day"): number {
+  return value * (unit === "day" ? HOURS_PER_DAY : 1);
+}
+
 // ── domain functions (transport-agnostic, see docs/adr/0001 #4) ──────
 
 /**
@@ -85,6 +103,38 @@ async function sendMessage(args: {
     .limit(1);
   if (room.length === 0) {
     throw new ORPCError("NOT_FOUND", { message: "토론방이 없습니다." });
+  }
+
+  // Moderation gate (docs/rfcs/0004 기능4): an active block bars the user from
+  // the room entirely; an active mute lets them read but not post.
+  const [block] = await db
+    .select({ userId: discussionRoomBlock.userId })
+    .from(discussionRoomBlock)
+    .where(
+      and(
+        eq(discussionRoomBlock.userId, args.userId),
+        eq(discussionRoomBlock.roomId, args.roomId),
+        sql`${discussionRoomBlock.blockedUntil} > now()`
+      )
+    )
+    .limit(1);
+  if (block) {
+    throw new ORPCError("FORBIDDEN", { message: "차단된 방입니다." });
+  }
+
+  const [muted] = await db
+    .select({ userId: discussionRoomMember.userId })
+    .from(discussionRoomMember)
+    .where(
+      and(
+        eq(discussionRoomMember.userId, args.userId),
+        eq(discussionRoomMember.roomId, args.roomId),
+        sql`${discussionRoomMember.mutedUntil} > now()`
+      )
+    )
+    .limit(1);
+  if (muted) {
+    throw new ORPCError("FORBIDDEN", { message: "뮤트 상태입니다." });
   }
 
   // Implicit join.
@@ -301,6 +351,176 @@ async function toggleFavorite(args: {
   return { favorited: existing.length === 0 };
 }
 
+/**
+ * Room member roster for the admin moderation panel. Joins each member to their
+ * user row and flags whether an active block exists (docs/rfcs/0004 기능4).
+ */
+async function roomMembers(args: { roomId: number }): Promise<
+  {
+    userId: string;
+    name: string;
+    role: string;
+    joinedAt: string;
+    mutedUntil: string | null;
+    blocked: boolean;
+  }[]
+> {
+  const rows = await db
+    .select({
+      userId: discussionRoomMember.userId,
+      name: user.name,
+      role: user.role,
+      joinedAt: discussionRoomMember.joinedAt,
+      mutedUntil: discussionRoomMember.mutedUntil,
+      blocked: sql<boolean>`EXISTS (SELECT 1 FROM ${discussionRoomBlock} WHERE ${discussionRoomBlock.userId} = ${discussionRoomMember.userId} AND ${discussionRoomBlock.roomId} = ${discussionRoomMember.roomId} AND ${discussionRoomBlock.blockedUntil} > now())`,
+    })
+    .from(discussionRoomMember)
+    .innerJoin(user, eq(discussionRoomMember.userId, user.id))
+    .where(eq(discussionRoomMember.roomId, args.roomId))
+    .orderBy(desc(discussionRoomMember.joinedAt));
+
+  return rows.map((r) => ({
+    userId: r.userId,
+    name: r.name,
+    role: r.role,
+    joinedAt: r.joinedAt.toISOString(),
+    mutedUntil: r.mutedUntil?.toISOString() ?? null,
+    blocked: r.blocked,
+  }));
+}
+
+/**
+ * Guard shared by mute/block: an admin may not moderate themselves or a fellow
+ * admin (docs/rfcs/0004 기능4).
+ */
+async function assertModeratable(args: {
+  actorId: string;
+  targetUserId: string;
+}): Promise<void> {
+  if (args.targetUserId === args.actorId) {
+    throw new ORPCError("FORBIDDEN", {
+      message: "자기 자신에게는 할 수 없습니다.",
+    });
+  }
+  const [target] = await db
+    .select({ role: user.role })
+    .from(user)
+    .where(eq(user.id, args.targetUserId))
+    .limit(1);
+  if (!target) {
+    throw new ORPCError("NOT_FOUND", { message: "유저가 없습니다." });
+  }
+  if (target.role === "admin") {
+    throw new ORPCError("FORBIDDEN", {
+      message: "관리자는 대상이 될 수 없습니다.",
+    });
+  }
+}
+
+/**
+ * Temporarily mute a member (뮤트) — total duration capped at 1 day. Ensures a
+ * member row exists first, then stamps mutedUntil / mutedBy.
+ */
+async function muteMember(args: {
+  roomId: number;
+  userId: string;
+  hours: number;
+  actorId: string;
+}): Promise<void> {
+  if (args.hours > MUTE_MAX_HOURS) {
+    throw new ORPCError("BAD_REQUEST", {
+      message: "뮤트는 최대 1일까지 가능합니다.",
+    });
+  }
+  await assertModeratable({ actorId: args.actorId, targetUserId: args.userId });
+
+  const mutedUntil = new Date(Date.now() + args.hours * MS.hour);
+  await db
+    .insert(discussionRoomMember)
+    .values({ userId: args.userId, roomId: args.roomId })
+    .onConflictDoNothing();
+  await db
+    .update(discussionRoomMember)
+    .set({ mutedUntil, mutedBy: args.actorId })
+    .where(
+      and(
+        eq(discussionRoomMember.userId, args.userId),
+        eq(discussionRoomMember.roomId, args.roomId)
+      )
+    );
+}
+
+/** Clear a member's mute. */
+async function unmuteMember(args: {
+  roomId: number;
+  userId: string;
+}): Promise<void> {
+  await db
+    .update(discussionRoomMember)
+    .set({ mutedUntil: null, mutedBy: null })
+    .where(
+      and(
+        eq(discussionRoomMember.userId, args.userId),
+        eq(discussionRoomMember.roomId, args.roomId)
+      )
+    );
+}
+
+/**
+ * Block a member (차단) — total duration capped at 7 days. Removes the member
+ * row (like leaveRoom) and upserts a block row that gates re-entry.
+ */
+async function blockMember(args: {
+  roomId: number;
+  userId: string;
+  hours: number;
+  actorId: string;
+}): Promise<void> {
+  if (args.hours > BLOCK_MAX_HOURS) {
+    throw new ORPCError("BAD_REQUEST", {
+      message: "차단은 최대 7일까지 가능합니다.",
+    });
+  }
+  await assertModeratable({ actorId: args.actorId, targetUserId: args.userId });
+
+  const blockedUntil = new Date(Date.now() + args.hours * MS.hour);
+  await db
+    .delete(discussionRoomMember)
+    .where(
+      and(
+        eq(discussionRoomMember.userId, args.userId),
+        eq(discussionRoomMember.roomId, args.roomId)
+      )
+    );
+  await db
+    .insert(discussionRoomBlock)
+    .values({
+      userId: args.userId,
+      roomId: args.roomId,
+      blockedBy: args.actorId,
+      blockedUntil,
+    })
+    .onConflictDoUpdate({
+      target: [discussionRoomBlock.userId, discussionRoomBlock.roomId],
+      set: { blockedBy: args.actorId, blockedUntil, blockedAt: new Date() },
+    });
+}
+
+/** Lift a member's block. */
+async function unblockMember(args: {
+  roomId: number;
+  userId: string;
+}): Promise<void> {
+  await db
+    .delete(discussionRoomBlock)
+    .where(
+      and(
+        eq(discussionRoomBlock.userId, args.userId),
+        eq(discussionRoomBlock.roomId, args.roomId)
+      )
+    );
+}
+
 // ── router ───────────────────────────────────────────────────────────
 
 export const discussionRouter = {
@@ -451,6 +671,7 @@ export const discussionRouter = {
           lastMessageAt: c.lastMessageAt,
           liked: likedExpr(userId),
           favorited: favoritedExpr(userId),
+          blocked: blockedExpr(userId),
         })
         .from(discussionRoom)
         .leftJoin(user, eq(discussionRoom.createdBy, user.id))
@@ -482,6 +703,7 @@ export const discussionRouter = {
         repliesCount: row.repliesCount,
         liked: row.liked,
         favorited: row.favorited,
+        blocked: row.blocked,
       };
     }),
 
@@ -852,6 +1074,71 @@ export const discussionRouter = {
       refreshRealtimeDiscussion("discussion.deleteMessages");
       return { ok: true };
     }),
+
+  /** Admin roster for the moderation panel — members + mute/block state. */
+  roomMembers: adminProcedure
+    .input(z.object({ roomId: z.number().int() }))
+    .handler(async ({ input }) => await roomMembers({ roomId: input.roomId })),
+
+  /** Admin mute (뮤트) — value+unit, total capped at 1 day. */
+  muteMember: adminProcedure
+    .input(
+      z.object({
+        roomId: z.number().int(),
+        userId: z.string(),
+        value: z.number().int().min(1),
+        unit: z.enum(["hour", "day"]),
+      })
+    )
+    .handler(async ({ context, input }) => {
+      await muteMember({
+        roomId: input.roomId,
+        userId: input.userId,
+        hours: toHours(input.value, input.unit),
+        actorId: context.session.user.id,
+      });
+      refreshRealtimeDiscussion("discussion.muteMember");
+      return { ok: true };
+    }),
+
+  /** Admin unmute. */
+  unmuteMember: adminProcedure
+    .input(z.object({ roomId: z.number().int(), userId: z.string() }))
+    .handler(async ({ input }) => {
+      await unmuteMember({ roomId: input.roomId, userId: input.userId });
+      refreshRealtimeDiscussion("discussion.unmuteMember");
+      return { ok: true };
+    }),
+
+  /** Admin block (차단) — value+unit, total capped at 7 days. */
+  blockMember: adminProcedure
+    .input(
+      z.object({
+        roomId: z.number().int(),
+        userId: z.string(),
+        value: z.number().int().min(1),
+        unit: z.enum(["hour", "day"]),
+      })
+    )
+    .handler(async ({ context, input }) => {
+      await blockMember({
+        roomId: input.roomId,
+        userId: input.userId,
+        hours: toHours(input.value, input.unit),
+        actorId: context.session.user.id,
+      });
+      refreshRealtimeDiscussion("discussion.blockMember");
+      return { ok: true };
+    }),
+
+  /** Admin unblock. */
+  unblockMember: adminProcedure
+    .input(z.object({ roomId: z.number().int(), userId: z.string() }))
+    .handler(async ({ input }) => {
+      await unblockMember({ roomId: input.roomId, userId: input.userId });
+      refreshRealtimeDiscussion("discussion.unblockMember");
+      return { ok: true };
+    }),
 };
 
 // Re-export domain functions so future ws handlers can call them without
@@ -864,4 +1151,9 @@ export const discussionDomain = {
   deleteMessages,
   toggleLike,
   toggleFavorite,
+  roomMembers,
+  muteMember,
+  unmuteMember,
+  blockMember,
+  unblockMember,
 };

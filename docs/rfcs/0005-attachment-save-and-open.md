@@ -265,19 +265,43 @@ SAF 저장본에는 던진다**(§4-3, `FileSystemLegacyModule.kt:412-424`).
 | **D8** | **RFC 0004 §155와 §204가 서로 모순인 것을 어떻게 정리할지** — §155는 `expo-media-library` 채택을 "확정(사용자·팀장님)"이라 했고, §204는 "`READ/WRITE_EXTERNAL_STORAGE` 추가 금지"라고 했다. 그런데 이 라이브러리의 config plugin은 `legacyExpoPlugins`로 **자동 적용**되어 그 두 권한을 반드시 넣는다(`plugins` 배열과 무관). **두 조항은 동시에 만족할 수 없다.** | 문구 정정 제안. 실제 매니페스트는 안전하다 — 라이브러리 매니페스트가 두 권한에 **`maxSdkVersion="32"` 캡**을 걸어 Android 13+(앱 targetSdk 35+)에선 요청되지 않고, 실제로 쓰이는 건 §155가 요구한 모던 권한 `READ_MEDIA_IMAGES`다. 그래서 §204를 "**레거시 저장소 권한은 `maxSdkVersion` 캡이 걸린 상태만 허용, 사진 접근은 `READ_MEDIA_*` 모던 권한만 사용, `ACCESS_MEDIA_LOCATION`·`MANAGE_EXTERNAL_STORAGE`는 금지**"로 좁히는 것을 제안한다. **이 작업으로 추가된 Android 권한은 0건**이며, 위반은 RFC 0004 기능5(2026-07-24) 시점부터 존재했다 |
 | **D9** | `.omc/**`를 biome 대상에서 제외한 위치 | `biome.json`의 **`overrides[]`에 항목 1개 추가**로 처리했다(차터 규칙 #4가 허용하는 유일한 수정 방식). 다만 팀장님은 같은 성격의 에이전트 도구 디렉터리(`!**/.claude`·`!**/.agents`·`!**/.codex`·`!**/.gemini`)를 **`files.includes`에서** 제외하고 있어, 관행대로면 `!**/.omc` 한 줄이 그쪽에 들어가는 게 일관된다. 규칙 #4를 지키려고 다른 자리에 넣었으니, **`files.includes`로 옮기라고 하시면 옮기겠다.** (`.omc`는 gitignore 대상이라 저장소엔 올라가지 않는다) |
 
-## 10. 실측 기록 (2026-07-27, Android 16 / API 36 에뮬레이터)
+## 10. 실측 기록 (2026-07-27)
 
-- `Pictures/moneyroad/image/moneyroad-6.png` 앱 uid로 생성 확인 → **MediaLibrary 중첩 앨범명 동작**.
+### 10-1. 실기기 — 갤럭시 (사용자 확인)
+
+**Android 경로는 이것으로 검증을 마쳤다.**
+
+| 기능 | 결과 |
+|---|---|
+| 채팅방 이미지 썸네일 | ✅ 정상 렌더 (§5-2 빈 본문 버그 해소 확인) |
+| 뷰어 `⋮` → 갤러리 저장 | ✅ |
+| 파일 다운로드(SAF 폴더) | ✅ |
+| 저장된 폴더에서 파일 직접 열기 | ✅ — 고른 트리에 실제로 접근 가능함을 뜻한다 |
+| 채팅방에서 파일 탭 → 시스템 앱 | ✅ (pdf, 이미지) |
+| **열 앱이 없을 때 안내(§4-5)** | ⬜ **미확인** — hwp를 아직 받아 보지 않았다 |
+
+- 파일로 보낸 **이미지를 연 앱이 Google Drive**였다(에뮬레이터에선 Google Photos).
+  우리 코드는 `ACTION_VIEW` + mime만 던지고 **어느 앱이 열지는 OS가 고른다**. 기기마다
+  다른 앱이 뜨는 것이 정상이며, 특정 앱을 전제한 로직은 없다.
+
+### 10-2. 에뮬레이터 (Android 16 / API 36, Google APIs 이미지)
+
+- `Pictures/moneyroad/image/moneyroad-6.png` 앱 uid로 생성 확인 → MediaLibrary 앨범 생성 동작.
+  (이후 §12-1에 따라 앨범명을 평면 `moneyroad`로 바꿨다.)
 - `Download/moneyroad/file` 생성은 `Missing 'WRITE' permission`으로 실패 → §4-2 근거.
 - `ACTION_VIEW` + `content://` 처리 앱 조회(`cmd package query-activities`):
 
 | MIME | 처리 앱 |
 |---|---|
 | `image/jpeg` | Google Photos |
-| `text/plain` | **Chrome**, htmlviewer |
+| `text/plain` | Chrome, htmlviewer |
 | `text/markdown` | 없음 → `text/plain`으로 낮춤 |
 | `application/pdf` | Google Drive |
-| `xlsx` / `msword` / `x-hwp` | **없음** → §4-4 |
+| `xlsx` / `msword` / `x-hwp` | **없음** → §4-5 |
+
+> ⚠️ **이 표는 그 에뮬레이터에 설치된 앱 목록일 뿐 일반적 사실이 아니다.** 실기기(갤럭시)에서는
+> 이미지를 Google Drive가 열었다(§10-1). 리졸버는 기기마다 다르므로 설계 판단에는
+> "**없을 수도 있다**"만 사용하고(→ §4-5 저장 유도), 특정 앱을 전제하지 않는다.
 
 - Chrome은 `content://`도 처리한다(로컬 파일 뷰어로 동작). 단 **오피스는 렌더하지 못한다** —
   브라우저로 열어도 다운로드로 떨어지므로 §4-5의 한계는 방식과 무관하다.

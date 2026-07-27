@@ -1,7 +1,7 @@
 import { File } from "expo-file-system";
 import { Image } from "expo-image";
 import * as MediaLibrary from "expo-media-library";
-import { useCallback, useEffect, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Dimensions,
@@ -21,6 +21,7 @@ import type { MrTokens } from "@/utils/theme";
 // 앱 내부 커스텀 사진 그리드(시스템 피커 아님, docs/rfcs/0004 기능5).
 // 권한 → 최근 사진 조회 → 다중선택(최대 8, 선택순번 배지, 원본 합계 ≤10MB).
 // 확정 시 업로드 가능한 로컬 파일 목록을 onConfirm으로 넘긴다.
+// maxCount=1이면 단일 선택 모드(뉴스 썸네일, docs/rfcs/0006 §5-1).
 
 export type PickedPhoto = {
   id: string;
@@ -85,6 +86,7 @@ function fmtSize(bytes: number): string {
 
 function PickerHeader({
   count,
+  maxCount,
   totalBytes,
   onClose,
   onConfirm,
@@ -92,6 +94,7 @@ function PickerHeader({
   t,
 }: {
   count: number;
+  maxCount: number;
   totalBytes: number;
   onClose: () => void;
   onConfirm: () => void;
@@ -121,7 +124,7 @@ function PickerHeader({
           사진 선택
         </Text>
         <Text style={{ fontSize: 11, color: t.fgMuted, marginTop: 1 }}>
-          {count}/{MAX_IMAGES} · {fmtSize(totalBytes)} / 10MB
+          {count}/{maxCount} · {fmtSize(totalBytes)} / 10MB
         </Text>
       </View>
       <Pressable
@@ -233,15 +236,31 @@ function GridCell({
   order,
   cell,
   onToggle,
+  singleSelect,
   t,
 }: {
   asset: MediaLibrary.Asset;
   order: number;
   cell: number;
   onToggle: (asset: MediaLibrary.Asset) => void;
+  singleSelect: boolean;
   t: MrTokens;
 }) {
   const selected = order > 0;
+  /* ----(선택 배지: 다중이면 순번, 단일이면 체크)---- */
+  // 1장만 고르는 화면에서 "1"이라는 숫자는 아무 정보도 주지 않는다. 순서가
+  // 의미를 갖는 건 여러 장을 골라 그 순서대로 보낼 때뿐이라 체크로 바꾼다.
+  let badge: ReactNode = null;
+  if (selected) {
+    badge = singleSelect ? (
+      <Icon.check color="#fff" size={12} />
+    ) : (
+      <Text style={{ fontSize: 11, fontWeight: "800", color: "#fff" }}>
+        {order}
+      </Text>
+    );
+  }
+  /* ----(~선택 배지 여기까지)---- */
   return (
     <Pressable
       onPress={() => onToggle(asset)}
@@ -280,11 +299,7 @@ function GridCell({
             backgroundColor: selected ? t.primary : "rgba(0,0,0,0.25)",
           }}
         >
-          {selected ? (
-            <Text style={{ fontSize: 11, fontWeight: "800", color: "#fff" }}>
-              {order}
-            </Text>
-          ) : null}
+          {badge}
         </View>
       </View>
     </Pressable>
@@ -295,13 +310,17 @@ export function PhotoGridPicker({
   visible,
   onClose,
   onConfirm,
+  // 기본값은 토론방 첨부의 기존 동작(최대 8장). 1을 주면 단일 선택 모드.
+  maxCount = MAX_IMAGES,
   t,
 }: {
   visible: boolean;
   onClose: () => void;
   onConfirm: (photos: PickedPhoto[]) => void;
+  maxCount?: number;
   t: MrTokens;
 }) {
+  const singleSelect = maxCount === 1;
   const insets = useSafeAreaInsets();
   const [permission, requestPermission] = MediaLibrary.usePermissions();
   const [assets, setAssets] = useState<MediaLibrary.Asset[]>([]);
@@ -376,10 +395,14 @@ export function PhotoGridPicker({
         setSelected((prev) => prev.filter((p) => p.id !== asset.id));
         return;
       }
-      if (selected.length >= MAX_IMAGES) {
-        flash(`최대 ${MAX_IMAGES}장까지 선택할 수 있어요.`);
+      /* ----(단일 선택 모드: 한도 초과 대신 선택을 옮긴다)---- */
+      // 1장짜리 화면에서 "최대 1장" 경고를 띄우면 사진을 바꾸려는 사용자가
+      // 먼저 해제부터 해야 해서 손이 두 번 간다. 새로 누른 사진으로 교체한다.
+      if (!singleSelect && selected.length >= maxCount) {
+        flash(`최대 ${maxCount}장까지 선택할 수 있어요.`);
         return;
       }
+      /* ----(~단일 선택 모드 여기까지)---- */
       try {
         const uri = await readableUriOf(asset);
         let size = 0;
@@ -388,27 +411,31 @@ export function PhotoGridPicker({
         } catch {
           size = 0;
         }
-        if (totalBytes + size > MAX_TOTAL_BYTES) {
-          flash("원본 크기 합계가 10MB를 넘어요.");
+        // 교체되는 사진의 용량은 합계에서 빠지므로 단일 모드의 기준선은 0이다.
+        const baseBytes = singleSelect ? 0 : totalBytes;
+        if (baseBytes + size > MAX_TOTAL_BYTES) {
+          flash(
+            singleSelect
+              ? "사진 원본이 10MB를 넘어요."
+              : "원본 크기 합계가 10MB를 넘어요."
+          );
           return;
         }
         const name = asset.filename || `image-${asset.id}.jpg`;
-        setSelected((prev) => [
-          ...prev,
-          {
-            id: asset.id,
-            uri,
-            thumbUri: asset.uri,
-            name,
-            mime: mimeFromName(name),
-            size,
-          },
-        ]);
+        const picked: PickedPhoto = {
+          id: asset.id,
+          uri,
+          thumbUri: asset.uri,
+          name,
+          mime: mimeFromName(name),
+          size,
+        };
+        setSelected((prev) => (singleSelect ? [picked] : [...prev, picked]));
       } catch {
         flash("사진을 불러오지 못했어요.");
       }
     },
-    [selected, totalBytes, flash]
+    [selected, totalBytes, flash, singleSelect, maxCount]
   );
 
   const orderOf = useCallback(
@@ -423,6 +450,7 @@ export function PhotoGridPicker({
       <View style={{ flex: 1, backgroundColor: t.bg }}>
         <PickerHeader
           count={selected.length}
+          maxCount={maxCount}
           onClose={onClose}
           onConfirm={() => onConfirm(selected)}
           t={t}
@@ -472,6 +500,7 @@ export function PhotoGridPicker({
                 cell={cell}
                 onToggle={toggle}
                 order={orderOf(item.id)}
+                singleSelect={singleSelect}
                 t={t}
               />
             )}

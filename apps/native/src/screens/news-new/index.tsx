@@ -14,9 +14,14 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { BackButton, MrScreen, Switch } from "@/components/ui";
 import { useMrTheme } from "@/hooks/use-mr-theme";
+import { uploadNewsThumbnail } from "@/lib/news-thumbnail-upload";
 import { nav } from "@/utils/nav";
 import { orpc } from "@/utils/orpc";
 import type { MrTokens } from "@/utils/theme";
+import {
+  ThumbnailField,
+  type ThumbnailValue,
+} from "./components/thumbnail-field";
 
 // 저장 카테고리 값(탭 id와 다름): 시장/산업/기업/해외/정책 → market/sector/company/global/other
 type NewsCategoryValue = "market" | "sector" | "company" | "global" | "other";
@@ -37,6 +42,34 @@ function isNewsCategory(value: string): value is NewsCategoryValue {
 
 const TITLE_MAX = 120;
 const CONTENT_MAX = 4000;
+
+/* ----(썸네일: 저장 직전에 업로드해 URL로 바꾼다 — docs/rfcs/0006 §5-2)---- */
+// 사진을 고르는 즉시가 아니라 [저장] 시점에 올리는 이유: 관리자가 작성을
+// 도중에 취소하면 아무 기사도 참조하지 않는 고아 객체가 GCS에 남기 때문이다.
+// 편집 모드에서 프리필된 기존 썸네일(remote)은 이미 올라가 있으니 그대로 쓴다.
+// 아무것도 안 골랐으면 undefined → 서버가 null 저장 → 앱이 기본 이미지를 그린다.
+async function resolveThumbnailUrl(
+  value: ThumbnailValue | null
+): Promise<string | undefined> {
+  if (!value) {
+    return;
+  }
+  if (value.kind === "remote") {
+    return value.url;
+  }
+  return await uploadNewsThumbnail({
+    uri: value.uri,
+    name: value.name,
+    mime: value.mime,
+  });
+}
+
+function uploadFailMessage(err: unknown): string {
+  return err instanceof Error
+    ? err.message
+    : "썸네일 업로드에 실패했습니다. 잠시 후 다시 시도해 주세요.";
+}
+/* ----(~썸네일 업로드 여기까지)---- */
 
 // 카테고리 다중 선택 토글(최소 1개). SegmentedControl은 단일선택이라 별도 구현.
 function CategoryToggle({
@@ -98,6 +131,9 @@ function useNewsForm(newsId?: string) {
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [link, setLink] = useState("");
+  const [thumbnail, setThumbnail] = useState<ThumbnailValue | null>(null);
+  // 업로드는 mutation 밖에서 일어나므로 저장 버튼 로딩을 따로 켜 줘야 한다.
+  const [uploading, setUploading] = useState(false);
 
   // 편집 모드: 기존 기사 값을 불러와 프리필(생성 모드에선 비활성).
   const detailQuery = useQuery({
@@ -117,6 +153,8 @@ function useNewsForm(newsId?: string) {
     setTitle(d.title);
     setContent(d.content);
     setLink(d.url ?? "");
+    // 이미 붙어 있는 썸네일은 다시 올릴 필요가 없다(remote). 교체·해제만 가능.
+    setThumbnail(d.imageUrl ? { kind: "remote", url: d.imageUrl } : null);
   }, [isEdit, detailQuery.data]);
 
   const invalidateFeed = () => {
@@ -137,7 +175,9 @@ function useNewsForm(newsId?: string) {
   const trimmedTitle = title.trim();
   const trimmedContent = content.trim();
   const trimmedLink = link.trim();
-  const isPending = isEdit ? updateNews.isPending : createNews.isPending;
+  // 저장 = 썸네일 업로드 + mutation. 둘 중 하나라도 진행 중이면 저장 중이다.
+  const isPending =
+    uploading || (isEdit ? updateNews.isPending : createNews.isPending);
   const isError = isEdit ? updateNews.isError : createNews.isError;
   const canSubmit =
     categories.length > 0 &&
@@ -151,9 +191,21 @@ function useNewsForm(newsId?: string) {
     );
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!canSubmit) {
       return;
+    }
+    // 업로드가 실패하면 기사를 만들지 않는다 — 썸네일만 빠진 채로 저장되면
+    // 관리자는 성공한 줄 알고 화면을 떠난다.
+    let thumbnailUrl: string | undefined;
+    setUploading(true);
+    try {
+      thumbnailUrl = await resolveThumbnailUrl(thumbnail);
+    } catch (err) {
+      Alert.alert("썸네일 업로드 실패", uploadFailMessage(err));
+      return;
+    } finally {
+      setUploading(false);
     }
     const payload = {
       categories,
@@ -161,6 +213,7 @@ function useNewsForm(newsId?: string) {
       title: trimmedTitle,
       content: trimmedContent,
       link: trimmedLink.length > 0 ? trimmedLink : undefined,
+      thumbnailUrl,
     };
     if (isEdit && typeof newsId === "string") {
       updateNews.mutate({ id: newsId, ...payload });
@@ -188,6 +241,8 @@ function useNewsForm(newsId?: string) {
     setContent,
     link,
     setLink,
+    thumbnail,
+    setThumbnail,
     isPending,
     isError,
     canSubmit,
@@ -211,6 +266,8 @@ export default function NewsFormScreen({ newsId }: { newsId?: string }) {
     setContent,
     link,
     setLink,
+    thumbnail,
+    setThumbnail,
     isPending,
     isError,
     canSubmit,
@@ -389,6 +446,10 @@ export default function NewsFormScreen({ newsId }: { newsId?: string }) {
             입력 시 상세의 "원문 기사 보기" 버튼이 이 링크로 연결됩니다.
           </Text>
         </View>
+
+        {/* ----(썸네일 첨부 — docs/rfcs/0006 §5-1)---- */}
+        <ThumbnailField onChange={setThumbnail} t={t} value={thumbnail} />
+        {/* ----(~썸네일 첨부 여기까지)---- */}
 
         {/* Save / Cancel */}
         <View

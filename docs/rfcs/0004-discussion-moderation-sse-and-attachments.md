@@ -156,7 +156,8 @@ RFC 0002 뉴스 패턴 복제: `DiscussionHub`(NewsHub 복사)+`GET /stream/disc
 - **파일(문서 피커)**: 광범위 저장소 권한 불요(선택 항목만 스코프 접근). — 원 요청서 핵심(불필요 권한 금지) 유지.
 
 **(d) 업로드/서빙 — [D9·D10 정해짐]**: 규칙 #9 → 업로드는 **server**(현 GCS 코드 realtime→server 이식). **비공개 버킷 + 서버 프록시(방 사람만) — 확정.** `moneyroad_image`엔 **객체 키** 저장, 채팅 이미지·파일은 **프록시로 서빙**(공개 URL 아님). 공용 `moneyroad_image`가 배너 등 공개 맥락에도 쓰이면 그쪽만 공개 URL(키 저장은 공용, 서빙만 맥락별). 숨김·삭제 메시지 첨부는 프록시에서 차단.
-  - **버킷 생성 = 사용자 직접(GCP Cloud Shell)**: 비공개 버킷 생성 + **server 서비스계정에 버킷 접근 권한(objectAdmin) 부여** + Cloud Run server에 `CHAT_ATTACHMENT_BUCKET` env 설정. (종목아이콘·뉴스썸네일 인프라 절차와 동일 — RFC 0002 §9-3.) 코드는 env로만 참조(이름에 안 묶임).
+  - **버킷 생성 = 사용자 직접(GCP Cloud Shell)**: 비공개 버킷 생성 + **server 서비스계정에 버킷 접근 권한(objectAdmin) 부여** + Cloud Run server에 `DISCUSSION_ATTACHMENT_BUCKET` env 설정. (종목아이콘·뉴스썸네일 인프라 절차와 동일 — RFC 0002 §9-3.) 코드는 env로만 참조(이름에 안 묶임).
+    > 📌 **사후 정정(2026-07-27)**: 이 env 키는 최초 구현 시 `CHAT_ATTACHMENT_BUCKET`으로 들어갔으나 CONTEXT.md `_Avoid_: Chat` 위반이라 `DISCUSSION_ATTACHMENT_BUCKET`으로 리네임했다. 본문은 정정된 이름으로 갱신했다. 상세는 **RFC 0005 §11**. 버킷 *값*(GCP 리소스 이름)은 손대지 않았다.
 
 ---
 
@@ -173,7 +174,7 @@ RFC 0002 뉴스 패턴 복제: `DiscussionHub`(NewsHub 복사)+`GET /stream/disc
 | `discussion_room_block`(신규) | `userId, roomId, blockedBy, blockedAt, blockedUntil`, 복합 PK | **D6/D7** |
 | `discussion_room_favorite`(신규) | `userId, roomId, createdAt` — `discussion_room_like` 복사 | **D8** |
 | `discussionRoomLike` | **유지** | **D8** |
-| `packages/env/src/server.ts` | 비공개 첨부 버킷 env(예 `CHAT_ATTACHMENT_BUCKET`) | **D10** |
+| `packages/env/src/server.ts` | 비공개 첨부 버킷 env(`DISCUSSION_ATTACHMENT_BUCKET` — 최초 구현의 `CHAT_ATTACHMENT_BUCKET`에서 정정, RFC 0005 §11) | **D10** |
 
 - 카운트: `repliesCount`(`:43`)에서 삭제·숨김 제외 정정, `membersCount`는 차단 멤버가 멤버행 삭제로 자동 제외.
 - 전부 nullable/default/신규 → **비파괴**(백필 불필요). 좋아요 유지라 파괴적 변경 없음. `moneyroad_image`는 공용이므로 discussion 스키마와 분리된 위치(예 별도 스키마 파일)에 둘지 §19-D14에서 확인.

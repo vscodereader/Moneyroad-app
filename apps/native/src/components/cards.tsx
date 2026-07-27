@@ -4,6 +4,7 @@ import { Image, Pressable, Text, View } from "react-native";
 import { Gradient, IndexIntradayChart, Sparkline } from "@/components/charts";
 import { Icon, SIGNAL_ACTION_ICON } from "@/components/icons";
 import {
+  AiChip,
   IconButton,
   Skeleton,
   StockLogo,
@@ -529,46 +530,29 @@ export function SignalCard({
 }
 
 // ── News thumbnail ────────────────────────────────────────────
+/* ----(썸네일 없는 기사: 머니로드 기본 이미지)---- */
+// 자동수집 기사는 원문에 og:image가 없거나 수집기의 버킷 env가 비어 있으면
+// 썸네일이 null로 남는다(로컬 실측 75%, prod 100% — RFC 0006 §1-2).
+// 예전에는 태그에서 뽑은 단어를 감성색 박스에 띄웠는데, 기사마다 글자 수와
+// 색이 달라 목록이 산만했다. 브랜드 기본 이미지 한 장으로 통일한다.
+// 번들 에셋이라 네트워크 요청이 없고 오프라인에서도 그려진다(RFC 0006 §4-2 A안).
+// `@/`는 src/ 로만 매핑되는 별칭이라 src 밖의 assets/ 는 상대경로로 부른다.
+const DEFAULT_NEWS_THUMBNAIL = require("../../assets/images/news-thumbnail-default.png");
+/* ----(~머니로드 기본 이미지 여기까지)---- */
+
 function NewsThumb({ news, t }: { news: NewsItem; t: MrTokens }) {
-  // 실제 썸네일(GCS 재호스팅)이 있으면 이미지, 없으면 감성색 텍스트 박스 폴백.
-  if (news.imageUrl) {
-    return (
-      <Image
-        resizeMode="cover"
-        source={{ uri: news.imageUrl }}
-        style={{
-          width: 78,
-          height: 78,
-          borderRadius: 8,
-          backgroundColor: t.bgSubtle,
-        }}
-      />
-    );
-  }
-  const up = news.sentiment === "up";
+  // 실제 썸네일(GCS 재호스팅)이 있으면 그것을, 없으면 기본 이미지를 같은 칸에 그린다.
   return (
-    <View
+    <Image
+      resizeMode="cover"
+      source={news.imageUrl ? { uri: news.imageUrl } : DEFAULT_NEWS_THUMBNAIL}
       style={{
         width: 78,
         height: 78,
         borderRadius: 8,
-        backgroundColor: up ? t.upBg : t.downBg,
-        alignItems: "center",
-        justifyContent: "center",
+        backgroundColor: t.bgSubtle,
       }}
-    >
-      <Text
-        style={{
-          fontSize: 11,
-          fontWeight: "700",
-          textAlign: "center",
-          lineHeight: 15,
-          color: up ? t.upStrong : t.downStrong,
-        }}
-      >
-        {news.thumbHint}
-      </Text>
-    </View>
+    />
   );
 }
 
@@ -650,23 +634,14 @@ export function NewsCard({
             {news.source} · {news.time}
           </Text>
           {showAiChip ? (
-            <View
-              style={{
-                marginLeft: "auto",
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 4,
-                height: 22,
-                paddingHorizontal: 8,
-                borderRadius: 999,
-                backgroundColor: t.sigAi,
-              }}
-            >
-              <Icon.sparkles color="#fff" size={11} />
-              <Text style={{ fontSize: 11, fontWeight: "700", color: "#fff" }}>
-                AI 요약
-              </Text>
+            /* ----(칩 라벨: 머니로드 독점 vs AI 요약)---- */
+            // 손으로 복사돼 있던 알약 칩을 ui.tsx의 AiChip으로 합쳤다(RFC 0006 §6-3).
+            // 우측 정렬은 AiChip이 아니라 이 래퍼가 책임진다 — 칩 자체는 위치를
+            // 모르는 편이 상세 시트처럼 좌측에 놓는 화면에서도 재사용된다.
+            <View style={{ marginLeft: "auto" }}>
+              <AiChip label={news.exclusive ? "머니로드 독점" : "AI 요약"} />
             </View>
+            /* ----(~칩 라벨 여기까지)---- */
           ) : null}
         </View>
       </View>

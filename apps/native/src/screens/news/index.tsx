@@ -21,7 +21,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { NewsCard } from "@/components/cards";
 import { Icon } from "@/components/icons";
-import { Chip, MrHeader, MrScreen, StockLogo } from "@/components/ui";
+import { AiChip, Chip, MrHeader, MrScreen, StockLogo } from "@/components/ui";
 import { useLiveQuote } from "@/hooks/use-live-quotes";
 import { useMrTheme } from "@/hooks/use-mr-theme";
 import { type NewsTab, useNewsStream } from "@/hooks/use-news-stream";
@@ -159,6 +159,12 @@ function NewsSheet({
     dummyStock?.name ?? seed?.stockName ?? d?.stock?.name ?? null;
   const url = d?.url ?? null;
   const preview = d?.preview;
+  /* ----(독점 기사 판별: 칩 문구 결정)---- */
+  // 시트는 detail이 도착하기 전에 seed로 먼저 그려진다. seed의 exclusive를 우선
+  // 쓰면 칩 문구가 "AI 요약" → "머니로드 독점"으로 늦게 튀지 않는다.
+  // seed 없이 딥링크로 연 경우에만 detail의 sourceType으로 판별한다.
+  const exclusive = seed?.exclusive ?? d?.sourceType === "manual";
+  /* ----(~독점 기사 판별 여기까지)---- */
 
   return (
     <Modal animationType="slide" onRequestClose={onClose} transparent visible>
@@ -200,22 +206,8 @@ function NewsSheet({
               marginTop: 8,
             }}
           >
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 4,
-                height: 22,
-                paddingHorizontal: 8,
-                borderRadius: 999,
-                backgroundColor: t.sigAi,
-              }}
-            >
-              <Icon.sparkles color="#fff" size={11} />
-              <Text style={{ fontSize: 11, fontWeight: "700", color: "#fff" }}>
-                AI 요약
-              </Text>
-            </View>
+            {/* 목록 카드와 같은 칩을 쓴다 — 손복사본이 둘로 갈려 문구가 어긋나던 것을 합쳤다 */}
+            <AiChip label={exclusive ? "머니로드 독점" : "AI 요약"} />
             <Text style={{ fontSize: 11, color: t.fgSubtle }}>
               머니로드가 요약함
             </Text>

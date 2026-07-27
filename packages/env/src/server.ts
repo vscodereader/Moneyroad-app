@@ -18,6 +18,12 @@ export const env = createEnv({
     // and is independent of this key.
     DISCUSSION_ATTACHMENT_BUCKET: z.string().optional(),
 
+    // 뉴스 썸네일 공개 GCS 버킷 (docs/rfcs/0006 §5-3). realtime의 같은 키와
+    // *같은 버킷*을 가리킨다 — 자동수집분과 관리자 업로드분이 한 버킷에 섞여
+    // 들어간다(키 프리픽스도 news-thumbnails/ 로 동일). 선택 — 미설정이면
+    // 관리자 썸네일 업로드 라우트만 503으로 꺼지고 나머지 뉴스 기능은 그대로다.
+    NEWS_THUMBNAIL_BUCKET: z.string().optional(),
+
     // Realtime service base URL for internal triggers. After a watchlist/signal
     // write the API nudges this URL so the realtime poller re-pins immediately
     // instead of waiting for its ~10s interval. Auth reuses STREAM_TOKEN_SECRET.

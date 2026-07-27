@@ -332,7 +332,7 @@ DB에서 독점 기사는 `source_type = 'manual'`이고 `source = '머니로드
 // cards.tsx — 인라인 <View>…</View> 19줄을 지우고
 {showAiChip ? (
   <View style={{ marginLeft: "auto" }}>
-    <AiChip label={news.exclusive ? "머니로드 독점" : "AI 요약"} />
+    <AiChip label={news.exclusive ? "머니로드 독점" : "머니로드 요약"} />
   </View>
 ) : null}
 ```
@@ -357,7 +357,28 @@ exclusive: row.sourceType === "manual",
 
 이번 변경으로 **독점 기사만** 글씨가 정확해지고, 자동수집 기사에는 `AI 요약` 칩이 그대로 남는다.
 
-> ✅ **사용자 결정 (2026-07-27)**: *"3번은 건드리지마. 무조건 true로 할꺼야."* — `showAiChip`은 지금처럼 **항상 true**로 두고, `aiGenerated`와 연결하지 않는다. 자동수집 기사의 `AI 요약` 칩도 **그대로 유지**한다. 이 항목은 더 이상 미결이 아니다.
+> ✅ **사용자 결정 (2026-07-27)**: *"3번은 건드리지마. 무조건 true로 할꺼야."* — `showAiChip`은 지금처럼 **항상 true**로 두고, `aiGenerated`와 연결하지 않는다. 칩을 언제 띄울지는 바꾸지 않는다. 이 항목은 더 이상 미결이다.
+
+### 6-5. 비독점 문구 변경 — `AI 요약` → `머니로드 요약` (2026-07-28)
+
+구현 직후 사용자가 **비독점 기사의 문구도** 직접 바꿨다. §6-4가 지적한 "요약을 만들지 않는데 `AI 요약`이라고 쓰여 있다"는 부정확을, 칩 노출 조건은 그대로 둔 채 **문구만 고쳐** 해소한 것이다.
+
+```
+독점  (sourceType='manual')  →  ✨ 머니로드 독점
+비독점                        →  ✨ 머니로드 요약     ← 이전: AI 요약
+```
+
+**세 곳을 맞춰야 했다.** 컴포넌트는 §6-3에서 하나로 합쳤지만 **문구 판단(`exclusive ? A : B`)은 두 호출부에 각각 적혀 있어서**, 사용자가 상세 시트만 먼저 바꿨을 때 목록 카드와 갈렸다(같은 기사가 목록에서 `AI 요약`, 열면 `머니로드 요약`).
+
+| 파일 | 조치 |
+|---|---|
+| `screens/news/index.tsx:210` | 사용자가 변경 |
+| `components/cards.tsx:643` | 사용자가 변경. **포맷 에러 발생** — 새 문구가 길어져 80자를 넘어 Biome이 3줄 분할을 요구했다. `ultracite fix`로 해소(안 고치면 pre-commit 훅에서 막힌다) |
+| `components/ui.tsx:511` | `AiChip`의 **기본값** `label = "AI 요약"` → `"머니로드 요약"`. 현재 두 호출부가 모두 `label`을 넘기므로 화면에 영향은 없지만, 나중에 `<AiChip />`을 그냥 쓰면(=`label`이 optional이라 타입 에러도 안 난다) 옛 문구가 조용히 튀어나온다 |
+
+> ⚠️ `ui.tsx` 변경은 §7 변경 파일 표의 "변경 없음" 약속을 깬 것이다. 사용자 지시로 진행했다. → **D7**
+>
+> 남은 부채: 문구 판단이 여전히 두 호출부에 중복돼 있어 **또 갈릴 수 있다.** 헬퍼 하나로 모으자고 제안했으나 채택되지 않았다. 그리고 컴포넌트 이름 `AiChip`은 이제 실제 문구(`머니로드 요약`/`머니로드 독점`)와 맞지 않는다 — 리네임은 팀장님 파일이라 하지 않았다. → **D7**
 
 ---
 
@@ -368,7 +389,7 @@ exclusive: row.sourceType === "manual",
 | `apps/native/assets/images/news-thumbnail-default.png` | **신규** — 240×240으로 축소해 배치 | 신규 |
 | `apps/native/src/components/cards.tsx` | ① `NewsThumb` 폴백 교체 (§4-3) ② 인라인 칩 19줄 → `AiChip` (§6-3) | 팀장님 파일 — **D1·D6** |
 | `apps/native/src/screens/news/index.tsx` | 상세 시트 인라인 칩 → `AiChip` (§6-3) | 팀장님 파일 — **D6** |
-| `apps/native/src/components/ui.tsx` | 변경 없음 — 기존 `AiChip`을 그대로 쓴다 | — |
+| `apps/native/src/components/ui.tsx` | `AiChip` 기본 label 1줄 (§6-5 — 초안은 "변경 없음"이었다) | 팀장님 파일 — **D7** |
 | `apps/native/src/screens/news-new/index.tsx` | 썸네일 섹션 + 폼 상태 + 업로드 호출 | 내 파일 |
 | `apps/native/src/screens/news-new/components/thumbnail-field.tsx` | **신규** — 선택 버튼·미리보기·파일명 | 신규 |
 | `apps/native/src/screens/discussion-room/components/photo-grid-picker.tsx` | 단일 선택 모드 지원(`maxCount` prop) — **Q8** | 내 파일 |
@@ -451,7 +472,7 @@ roles/storage.objectViewer → ['allUsers']      ← 공개 읽기 설정 완료
 | **Q11** | 업로드 라우트를 **새 `news-media.ts` 플러그인**으로 뺄까, 기존 `discussion-media.ts`에 얹을까? *(후자는 CONTEXT.md 용어상 뉴스가 discussion에 들어가는 셈)* | **새 플러그인.** 뉴스는 DiscussionRoom이 아니다 |
 | **Q12** | §1-2 실측대로 **로컬 75% / prod 100%** 의 기사가 썸네일이 없다. 이 기능을 켜면 목록의 상당수가 **같은 기본 이미지**로 반복된다. 그래도 진행? *(prod 썸네일을 살리려면 realtime 인프라 작업이 별도로 필요 — 오늘 할 일 4번과 함께 처리 가능)* | **진행.** 지금의 단어 박스보다는 낫다. prod realtime 버킷 env는 별건으로 잡자 |
 | ~~Q13~~ | ~~"머니로드 독점 기사 포인트"가 뭘 뜻하나?~~ | ✅ **확정: 보라색 알약 칩의 글씨만 교체.** 사용자 확답 2026-07-27 — "그 UI 그 폰트 그대로 쓰되 글씨만 '머니로드 독점'". 상세는 **§6** |
-| ~~Q14~~ | ~~목록 카드 + 상세 시트 둘 다? 비독점은 `AI 요약` 유지?~~ | ✅ **확정: 둘 다 적용. 비독점은 `AI 요약` 유지.** 사용자 확답 2026-07-27 — "밖과 안 둘 다 바꿔줘" |
+| ~~Q14~~ | ~~목록 카드 + 상세 시트 둘 다? 비독점은 `AI 요약` 유지?~~ | ✅ **확정: 둘 다 적용.** 비독점 문구는 이후 `머니로드 요약`으로 바뀌었다 — **§6-5** |
 
 > **모든 확인 항목이 닫혔다. 구현 착수 가능.**
 
@@ -467,6 +488,7 @@ roles/storage.objectViewer → ['allUsers']      ← 공개 읽기 설정 완료
 | **D4** | `NEWS_THUMBNAIL_BUCKET`을 realtime·server **양쪽에서** 참조하게 되는 구조 승인 |
 | **D5** | §6-1 — 죽은 코드였던 `AiChip`(`ui.tsx:511`)을 살려 인라인 복사본 2곳을 통합하는 것. **`cards.tsx`(팀장님 파일)의 칩 코드 19줄 삭제**를 포함한다 |
 | **D6** | §12-3 — iOS HEIC 사진이 **토론방 첨부·뉴스 썸네일 양쪽에서** 415로 거절된다(선재 결함). `expo-image-manipulator` 도입해 클라이언트에서 JPEG 변환하는 별건 작업을 승인하시는지 |
+| **D7** | §6-5 — 칩 문구를 `AI 요약` → `머니로드 요약`으로 바꾸면서 **`ui.tsx`(팀장님 파일)의 기본값 1줄**을 고쳤다(§7은 "변경 없음"이었다). 승인 요청. 더불어 컴포넌트 이름 `AiChip`이 실제 문구와 맞지 않게 됐는데 **리네임 여부**를 정해 주시면 좋겠다 |
 
 > §6-4(자동수집 기사의 `AI 요약` 칩 부정확)는 **사용자가 유지하기로 결정**해 결정 목록에서 뺐다.
 

@@ -161,7 +161,7 @@ function NewsSheet({
   const preview = d?.preview;
   /* ----(독점 기사 판별: 칩 문구 결정)---- */
   // 시트는 detail이 도착하기 전에 seed로 먼저 그려진다. seed의 exclusive를 우선
-  // 쓰면 칩 문구가 "AI 요약" → "머니로드 독점"으로 늦게 튀지 않는다.
+  // 쓰면 칩 문구가 "머니로드 요약" → "머니로드 독점"으로 늦게 튀지 않는다.
   // seed 없이 딥링크로 연 경우에만 detail의 sourceType으로 판별한다.
   const exclusive = seed?.exclusive ?? d?.sourceType === "manual";
   /* ----(~독점 기사 판별 여기까지)---- */
@@ -207,7 +207,7 @@ function NewsSheet({
             }}
           >
             {/* 목록 카드와 같은 칩을 쓴다 — 손복사본이 둘로 갈려 문구가 어긋나던 것을 합쳤다 */}
-            <AiChip label={exclusive ? "머니로드 독점" : "AI 요약"} />
+            <AiChip label={exclusive ? "머니로드 독점" : "머니로드 요약"} />
             <Text style={{ fontSize: 11, color: t.fgSubtle }}>
               머니로드가 요약함
             </Text>

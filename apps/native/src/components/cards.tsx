@@ -634,12 +634,14 @@ export function NewsCard({
             {news.source} · {news.time}
           </Text>
           {showAiChip ? (
-            /* ----(칩 라벨: 머니로드 독점 vs AI 요약)---- */
+            /* ----(칩 라벨: 머니로드 독점 vs 머니로드 요약)---- */
             // 손으로 복사돼 있던 알약 칩을 ui.tsx의 AiChip으로 합쳤다(RFC 0006 §6-3).
             // 우측 정렬은 AiChip이 아니라 이 래퍼가 책임진다 — 칩 자체는 위치를
             // 모르는 편이 상세 시트처럼 좌측에 놓는 화면에서도 재사용된다.
             <View style={{ marginLeft: "auto" }}>
-              <AiChip label={news.exclusive ? "머니로드 독점" : "AI 요약"} />
+              <AiChip
+                label={news.exclusive ? "머니로드 독점" : "머니로드 요약"}
+              />
             </View>
             /* ----(~칩 라벨 여기까지)---- */
           ) : null}

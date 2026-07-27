@@ -18,7 +18,7 @@ export type UploadedFileRef = {
 
 type LocalFile = { uri: string; name: string; mime: string };
 
-function authHeaders(): Record<string, string> {
+export function authHeaders(): Record<string, string> {
   const headers: Record<string, string> = {};
   if (Platform.OS !== "web") {
     const cookies = authClient.getCookie();
@@ -30,7 +30,7 @@ function authHeaders(): Record<string, string> {
 }
 
 // Absolute URL for a server-relative media path (the messages payload returns
-// paths like "/media/chat-image/42").
+// paths like "/media/discussion-image/42").
 export function mediaUrl(path: string): string {
   return path.startsWith("http")
     ? path
@@ -66,10 +66,11 @@ async function postFile(endpoint: string, file: LocalFile): Promise<Response> {
   });
 }
 
-// POST /upload/chat-image → { imageId }. Throws on any non-2xx so the caller can
-// treat this upload as failed (partial-failure retry lives in the screen).
-export async function uploadChatImage(file: LocalFile): Promise<number> {
-  const res = await postFile("/upload/chat-image", file);
+// POST /upload/discussion-image → { imageId }. Throws on any non-2xx so the
+// caller can treat this upload as failed (partial-failure retry lives in the
+// screen).
+export async function uploadDiscussionImage(file: LocalFile): Promise<number> {
+  const res = await postFile("/upload/discussion-image", file);
   if (!res.ok) {
     throw new Error(`이미지 업로드 실패 (${res.status})`);
   }
@@ -77,11 +78,11 @@ export async function uploadChatImage(file: LocalFile): Promise<number> {
   return data.imageId;
 }
 
-// POST /upload/chat-file → { bucket, key, mime, size, name }.
-export async function uploadChatFile(
+// POST /upload/discussion-file → { bucket, key, mime, size, name }.
+export async function uploadDiscussionFile(
   file: LocalFile
 ): Promise<UploadedFileRef> {
-  const res = await postFile("/upload/chat-file", file);
+  const res = await postFile("/upload/discussion-file", file);
   if (!res.ok) {
     throw new Error(`파일 업로드 실패 (${res.status})`);
   }

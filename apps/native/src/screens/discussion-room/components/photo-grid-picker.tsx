@@ -8,6 +8,7 @@ import {
   FlatList,
   Linking,
   Modal,
+  Platform,
   Pressable,
   Text,
   View,
@@ -23,7 +24,7 @@ import type { MrTokens } from "@/utils/theme";
 
 export type PickedPhoto = {
   id: string;
-  // Upload/size source — a readable file:// uri from getAssetInfoAsync.
+  // Upload/size source — a readable file:// uri (see readableUriOf).
   uri: string;
   // Grid-thumbnail source (asset.uri: ph:// on iOS, file:// on Android).
   thumbUri: string;
@@ -55,6 +56,25 @@ function mimeFromName(name: string): string {
   const ext = dot >= 0 ? name.slice(dot + 1).toLowerCase() : "";
   return MIME_BY_EXT[ext] ?? "image/jpeg";
 }
+
+/* ----(앨범 자산의 읽을 수 있는 로컬 경로 — RFC 0005 §5)---- */
+// Readable file:// path for an asset, without asking the library for full info.
+// Android already hands back a file:// uri, and its getAssetInfoAsync always
+// resolves with full info — which reads the photo's EXIF GPS through
+// MediaStore.setRequireOriginal() and throws without ACCESS_MEDIA_LOCATION, a
+// permission this app deliberately doesn't request (RFC 0004 §204; the server
+// strips EXIF anyway). So Android must never reach that call at all: the gate
+// is the platform, not the uri shape — a uri that isn't file:// (a scheme a
+// future OS version may hand back) would otherwise fall straight into it and
+// bring the reject back. Only iOS returns a ph:// reference to resolve.
+async function readableUriOf(asset: MediaLibrary.Asset): Promise<string> {
+  if (Platform.OS === "android" || asset.uri.startsWith("file://")) {
+    return asset.uri;
+  }
+  const info = await MediaLibrary.getAssetInfoAsync(asset);
+  return info?.localUri ?? asset.uri;
+}
+/* ----(~앨범 자산의 읽을 수 있는 로컬 경로 여기까지)---- */
 
 function fmtSize(bytes: number): string {
   if (bytes >= MB) {
@@ -361,8 +381,7 @@ export function PhotoGridPicker({
         return;
       }
       try {
-        const info = await MediaLibrary.getAssetInfoAsync(asset);
-        const uri = info.localUri ?? asset.uri;
+        const uri = await readableUriOf(asset);
         let size = 0;
         try {
           size = new File(uri).size ?? 0;

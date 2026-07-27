@@ -20,9 +20,13 @@ import { Jimp, JimpMime } from "jimp";
 const MB = 1024 * 1024;
 const IMAGE_MAX_BYTES = 10 * MB;
 const FILE_MAX_BYTES = 20 * MB;
-// Object keys: chat/images/{uuid}, chat/files/{uuid}/{safeName}.
-const IMAGE_KEY_PREFIX = "chat/images";
-const FILE_KEY_PREFIX = "chat/files";
+// Object keys: discussion/images/{uuid}, discussion/files/{uuid}/{safeName}.
+// Objects uploaded before the CONTEXT.md 용어 정정 still sit under the previous
+// prefix pair (docs/rfcs/0005 §11). Reads resolve the key stored on the DB row,
+// never this constant, so both prefixes coexist and no object may be moved or
+// deleted in the bucket.
+const IMAGE_KEY_PREFIX = "discussion/images";
+const FILE_KEY_PREFIX = "discussion/files";
 // Private bucket → viewers reach bytes only through the access-checked proxy.
 const MEDIA_CACHE_CONTROL = "private, max-age=3600";
 
@@ -107,7 +111,7 @@ async function requireUserId(
 // Resolve the configured bucket or send a 503 (attachments stay off until a
 // bucket is configured — mirrors the optional env).
 function requireBucket(reply: FastifyReply): string | null {
-  const bucket = env.CHAT_ATTACHMENT_BUCKET;
+  const bucket = env.DISCUSSION_ATTACHMENT_BUCKET;
   if (!bucket) {
     reply
       .status(503)
@@ -184,12 +188,16 @@ function extensionOf(name: string): string {
 }
 
 // Stream private-bucket bytes to the reply with the given content metadata.
+// Returns the reply so the async route handler can `return` it: resolving an
+// async handler with `undefined` makes Fastify call `reply.send(undefined)` a
+// second time, which overwrites Content-Length with "0" and ships an empty
+// body (fastify/lib/wrap-thenable.js → reply.js `onSendEnd`).
 function streamObject(
   reply: FastifyReply,
   bucket: string,
   key: string,
   opts: { mime: string; size: number; downloadName?: string }
-): void {
+): FastifyReply {
   reply.header("Content-Type", opts.mime);
   reply.header("Content-Length", String(opts.size));
   reply.header("Cache-Control", MEDIA_CACHE_CONTROL);
@@ -201,15 +209,43 @@ function streamObject(
   }
   const stream = getStorage().bucket(bucket).file(key).createReadStream();
   stream.on("error", (err) => {
-    reply.request.log.error({ err }, "chat media stream failed");
-    if (!reply.sent) {
+    reply.request.log.error({ err }, "discussion media stream failed");
+    // Only safe to swap in an error payload while nothing has been written —
+    // once the stream started piping the status line is already on the wire.
+    if (!reply.raw.headersSent) {
       reply.status(404).send({ error: "Not found", code: "OBJECT_MISSING" });
     }
   });
-  reply.send(stream);
+  return reply.send(stream);
 }
 
-export function registerChatMediaPlugin(app: FastifyInstance) {
+/* ----(업로드 전건 500 수정 — evlog 로거에 없는 레벨 보강, RFC 0005 §5-1)---- */
+// Levels @fastify/multipart calls on `request.log` that evlog's logger lacks.
+// evlog replaces `request.log` on every request (evlog/fastify `attachLogger`)
+// with a logger exposing only info/warn/error — but multipart opens
+// `request.file()` with `this.log.debug(...)` and also uses trace, so the very
+// first upload byte throws "this.log.debug is not a function" (→ 500).
+// Filling the gaps in this plugin's context keeps the shim next to the code
+// that needs it instead of altering the shared logger for every route.
+const MISSING_LOG_LEVELS = ["trace", "debug", "fatal"] as const;
+/* ----(~업로드 전건 500 수정 상수 여기까지)---- */
+
+export function registerDiscussionMediaPlugin(app: FastifyInstance) {
+  /* ----(업로드 전건 500 수정 — 이 플러그인 컨텍스트 한정 로거 훅, RFC 0005 §5-1)---- */
+  app.addHook("onRequest", (request, _reply, done) => {
+    const log = request.log as unknown as Record<string, unknown>;
+    for (const level of MISSING_LOG_LEVELS) {
+      if (typeof log[level] !== "function") {
+        // Diagnostic-only levels: dropping them loses nothing evlog reports.
+        log[level] = () => {
+          // noop
+        };
+      }
+    }
+    done();
+  });
+  /* ----(~업로드 전건 500 수정 로거 훅 여기까지)---- */
+
   // Scoped to this encapsulated context so the multipart content-type parser
   // doesn't leak into the oRPC / auth plugins.
   app.register(fastifyMultipart, {
@@ -217,9 +253,9 @@ export function registerChatMediaPlugin(app: FastifyInstance) {
     throwFileSizeLimit: true,
   });
 
-  // POST /upload/chat-image — one image, magic-byte verified, EXIF-stripped,
-  // stored in the private bucket. -> { imageId }
-  app.post("/upload/chat-image", async (request, reply) => {
+  // POST /upload/discussion-image — one image, magic-byte verified,
+  // EXIF-stripped, stored in the private bucket. -> { imageId }
+  app.post("/upload/discussion-image", async (request, reply) => {
     const userId = await requireUserId(request, reply);
     if (!userId) {
       return;
@@ -265,7 +301,7 @@ export function registerChatMediaPlugin(app: FastifyInstance) {
       height = image.bitmap.height;
       output = await image.getBuffer(outMime);
     } catch (err) {
-      request.log.warn({ err }, "chat image re-encode failed");
+      request.log.warn({ err }, "discussion image re-encode failed");
       return reply
         .status(415)
         .send({ error: "Unreadable image", code: "BAD_IMAGE" });
@@ -298,9 +334,9 @@ export function registerChatMediaPlugin(app: FastifyInstance) {
     return reply.send({ imageId: row.id });
   });
 
-  // POST /upload/chat-file — one file (allowlisted), stored in the private
-  // bucket verbatim. -> { bucket, key, mime, size, name }
-  app.post("/upload/chat-file", async (request, reply) => {
+  // POST /upload/discussion-file — one file (allowlisted), stored in the
+  // private bucket verbatim. -> { bucket, key, mime, size, name }
+  app.post("/upload/discussion-file", async (request, reply) => {
     const userId = await requireUserId(request, reply);
     if (!userId) {
       return;
@@ -365,11 +401,11 @@ export function registerChatMediaPlugin(app: FastifyInstance) {
     });
   });
 
-  // GET /media/chat-image/:imageId — proxy an image's bytes after verifying the
-  // requester can reach a non-deleted, non-blinded message that links it (or is
-  // the uploader, for a not-yet-sent preview).
+  // GET /media/discussion-image/:imageId — proxy an image's bytes after
+  // verifying the requester can reach a non-deleted, non-blinded message that
+  // links it (or is the uploader, for a not-yet-sent preview).
   app.get<{ Params: { imageId: string } }>(
-    "/media/chat-image/:imageId",
+    "/media/discussion-image/:imageId",
     async (request, reply) => {
       const userId = await requireUserId(request, reply);
       if (!userId) {
@@ -430,17 +466,17 @@ export function registerChatMediaPlugin(app: FastifyInstance) {
           .send({ error: "Forbidden", code: "FORBIDDEN" });
       }
 
-      streamObject(reply, image.bucket, image.objectKey, {
+      return streamObject(reply, image.bucket, image.objectKey, {
         mime: image.mime,
         size: image.byteSize,
       });
     }
   );
 
-  // GET /media/chat-file/:messageId — proxy a file message's bytes after
+  // GET /media/discussion-file/:messageId — proxy a file message's bytes after
   // verifying room access. Deleted/blinded attachments are refused.
   app.get<{ Params: { messageId: string } }>(
-    "/media/chat-file/:messageId",
+    "/media/discussion-file/:messageId",
     async (request, reply) => {
       const userId = await requireUserId(request, reply);
       if (!userId) {
@@ -484,7 +520,7 @@ export function registerChatMediaPlugin(app: FastifyInstance) {
           .send({ error: "Forbidden", code: "FORBIDDEN" });
       }
 
-      streamObject(reply, message.fileBucket, message.fileKey, {
+      return streamObject(reply, message.fileBucket, message.fileKey, {
         mime: message.fileMime ?? "application/octet-stream",
         size: message.fileSize ?? 0,
         downloadName: message.fileName ?? undefined,

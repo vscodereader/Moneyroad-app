@@ -12,10 +12,11 @@ export const env = createEnv({
     CORS_ORIGIN: z.url(),
     STREAM_TOKEN_SECRET: z.string().min(32),
 
-    // Object-storage bucket for chat attachments (discussion message images /
+    // Object-storage bucket for DiscussionRoom attachments (message images /
     // files, docs/rfcs/0004 기능5). Optional — attachment features stay off
-    // until a bucket is configured.
-    CHAT_ATTACHMENT_BUCKET: z.string().optional(),
+    // until a bucket is configured. The bucket *value* is a GCP resource name
+    // and is independent of this key.
+    DISCUSSION_ATTACHMENT_BUCKET: z.string().optional(),
 
     // Realtime service base URL for internal triggers. After a watchlist/signal
     // write the API nudges this URL so the realtime poller re-pins immediately

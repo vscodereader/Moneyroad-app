@@ -95,6 +95,25 @@ export const Icon = {
       <Polyline points="6 9 12 15 18 9" {...stroke(color, 2.4)} />
     </Base>
   ),
+  /* ----(첨부 저장·열기용 아이콘 — RFC 0005 §6)---- */
+  download: ({ size = DEFAULT_SIZE, color = DEFAULT_COLOR }: IconProps) => (
+    <Base size={size}>
+      <Path
+        d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"
+        {...stroke(color, 2.2)}
+      />
+      <Polyline points="7 10 12 15 17 10" {...stroke(color, 2.2)} />
+      <Line x1="12" x2="12" y1="15" y2="3" {...stroke(color, 2.2)} />
+    </Base>
+  ),
+  moreVertical: ({ size = DEFAULT_SIZE, color = DEFAULT_COLOR }: IconProps) => (
+    <Base size={size}>
+      <Circle cx="12" cy="5" fill={color} r="1.7" />
+      <Circle cx="12" cy="12" fill={color} r="1.7" />
+      <Circle cx="12" cy="19" fill={color} r="1.7" />
+    </Base>
+  ),
+  /* ----(~첨부 저장·열기용 아이콘 여기까지)---- */
   close: ({ size = DEFAULT_SIZE, color = DEFAULT_COLOR }: IconProps) => (
     <Base size={size}>
       <Line x1="18" x2="6" y1="6" y2="18" {...stroke(color)} />

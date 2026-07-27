@@ -106,8 +106,8 @@ interface FileRef {
  * (docs/adr/0002). Future ws handlers call this same function.
  *
  * Attachments (docs/rfcs/0004 기능5): pass `imageIds` (already uploaded via
- * POST /upload/chat-image, must belong to the sender) for an image message, or
- * `file` (from POST /upload/chat-file) for a file message. The message `type`
+ * POST /upload/discussion-image, must belong to the sender) for an image
+ * message, or `file` (from POST /upload/discussion-file). The message `type`
  * is derived from what's attached; text messages are unchanged.
  */
 async function sendMessage(args: {
@@ -840,15 +840,28 @@ export const discussionRouter = {
         .map((m) => m.id);
       const imagesByMessage = new Map<
         number,
-        { imageId: number; url: string }[]
+        /* ----(이미지 payload 의 mime — RFC 0005 §4-1)---- */
+        { imageId: number; url: string; mime: string }[]
+        /* ----(~이미지 payload 의 mime 여기까지)---- */
       >();
       if (imageMessageIds.length > 0) {
         const links = await db
           .select({
             messageId: discussionMessageImage.messageId,
             imageId: discussionMessageImage.imageId,
+            /* ----(갤러리 저장용 mime 선택 — RFC 0005 §4-1)---- */
+            // The client needs the real type to pick a file extension before
+            // saving to the gallery — MediaStore rejects an asset it can't type.
+            mime: moneyroadImage.mime,
+            /* ----(~갤러리 저장용 mime 선택 여기까지)---- */
           })
           .from(discussionMessageImage)
+          /* ----(mime 을 얻기 위한 이미지 조인 — RFC 0005 §4-1)---- */
+          .innerJoin(
+            moneyroadImage,
+            eq(discussionMessageImage.imageId, moneyroadImage.id)
+          )
+          /* ----(~mime 을 얻기 위한 이미지 조인 여기까지)---- */
           .where(inArray(discussionMessageImage.messageId, imageMessageIds))
           .orderBy(
             discussionMessageImage.messageId,
@@ -858,7 +871,10 @@ export const discussionRouter = {
           const list = imagesByMessage.get(link.messageId) ?? [];
           list.push({
             imageId: link.imageId,
-            url: `/media/chat-image/${link.imageId}`,
+            url: `/media/discussion-image/${link.imageId}`,
+            /* ----(갤러리 저장용 mime 전달 — RFC 0005 §4-1)---- */
+            mime: link.mime,
+            /* ----(~갤러리 저장용 mime 전달 여기까지)---- */
           });
           imagesByMessage.set(link.messageId, list);
         }
@@ -884,7 +900,7 @@ export const discussionRouter = {
             file:
               m.type === "file" && !masked
                 ? {
-                    url: `/media/chat-file/${m.id}`,
+                    url: `/media/discussion-file/${m.id}`,
                     name: m.fileName ?? "",
                     mime: m.fileMime ?? "application/octet-stream",
                     size: m.fileSize ?? 0,
@@ -1022,12 +1038,12 @@ export const discussionRouter = {
           // Explicit kind is optional — the actual type is derived from what's
           // attached (docs/rfcs/0004 기능5).
           type: z.enum(["text", "image", "file"]).optional(),
-          // Image message: ids from POST /upload/chat-image (sender's own).
+          // Image message: ids from POST /upload/discussion-image (sender's own).
           imageIds: z
             .array(z.number().int())
             .max(MAX_MESSAGE_IMAGES)
             .optional(),
-          // File message: ref returned by POST /upload/chat-file.
+          // File message: ref returned by POST /upload/discussion-file.
           file: z
             .object({
               bucket: z.string().min(1),

@@ -5,7 +5,6 @@ import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  Linking,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -21,7 +20,22 @@ import { IconButton, MrScreen, StockLogo } from "@/components/ui";
 import { useLiveQuote } from "@/hooks/use-live-quotes";
 import { useMrTheme } from "@/hooks/use-mr-theme";
 import { authClient } from "@/lib/auth-client";
-import { mediaUrl, uploadChatFile, uploadChatImage } from "@/lib/chat-upload";
+/* ----(첨부 저장/열기, RFC 0004 기능5 후속 · RFC 0005)---- */
+import {
+  attachmentErrorCode,
+  downloadDiscussionFile,
+  NO_VIEWER_APP,
+  needsSaveFolderChoice,
+  openAttachment,
+  PICK_CANCELLED,
+  savedFileName,
+  savedFileNames,
+} from "@/lib/discussion-download";
+/* ----(~첨부 저장/열기 여기까지)---- */
+import {
+  uploadDiscussionFile,
+  uploadDiscussionImage,
+} from "@/lib/discussion-upload";
 import { findStock, type Stock } from "@/utils/data";
 import { changeColor, fmt } from "@/utils/format";
 import { nav } from "@/utils/nav";
@@ -30,11 +44,18 @@ import type { MrTokens } from "@/utils/theme";
 import { AdminMessageActionSheet } from "./components/admin-message-action-sheet";
 import { AttachMenu } from "./components/attach-menu";
 import { BlindReasonSheet } from "./components/blind-reason-sheet";
-import { type BubbleFile, FileBubble } from "./components/file-bubble";
+import {
+  type BubbleFile,
+  FileBubble,
+  type FileSaveState,
+} from "./components/file-bubble";
 import {
   type BubbleImage,
   ImageGridBubble,
 } from "./components/image-grid-bubble";
+/* ----(전체화면 이미지 뷰어)---- */
+import { ImageViewer } from "./components/image-viewer";
+/* ----(~전체화면 이미지 뷰어 여기까지)---- */
 import { MemberListSheet } from "./components/member-list-sheet";
 import { MessageCheckbox } from "./components/message-checkbox";
 import {
@@ -205,6 +226,10 @@ function BubbleContent({
   isDeleted,
   isBlinded,
   textColor,
+  fileState,
+  onDownloadFile,
+  onOpenFile,
+  onPressImage,
   t,
 }: {
   message: Message;
@@ -214,13 +239,34 @@ function BubbleContent({
   isDeleted: boolean;
   isBlinded: boolean;
   textColor: string;
+  /* ----(첨부 저장 상태 + 이미지 뷰어 진입)---- */
+  fileState: FileSaveState;
+  onDownloadFile: () => void;
+  onOpenFile: () => void;
+  onPressImage: (index: number) => void;
+  /* ----(~첨부 저장 상태 + 이미지 뷰어 진입 여기까지)---- */
   t: MrTokens;
 }) {
   if (kind === "image" && message.images) {
-    return <ImageGridBubble images={message.images} t={t} />;
+    return (
+      <ImageGridBubble
+        images={message.images}
+        onPressImage={onPressImage}
+        t={t}
+      />
+    );
   }
   if (kind === "file" && message.file) {
-    return <FileBubble file={message.file} isSelf={isSelf} t={t} />;
+    return (
+      <FileBubble
+        file={message.file}
+        isSelf={isSelf}
+        onDownload={onDownloadFile}
+        onOpen={onOpenFile}
+        state={fileState}
+        t={t}
+      />
+    );
   }
   return (
     <Text
@@ -248,6 +294,9 @@ function MessageBubbleBody({
   onLongPress,
   onToggleSelect,
   onOpenFile,
+  fileState,
+  onDownloadFile,
+  onPressImage,
   t,
 }: {
   message: Message;
@@ -261,6 +310,11 @@ function MessageBubbleBody({
   onLongPress: () => void;
   onToggleSelect: () => void;
   onOpenFile: () => void;
+  /* ----(첨부 저장 상태 + 이미지 뷰어 진입)---- */
+  fileState: FileSaveState;
+  onDownloadFile: () => void;
+  onPressImage: (index: number) => void;
+  /* ----(~첨부 저장 상태 + 이미지 뷰어 진입 여기까지)---- */
   t: MrTokens;
 }) {
   const kind = bubbleKind(message, isMasked);
@@ -273,6 +327,13 @@ function MessageBubbleBody({
   } else if (kind === "file") {
     onPress = onOpenFile;
   }
+
+  /* ----(선택모드에서는 말풍선 안쪽 버튼도 선택 토글)---- */
+  // 원형 버튼은 자체 Pressable이라 상위 탭을 가로챈다. 선택모드에서 저장/열기가
+  // 시작되면 선택이 안 되는 것처럼 보이므로 동작을 토글로 바꿔 준다.
+  const onFileDownload = inSelection ? onToggleSelect : onDownloadFile;
+  const onFileOpen = inSelection ? onToggleSelect : onOpenFile;
+  /* ----(~선택모드에서는 말풍선 안쪽 버튼도 선택 토글 여기까지)---- */
 
   // Attachments carry their own visual; text keeps the rounded bubble chrome.
   const chrome = isAttachment
@@ -304,12 +365,16 @@ function MessageBubbleBody({
         style={chrome}
       >
         <BubbleContent
+          fileState={fileState}
           isBlinded={isBlinded}
           isDeleted={isDeleted}
           isMasked={isMasked}
           isSelf={isSelf}
           kind={kind}
           message={message}
+          onDownloadFile={onFileDownload}
+          onOpenFile={onFileOpen}
+          onPressImage={onPressImage}
           t={t}
           textColor={textColor}
         />
@@ -338,6 +403,9 @@ function MessageBubble({
   isSelected,
   onToggleSelect,
   onOpenFile,
+  fileState,
+  onDownloadFile,
+  onPressImage,
   t,
 }: {
   message: Message;
@@ -349,6 +417,11 @@ function MessageBubble({
   isSelected: boolean;
   onToggleSelect: () => void;
   onOpenFile: () => void;
+  /* ----(첨부 저장 상태 + 이미지 뷰어 진입)---- */
+  fileState: FileSaveState;
+  onDownloadFile: () => void;
+  onPressImage: (index: number) => void;
+  /* ----(~첨부 저장 상태 + 이미지 뷰어 진입 여기까지)---- */
   t: MrTokens;
 }) {
   const isDeleted = Boolean(message.deletedAt);
@@ -395,14 +468,17 @@ function MessageBubble({
           {showAvatarSpacer ? <View style={{ width: 28 }} /> : null}
           <MessageBubbleBody
             bubbleBg={bubbleBg}
+            fileState={fileState}
             inSelection={inSelection}
             isBlinded={isBlinded}
             isDeleted={isDeleted}
             isMasked={isMasked}
             isSelf={isSelf}
             message={message}
+            onDownloadFile={onDownloadFile}
             onLongPress={onLongPress}
             onOpenFile={onOpenFile}
+            onPressImage={onPressImage}
             onToggleSelect={onToggleSelect}
             t={t}
             textColor={textColor}
@@ -827,6 +903,9 @@ function MessageList({
   selectedIds,
   onToggleSelect,
   onOpenFile,
+  fileStates,
+  onDownloadFile,
+  onPressImage,
   isPending,
   isEmpty,
   t,
@@ -840,6 +919,11 @@ function MessageList({
   selectedIds: Set<number>;
   onToggleSelect: (id: number) => void;
   onOpenFile: (m: Message) => void;
+  /* ----(첨부 저장 상태 + 이미지 뷰어 진입)---- */
+  fileStates: Map<number, FileSaveState>;
+  onDownloadFile: (m: Message) => void;
+  onPressImage: (m: Message, index: number) => void;
+  /* ----(~첨부 저장 상태 + 이미지 뷰어 진입 여기까지)---- */
   isPending: boolean;
   isEmpty: boolean;
   t: MrTokens;
@@ -891,13 +975,16 @@ function MessageList({
         const isHost = hostUserId !== null && hostUserId === m.userId;
         return (
           <MessageBubble
+            fileState={fileStates.get(m.id) ?? "idle"}
             isHost={isHost}
             isSelected={selectedIds.has(m.id)}
             isSelf={isSelf}
             key={m.id}
             message={m}
+            onDownloadFile={() => onDownloadFile(m)}
             onLongPress={() => onLongPress(m)}
             onOpenFile={() => onOpenFile(m)}
+            onPressImage={(index) => onPressImage(m, index)}
             onToggleSelect={() => onToggleSelect(m.id)}
             selectionMode={selectionMode}
             showHeader={showHeader}
@@ -909,6 +996,70 @@ function MessageList({
     </ScrollView>
   );
 }
+
+// ── 첨부 저장 상태 seed 헬퍼 (RFC 0005 §4-2) ────────────────────────
+
+/* ----(저장 폴더 파일명 집합 → 말풍선 상태)---- */
+type FileSeed = { id: number; name: string };
+
+// 파일 메시지만 추린다. 삭제·가림된 메시지는 서버가 file을 null로 지운다.
+function fileSeeds(messages: Message[]): FileSeed[] {
+  const seeds: FileSeed[] = [];
+  for (const m of messages) {
+    if (m.type === "file" && m.file) {
+      seeds.push({ id: m.id, name: m.file.name });
+    }
+  }
+  return seeds;
+}
+
+// 폴더를 다시 읽을지 판단하는 키. id와 파일명이 그대로면 조회를 건너뛴다.
+function seedKeyOf(seeds: FileSeed[]): string {
+  return seeds.map((seed) => `${seed.id}:${seed.name}`).join("|");
+}
+
+// 저장 폴더에 그 이름의 파일이 있으면 "저장됨". 진행 중(저장/열기)인 항목은
+// 끝나기 전에 되돌아가면 안 되므로 건드리지 않는다. 바뀐 게 없으면 같은 Map을
+// 돌려줘 불필요한 리렌더를 막는다.
+function seedFileStates(
+  prev: Map<number, FileSaveState>,
+  seeds: FileSeed[],
+  savedNames: Set<string>
+): Map<number, FileSaveState> {
+  const next = new Map(prev);
+  let changed = false;
+  for (const seed of seeds) {
+    const current = next.get(seed.id);
+    if (current === "downloading" || current === "opening") {
+      continue;
+    }
+    const state: FileSaveState = savedNames.has(savedFileName(seed.name))
+      ? "saved"
+      : "idle";
+    if (current !== state) {
+      next.set(seed.id, state);
+      changed = true;
+    }
+  }
+  return changed ? next : prev;
+}
+
+// 첫 저장에서는 SAF 폴더 선택 화면이 먼저 뜬다. 설명 없이 파일 관리자가 열리면
+// 당황하므로 한 번만 알려 주고 진행한다.
+function askSaveFolderNotice(): Promise<boolean> {
+  return new Promise<boolean>((resolve) => {
+    Alert.alert(
+      "저장할 폴더를 골라주세요",
+      "받은 파일을 어디에 저장할지 처음 한 번만 고르면, 다음부터는 그 폴더에 바로 저장돼요.",
+      [
+        { text: "취소", style: "cancel", onPress: () => resolve(false) },
+        { text: "폴더 선택", onPress: () => resolve(true) },
+      ],
+      { onDismiss: () => resolve(false) }
+    );
+  });
+}
+/* ----(~저장 폴더 파일명 집합 → 말풍선 상태 여기까지)---- */
 
 // ── screen ──────────────────────────────────────────────────────────
 
@@ -1053,6 +1204,23 @@ export default function DiscussionRoomScreen() {
   const [attachMenuOpen, setAttachMenuOpen] = useState(false);
   const [photoGridOpen, setPhotoGridOpen] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  /* ----(첨부 저장 상태 + 전체화면 이미지 뷰어)---- */
+  // messageId → 파일 저장 상태. 앱을 껐다 켜도 유지되도록 값의 출처는 실제
+  // 저장 폴더에 같은 이름의 파일이 있는지다(아래 effect에서 seed). 저장 폴더를
+  // 아직 고르지 않았으면 전부 idle로 남는다 — 목록을 그리다 폴더 선택 화면이
+  // 튀어나오면 안 되므로, 폴더를 묻는 건 저장 버튼을 눌렀을 때뿐이다.
+  const [fileStates, setFileStates] = useState<Map<number, FileSaveState>>(
+    new Map()
+  );
+  const [viewer, setViewer] = useState<{
+    images: BubbleImage[];
+    index: number;
+    senderName: string;
+    createdAt: string;
+  } | null>(null);
+  // 폴더 선택 안내는 한 세션에 한 번만 띄운다(필요 여부 자체는 lib이 판단한다).
+  const saveNoticeShownRef = useRef(false);
+  /* ----(~첨부 저장 상태 + 전체화면 이미지 뷰어 여기까지)---- */
 
   // Initial scroll-to-end once messages first load. Subsequent polls do NOT
   // auto-scroll — users reading older messages shouldn't be yanked.
@@ -1064,6 +1232,39 @@ export default function DiscussionRoomScreen() {
       });
     }
   }, [messagesQuery.isSuccess]);
+
+  /* ----(이미 저장된 파일 감지)---- */
+  // 저장 폴더 목록을 **한 번** 읽어 이름 집합으로 대조한다(첨부마다 조회하면
+  // SAF 왕복이 N번 난다). 폴더를 아직 고르지 않았으면 lib이 빈 집합을 주고
+  // 피커는 뜨지 않는다. 메시지 목록은 5초 폴링마다 새 배열이라 그대로 두면
+  // 5초마다 폴더를 다시 읽게 되므로, 파일 메시지 구성이 바뀔 때만 읽는다.
+  const loadedMessages = messagesQuery.data?.messages;
+  const seedKeyRef = useRef("");
+  useEffect(() => {
+    if (!loadedMessages) {
+      return;
+    }
+    const seeds = fileSeeds(loadedMessages);
+    const seedKey = seedKeyOf(seeds);
+    if (seeds.length === 0 || seedKey === seedKeyRef.current) {
+      return;
+    }
+    seedKeyRef.current = seedKey;
+
+    // 언마운트/재조회 후에 늦게 도착한 결과로 setState 하지 않는다.
+    let cancelled = false;
+    (async () => {
+      const names = await savedFileNames();
+      if (cancelled) {
+        return;
+      }
+      setFileStates((prev) => seedFileStates(prev, seeds, names));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [loadedMessages]);
+  /* ----(~이미 저장된 파일 감지 여기까지)---- */
 
   const handleSend = () => {
     const content = draft.trim();
@@ -1089,16 +1290,104 @@ export default function DiscussionRoomScreen() {
     });
   };
 
-  // 파일 말풍선 탭 → 접근 검증 프록시 URL을 브라우저로 연다(RFC 0004 기능5).
-  const handleOpenFile = (message: Message) => {
-    if (message.file) {
-      Linking.openURL(mediaUrl(message.file.url)).catch(() => {
-        Alert.alert("열기 실패", "파일을 열 수 없어요.");
-      });
+  /* ----(파일 저장 / 열기 / 이미지 뷰어)---- */
+  // ↓ 버튼 → 저장 폴더에 내려받는다. 저장 위치를 코드에 박지 않으므로(§151)
+  // 어디에 저장됐는지는 lib이 돌려주는 label을 그대로 보여준다.
+  const handleDownloadFile = async (message: Message) => {
+    const file = message.file;
+    if (!file) {
+      return;
+    }
+    // 저장 폴더를 고르게 해야 하는지는 lib이 판단한다(고를 것이 없는 기기에서는
+    // 안내가 뜨지 않는다). 화면은 "물어봐야 하나"만 알면 된다.
+    if (!saveNoticeShownRef.current && (await needsSaveFolderChoice())) {
+      saveNoticeShownRef.current = true;
+      const goAhead = await askSaveFolderNotice();
+      if (!goAhead) {
+        return;
+      }
+    }
+    setFileStates((prev) => new Map(prev).set(message.id, "downloading"));
+    try {
+      const { label } = await downloadDiscussionFile(
+        file.url,
+        file.name,
+        file.mime
+      );
+      setFileStates((prev) => new Map(prev).set(message.id, "saved"));
+      Alert.alert("저장 완료", `${label}에 저장했어요.`);
+    } catch (err) {
+      // 진행중이면 버튼이 잠기므로 어떤 경우든 먼저 idle로 되돌려 재시도를
+      // 열어 둔다.
+      setFileStates((prev) => new Map(prev).set(message.id, "idle"));
+      // 폴더 선택을 취소한 건 실패가 아니라 "안 골랐음"이다 — 조용히 되돌린다.
+      if (attachmentErrorCode(err) === PICK_CANCELLED) {
+        return;
+      }
+      Alert.alert(
+        "저장 실패",
+        err instanceof Error ? err.message : "파일을 저장하지 못했어요."
+      );
     }
   };
 
-  // 문서 피커(단일) → /upload/chat-file → file 메시지 전송. 광범위 저장소 권한 X.
+  // 열 앱이 없는 형식(오피스·hwp 등)은 저장을 권한다. 저장해 두면 나중에 파일
+  // 관리자나 다른 앱에서 열 수 있다(RFC 0005 §4-5).
+  const handleOpenFileError = (err: unknown, message: Message) => {
+    if (attachmentErrorCode(err) === NO_VIEWER_APP) {
+      Alert.alert(
+        "열 수 있는 앱이 없어요",
+        "이 형식을 열 수 있는 앱이 폰에 없어요. 저장해 두면 나중에 다른 앱으로 열어볼 수 있어요.",
+        [
+          { text: "취소", style: "cancel" },
+          { text: "저장하기", onPress: () => handleDownloadFile(message) },
+        ]
+      );
+      return;
+    }
+    Alert.alert(
+      "열기 실패",
+      err instanceof Error ? err.message : "파일을 열 수 없어요."
+    );
+  };
+
+  // 이름 탭 → 저장돼 있으면 그 저장본을, 아니면 앱 캐시로 받아서 폰에 설치된
+  // 앱으로 연다(캐시본은 저장 폴더에 남지 않아 "저장 안 함" 상태가 유지된다).
+  // 바이트는 세션 쿠키를 실은 서버 프록시로만 받고, 외부 앱에는 로컬 content://
+  // 만 넘어간다(RFC 0004 §158·§191·§203). 저장 폴더 피커는 뜨지 않는다.
+  const handleOpenFile = async (message: Message) => {
+    const file = message.file;
+    if (!file) {
+      return;
+    }
+    // 캐시로 받는 데 수 초가 걸릴 수 있어 "여는 중"을 표시하고, 끝나면 원래
+    // 상태로 되돌린다(연다고 저장 여부가 바뀌지는 않는다).
+    const restoreState = fileStates.get(message.id) ?? "idle";
+    setFileStates((prev) => new Map(prev).set(message.id, "opening"));
+    try {
+      await openAttachment(file.url, file.name, file.mime);
+    } catch (err) {
+      handleOpenFileError(err, message);
+    } finally {
+      setFileStates((prev) => new Map(prev).set(message.id, restoreState));
+    }
+  };
+
+  const handlePressImage = (message: Message, index: number) => {
+    if (!message.images) {
+      return;
+    }
+    setViewer({
+      images: message.images,
+      index,
+      senderName: message.userName,
+      createdAt: message.createdAt,
+    });
+  };
+  /* ----(~파일 저장 / 열기 / 이미지 뷰어 여기까지)---- */
+
+  // 문서 피커(단일) → /upload/discussion-file → file 메시지 전송.
+  // 광범위 저장소 권한 X.
   const handlePickFile = async () => {
     setAttachMenuOpen(false);
     let result: DocumentPicker.DocumentPickerResult;
@@ -1117,7 +1406,7 @@ export default function DiscussionRoomScreen() {
     }
     setIsUploading(true);
     try {
-      const ref = await uploadChatFile({
+      const ref = await uploadDiscussionFile({
         uri: asset.uri,
         name: asset.name,
         mime: asset.mimeType ?? "application/octet-stream",
@@ -1145,7 +1434,7 @@ export default function DiscussionRoomScreen() {
       const results = await Promise.all(
         photos.map(async (p) => {
           try {
-            const id = await uploadChatImage({
+            const id = await uploadDiscussionImage({
               uri: p.uri,
               name: p.name,
               mime: p.mime,
@@ -1360,12 +1649,15 @@ export default function DiscussionRoomScreen() {
         <View style={{ flex: 1 }}>
           <MessageList
             currentUserId={currentUserId}
+            fileStates={fileStates}
             hostUserId={room.createdBy?.id ?? null}
             isEmpty={messagesQuery.isSuccess && messages.length === 0}
             isPending={messagesQuery.isPending}
             messages={messages}
+            onDownloadFile={handleDownloadFile}
             onLongPress={handleLongPress}
             onOpenFile={handleOpenFile}
+            onPressImage={handlePressImage}
             onToggleSelect={toggleSelect}
             scrollRef={scrollRef}
             selectedIds={selectedIds}
@@ -1429,6 +1721,18 @@ export default function DiscussionRoomScreen() {
         t={t}
         visible={photoGridOpen}
       />
+      {/* ----(전체화면 이미지 뷰어)---- */}
+      {viewer ? (
+        <ImageViewer
+          createdAt={viewer.createdAt}
+          images={viewer.images}
+          initialIndex={viewer.index}
+          onClose={() => setViewer(null)}
+          senderName={viewer.senderName}
+          visible
+        />
+      ) : null}
+      {/* ----(~전체화면 이미지 뷰어 여기까지)---- */}
     </MrScreen>
   );
 }

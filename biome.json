@@ -150,6 +150,11 @@
           }
         }
       }
+    },
+    {
+      "includes": ["**/.omc/**"],
+      "formatter": { "enabled": false },
+      "linter": { "enabled": false }
     }
   ],
   "extends": [

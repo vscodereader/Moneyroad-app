@@ -14,6 +14,7 @@ import { Icon } from "@/components/icons";
 //import { Chip, IconButton, MrHeader, MrScreen } from "@/components/ui";
 import { Chip, MrHeader, MrScreen } from "@/components/ui";
 import { useMrTheme } from "@/hooks/use-mr-theme";
+import { useSignalStream } from "@/hooks/use-signal-stream";
 import { authClient } from "@/lib/auth-client";
 import type { Signal } from "@/utils/data";
 import { nav } from "@/utils/nav";
@@ -38,6 +39,13 @@ export default function SignalsScreen() {
   const [openId, setOpenId] = useState<string | null>(null);
   const { data: session } = authClient.useSession();
   const isAdmin = session?.user.role === "admin";
+
+  /* ----(시그널 추가·삭제 시 화면 자동 갱신)---- */
+  // 관리자가 시그널을 넣어도 유저 화면은 앱을 껐다 켜야 바뀌었다. 목록을
+  // 되불러오게 하는 broadcast가 아예 없었기 때문이다(refresh-pins는 시세
+  // 심볼셋만 갱신한다). 아래 훅이 feed·counts를 함께 무효화한다.
+  useSignalStream();
+  /* ----(~시그널 추가·삭제 시 화면 자동 갱신 여기까지)---- */
 
   const counts = useQuery(
     orpc.signal.counts.queryOptions({ input: { window: "all" } })

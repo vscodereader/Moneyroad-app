@@ -1,2 +1,3 @@
 @import "@moneyroad-app/ui/globals.css";
+@import "./landing.css";
 @source "../node_modules/streamdown/dist/*.js";

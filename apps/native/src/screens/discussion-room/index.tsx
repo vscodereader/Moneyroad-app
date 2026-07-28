@@ -39,7 +39,11 @@ import {
 import { findStock, type Stock } from "@/utils/data";
 import { changeColor, fmt } from "@/utils/format";
 import { nav } from "@/utils/nav";
-import { orpc } from "@/utils/orpc";
+/* ----(앵커 조회는 명령형 호출 — RFC 0008 §4-8)---- */
+// 앵커 주변/추가 로드는 누적 목록을 직접 만들어야 해서 queryOptions 가 아니라
+// client 를 그대로 부른다.
+import { client, orpc } from "@/utils/orpc";
+/* ----(~앵커 조회는 명령형 호출 여기까지)---- */
 import type { MrTokens } from "@/utils/theme";
 import { AdminMessageActionSheet } from "./components/admin-message-action-sheet";
 import { AttachMenu } from "./components/attach-menu";
@@ -62,6 +66,10 @@ import {
   PhotoGridPicker,
   type PickedPhoto,
 } from "./components/photo-grid-picker";
+/* ----(답글 — RFC 0008)---- */
+import { ReplyActionSheet } from "./components/reply-action-sheet";
+import { type ReplyParent, ReplyQuote } from "./components/reply-quote";
+/* ----(~답글 여기까지)---- */
 import { SelectionBar } from "./components/selection-bar";
 
 type SelectionMode = "hide" | "delete";
@@ -78,6 +86,15 @@ const AVATAR_PALETTE = [
 
 const MESSAGE_LIMIT = 50;
 const POLL_INTERVAL_MS = 5000; // ADR-0001 #1: room-only foreground polling.
+
+/* ----(앵커·양방향 로드 상수 — RFC 0008)---- */
+// 스크롤이 위/아래 끝에서 이만큼 안으로 들어오면 추가 로드를 건다.
+const EDGE_THRESHOLD_PX = 80;
+// 앵커 진입 시 위·아래로 각각 불러올 개수. 총 50건 안팎이라 기존 한 페이지와 비슷하다.
+const ANCHOR_LIMIT = 25;
+// 앵커 하이라이트 지속 시간(D9).
+const ANCHOR_HIGHLIGHT_MS = 1500;
+/* ----(~앵커·양방향 로드 상수 여기까지)---- */
 
 function colorFor(name: string): string {
   let h = 0;
@@ -110,6 +127,13 @@ type Message = {
   deletedAt: string | null;
   blindedAt: string | null;
   blindReason: string | null;
+  /* ----(답글 — RFC 0008)---- */
+  // parentId 가 있으면 답글. parent 는 인용에 그릴 원문 스냅샷이며, 원문이
+  // 삭제/가림이면 서버가 본문을 비우고 masked 만 채워 보낸다.
+  parentId: number | null;
+  parent: ReplyParent | null;
+  replyCount: number;
+  /* ----(~답글 여기까지)---- */
 };
 
 type RoomData = {
@@ -297,6 +321,7 @@ function MessageBubbleBody({
   fileState,
   onDownloadFile,
   onPressImage,
+  onPressQuote,
   t,
 }: {
   message: Message;
@@ -315,10 +340,18 @@ function MessageBubbleBody({
   onDownloadFile: () => void;
   onPressImage: (index: number) => void;
   /* ----(~첨부 저장 상태 + 이미지 뷰어 진입 여기까지)---- */
+  /* ----(인용 탭 → 원문 점프 — RFC 0008 D16)---- */
+  onPressQuote: (parentId: number) => void;
+  /* ----(~인용 탭 → 원문 점프 여기까지)---- */
   t: MrTokens;
 }) {
   const kind = bubbleKind(message, isMasked);
   const isAttachment = kind !== "text";
+  /* ----(답글 인용 — RFC 0008 §4-6)---- */
+  // 이 메시지가 삭제/가림 상태면 인용도 감춘다 — 마스킹된 말풍선에 원문이
+  // 남아 있으면 안 된다.
+  const quote = isMasked ? null : message.parent;
+  /* ----(~답글 인용 여기까지)---- */
 
   // In selection mode a tap always toggles; otherwise a file bubble opens.
   let onPress: (() => void) | undefined;
@@ -364,6 +397,33 @@ function MessageBubbleBody({
         onPress={onPress}
         style={chrome}
       >
+        {/* ----(답글 인용 블록 — RFC 0008 §4-6)---- */}
+        {/* 첨부 말풍선은 chrome(배경·패딩)이 없어 인용이 붕 뜬다. 그때만
+            자체 배경을 줘서 원글 영역이 보이게 한다. */}
+        {quote ? (
+          <View
+            style={
+              isAttachment
+                ? {
+                    marginBottom: 4,
+                    paddingHorizontal: 10,
+                    paddingVertical: 6,
+                    borderRadius: 10,
+                    backgroundColor: t.bgSubtle,
+                    maxWidth: 260,
+                  }
+                : { marginBottom: 4 }
+            }
+          >
+            <ReplyQuote
+              compact
+              onPress={() => onPressQuote(quote.id)}
+              parent={quote}
+              t={t}
+            />
+          </View>
+        ) : null}
+        {/* ----(~답글 인용 블록 여기까지)---- */}
         <BubbleContent
           fileState={fileState}
           isBlinded={isBlinded}
@@ -406,6 +466,7 @@ function MessageBubble({
   fileState,
   onDownloadFile,
   onPressImage,
+  onPressQuote,
   t,
 }: {
   message: Message;
@@ -422,6 +483,9 @@ function MessageBubble({
   onDownloadFile: () => void;
   onPressImage: (index: number) => void;
   /* ----(~첨부 저장 상태 + 이미지 뷰어 진입 여기까지)---- */
+  /* ----(인용 탭 → 원문 점프 — RFC 0008 D16)---- */
+  onPressQuote: (parentId: number) => void;
+  /* ----(~인용 탭 → 원문 점프 여기까지)---- */
   t: MrTokens;
 }) {
   const isDeleted = Boolean(message.deletedAt);
@@ -479,6 +543,7 @@ function MessageBubble({
             onLongPress={onLongPress}
             onOpenFile={onOpenFile}
             onPressImage={onPressImage}
+            onPressQuote={onPressQuote}
             onToggleSelect={onToggleSelect}
             t={t}
             textColor={textColor}
@@ -751,6 +816,8 @@ function Composer({
   onAttach,
   isSending,
   attachDisabled,
+  replyTo,
+  onCancelReply,
   t,
   bottomInset,
 }: {
@@ -760,6 +827,11 @@ function Composer({
   onAttach: () => void;
   isSending: boolean;
   attachDisabled: boolean;
+  /* ----(답글 작성 중 — RFC 0008 §4-5)---- */
+  // 값이 있으면 입력창 위에 인용 미리보기가 뜬다 (chat_and_answer2.jpg).
+  replyTo: ReplyParent | null;
+  onCancelReply: () => void;
+  /* ----(~답글 작성 중 여기까지)---- */
   t: MrTokens;
   bottomInset: number;
 }) {
@@ -767,77 +839,90 @@ function Composer({
   return (
     <View
       style={{
-        flexDirection: "row",
-        gap: 8,
-        paddingHorizontal: 12,
-        paddingTop: 10,
-        paddingBottom: bottomInset + 12,
         backgroundColor: t.bg,
         borderTopWidth: 1,
         borderTopColor: t.border,
-        alignItems: "center",
       }}
     >
-      <Pressable
-        disabled={attachDisabled}
-        onPress={onAttach}
-        style={{
-          width: 36,
-          height: 36,
-          borderRadius: 999,
-          alignItems: "center",
-          justifyContent: "center",
-          backgroundColor: t.bgSubtle,
-        }}
-      >
-        <Icon.plus color={attachDisabled ? t.fgSubtle : t.fgMuted} size={22} />
-      </Pressable>
+      {/* ----(답글 인용 미리보기 — RFC 0008 §4-5)---- */}
+      {replyTo ? (
+        <ReplyQuote onCancel={onCancelReply} parent={replyTo} t={t} />
+      ) : null}
+      {/* ----(~답글 인용 미리보기 여기까지)---- */}
       <View
         style={{
-          flex: 1,
           flexDirection: "row",
+          gap: 8,
+          paddingHorizontal: 12,
+          paddingTop: 10,
+          paddingBottom: bottomInset + 12,
           alignItems: "center",
-          gap: 6,
-          backgroundColor: t.bgSubtle,
-          borderRadius: 20,
-          paddingLeft: 14,
-          paddingRight: 4,
-          minHeight: 40,
         }}
       >
-        <TextInput
-          editable={!isSending}
-          onChangeText={setDraft}
-          onSubmitEditing={onSend}
-          placeholder="의견을 입력하세요"
-          placeholderTextColor={t.fgSubtle}
-          returnKeyType="send"
-          style={{
-            flex: 1,
-            fontSize: 14,
-            color: t.fgStrong,
-            paddingVertical: 8,
-          }}
-          value={draft}
-        />
         <Pressable
-          disabled={!canSend}
-          onPress={onSend}
+          disabled={attachDisabled}
+          onPress={onAttach}
           style={{
-            width: 32,
-            height: 32,
+            width: 36,
+            height: 36,
             borderRadius: 999,
-            backgroundColor: canSend ? t.primary : t.bgMuted,
             alignItems: "center",
             justifyContent: "center",
+            backgroundColor: t.bgSubtle,
           }}
         >
-          {isSending ? (
-            <ActivityIndicator color="#fff" size="small" />
-          ) : (
-            <Icon.send color={canSend ? "#fff" : t.fgSubtle} size={16} />
-          )}
+          <Icon.plus
+            color={attachDisabled ? t.fgSubtle : t.fgMuted}
+            size={22}
+          />
         </Pressable>
+        <View
+          style={{
+            flex: 1,
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 6,
+            backgroundColor: t.bgSubtle,
+            borderRadius: 20,
+            paddingLeft: 14,
+            paddingRight: 4,
+            minHeight: 40,
+          }}
+        >
+          <TextInput
+            editable={!isSending}
+            onChangeText={setDraft}
+            onSubmitEditing={onSend}
+            placeholder="의견을 입력하세요"
+            placeholderTextColor={t.fgSubtle}
+            returnKeyType="send"
+            style={{
+              flex: 1,
+              fontSize: 14,
+              color: t.fgStrong,
+              paddingVertical: 8,
+            }}
+            value={draft}
+          />
+          <Pressable
+            disabled={!canSend}
+            onPress={onSend}
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: 999,
+              backgroundColor: canSend ? t.primary : t.bgMuted,
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            {isSending ? (
+              <ActivityIndicator color="#fff" size="small" />
+            ) : (
+              <Icon.send color={canSend ? "#fff" : t.fgSubtle} size={16} />
+            )}
+          </Pressable>
+        </View>
       </View>
     </View>
   );
@@ -906,6 +991,12 @@ function MessageList({
   fileStates,
   onDownloadFile,
   onPressImage,
+  onPressQuote,
+  anchorId,
+  anchorHighlighted,
+  onAnchorLayout,
+  onReachTop,
+  onReachBottom,
   isPending,
   isEmpty,
   t,
@@ -924,13 +1015,38 @@ function MessageList({
   onDownloadFile: (m: Message) => void;
   onPressImage: (m: Message, index: number) => void;
   /* ----(~첨부 저장 상태 + 이미지 뷰어 진입 여기까지)---- */
+  /* ----(답글·앵커 — RFC 0008)---- */
+  onPressQuote: (parentId: number) => void;
+  // 앵커로 진입했을 때 가운데로 스크롤할 대상. 그 행의 y/height 를 재서
+  // 화면 중앙 좌표를 계산한다 — ScrollView 라 scrollToIndex 를 쓸 수 없다.
+  anchorId: number | null;
+  anchorHighlighted: boolean;
+  onAnchorLayout: (y: number, height: number) => void;
+  // 위/아래 끝에 닿으면 각각 과거·최신 방향으로 더 불러온다(D15).
+  onReachTop: () => void;
+  onReachBottom: () => void;
+  /* ----(~답글·앵커 여기까지)---- */
   isPending: boolean;
   isEmpty: boolean;
   t: MrTokens;
 }) {
   return (
     <ScrollView
+      onScroll={(e) => {
+        /* ----(양방향 추가 로드 — RFC 0008 D15)---- */
+        const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
+        if (contentOffset.y <= EDGE_THRESHOLD_PX) {
+          onReachTop();
+        }
+        const distanceToBottom =
+          contentSize.height - (contentOffset.y + layoutMeasurement.height);
+        if (distanceToBottom <= EDGE_THRESHOLD_PX) {
+          onReachBottom();
+        }
+        /* ----(~양방향 추가 로드 여기까지)---- */
+      }}
       ref={scrollRef}
+      scrollEventThrottle={64}
       showsVerticalScrollIndicator={false}
       style={{ flex: 1, backgroundColor: t.bgSubtle }}
     >
@@ -973,7 +1089,9 @@ function MessageList({
         const showHeader = !prev || prev.userId !== m.userId;
         const isSelf = currentUserId === m.userId;
         const isHost = hostUserId !== null && hostUserId === m.userId;
-        return (
+        /* ----(앵커 행 — RFC 0008 §4-8, D9)---- */
+        const isAnchor = anchorId === m.id;
+        const bubble = (
           <MessageBubble
             fileState={fileStates.get(m.id) ?? "idle"}
             isHost={isHost}
@@ -985,12 +1103,35 @@ function MessageList({
             onLongPress={() => onLongPress(m)}
             onOpenFile={() => onOpenFile(m)}
             onPressImage={(index) => onPressImage(m, index)}
+            onPressQuote={onPressQuote}
             onToggleSelect={() => onToggleSelect(m.id)}
             selectionMode={selectionMode}
             showHeader={showHeader}
             t={t}
           />
         );
+        if (!isAnchor) {
+          return bubble;
+        }
+        // 목록 300개 중 어느 게 내 글인지 눈으로 못 찾으므로 잠깐 강조한다(D9).
+        return (
+          <View
+            key={m.id}
+            onLayout={(e) =>
+              onAnchorLayout(
+                e.nativeEvent.layout.y,
+                e.nativeEvent.layout.height
+              )
+            }
+            style={{
+              backgroundColor: anchorHighlighted ? t.primarySubtle : undefined,
+              borderRadius: 12,
+            }}
+          >
+            {bubble}
+          </View>
+        );
+        /* ----(~앵커 행 여기까지)---- */
       })}
       <View style={{ height: 12 }} />
     </ScrollView>
@@ -1063,9 +1204,158 @@ function askSaveFolderNotice(): Promise<boolean> {
 
 // ── screen ──────────────────────────────────────────────────────────
 
-function useDiscussionRoom(roomId: number, isValid: boolean) {
+/* ----(앵커 파라미터 파싱 — RFC 0008 §4-8)---- */
+// ?anchorId=123 → 123. 없거나 이상한 값이면 null(= 평소처럼 최신부터).
+function parseAnchorParam(raw: string | undefined): number | null {
+  const n = Number(raw);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+/* ----(~앵커 파라미터 파싱 여기까지)---- */
+
+/* ----(앵커 중앙 정렬 — RFC 0008 §4-8, D9)---- */
+// ScrollView 라 scrollToIndex 가 없다. 대상 행이 onLayout 으로 자기 y/height 를
+// 알려주면 그때 화면 중앙 좌표를 계산해 옮기고 잠깐 강조한다.
+function useAnchorCentering(
+  anchorId: number | null,
+  scrollRef: React.RefObject<ScrollView | null>
+) {
+  const [anchorHighlighted, setAnchorHighlighted] = useState(false);
+  const [viewportHeight, setViewportHeight] = useState(0);
+  // onLayout 은 리렌더마다 다시 불리므로 같은 앵커는 한 번만 처리한다.
+  const centeredRef = useRef<number | null>(null);
+
+  const handleAnchorLayout = (y: number, height: number) => {
+    if (anchorId === null || centeredRef.current === anchorId) {
+      return;
+    }
+    centeredRef.current = anchorId;
+    const target = Math.max(0, y - viewportHeight / 2 + height / 2);
+    requestAnimationFrame(() => {
+      scrollRef.current?.scrollTo({ y: target, animated: false });
+    });
+    setAnchorHighlighted(true);
+    setTimeout(() => setAnchorHighlighted(false), ANCHOR_HIGHLIGHT_MS);
+  };
+
+  return {
+    anchorHighlighted,
+    handleAnchorLayout,
+    resetCentering: () => {
+      centeredRef.current = null;
+    },
+    setViewportHeight,
+  };
+}
+/* ----(~앵커 중앙 정렬 여기까지)---- */
+
+function useDiscussionRoom(
+  roomId: number,
+  isValid: boolean,
+  initialAnchorId: number | null
+) {
   const { data: session } = authClient.useSession();
   const queryClient = useQueryClient();
+
+  /* ----(앵커 모드 — RFC 0008 §4-8, D15)---- */
+  // "내 글·답글" 목록이나 인용에서 들어오면 특정 메시지 주변을 봐야 한다. 기본
+  // 폴링 쿼리는 항상 **최신 50건**만 주므로 그것으로는 과거 지점을 열 수 없다.
+  //
+  // 그래서 앵커가 있는 동안에는 폴링을 끄고 로컬 누적 목록을 쓴다. 폴링을 켜 둔
+  // 채로 누적하면 5초마다 최신 50건이 밀고 들어와 보던 위치가 튄다.
+  // 아래 끝까지 내려 더 불러올 게 없어지면 앵커를 풀고 폴링 목록으로 돌아간다.
+  const [anchorId, setAnchorId] = useState<number | null>(initialAnchorId);
+  const [anchored, setAnchored] = useState<{
+    messages: Message[];
+    nextCursor: number | null;
+    nextAfter: number | null;
+  } | null>(null);
+  // 끝에 닿을 때마다 onScroll 이 연달아 불리므로 중복 요청을 막는다.
+  const loadingRef = useRef(false);
+
+  useEffect(() => {
+    if (!(isValid && anchorId !== null)) {
+      setAnchored(null);
+      return;
+    }
+    let cancelled = false;
+    client.discussion
+      .messagesAround({ roomId, anchorId, limit: ANCHOR_LIMIT })
+      .then((r) => {
+        if (!cancelled) {
+          setAnchored({
+            messages: r.messages as Message[],
+            nextCursor: r.nextCursor,
+            nextAfter: r.nextAfter,
+          });
+        }
+      })
+      .catch(() => {
+        // 앵커가 사라졌거나(방 삭제 등) 잘못된 id — 평소 화면으로 되돌린다.
+        if (!cancelled) {
+          setAnchorId(null);
+          setAnchored(null);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [roomId, anchorId, isValid]);
+
+  const loadOlder = async () => {
+    if (!anchored || anchored.nextCursor === null || loadingRef.current) {
+      return;
+    }
+    loadingRef.current = true;
+    try {
+      const r = await client.discussion.messages({
+        roomId,
+        cursor: anchored.nextCursor,
+        limit: MESSAGE_LIMIT,
+      });
+      setAnchored((prev) =>
+        prev === null
+          ? prev
+          : {
+              messages: [...(r.messages as Message[]), ...prev.messages],
+              nextCursor: r.nextCursor,
+              nextAfter: prev.nextAfter,
+            }
+      );
+    } finally {
+      loadingRef.current = false;
+    }
+  };
+
+  const loadNewer = async () => {
+    if (!anchored || loadingRef.current) {
+      return;
+    }
+    if (anchored.nextAfter === null) {
+      // 더 최신이 없다 = 실시간 꼬리에 닿았다. 앵커를 풀고 폴링으로 복귀한다.
+      setAnchorId(null);
+      return;
+    }
+    loadingRef.current = true;
+    try {
+      const r = await client.discussion.messages({
+        roomId,
+        after: anchored.nextAfter,
+        limit: MESSAGE_LIMIT,
+      });
+      setAnchored((prev) =>
+        prev === null
+          ? prev
+          : {
+              messages: [...prev.messages, ...(r.messages as Message[])],
+              nextCursor: prev.nextCursor,
+              nextAfter: r.nextAfter,
+            }
+      );
+    } finally {
+      loadingRef.current = false;
+    }
+  };
+  /* ----(~앵커 모드 여기까지)---- */
 
   const roomOptions = orpc.discussion.room.queryOptions({
     input: { id: roomId },
@@ -1082,7 +1372,9 @@ function useDiscussionRoom(roomId: number, isValid: boolean) {
   });
   const messagesQuery = useQuery({
     ...messagesOptions,
-    enabled: isValid,
+    /* ----(앵커 중에는 폴링 정지 — RFC 0008 §4-8)---- */
+    enabled: isValid && anchorId === null,
+    /* ----(~앵커 중에는 폴링 정지 여기까지)---- */
     refetchInterval: POLL_INTERVAL_MS,
     // TODO: pause polling on AppState=background via focusManager.
   });
@@ -1136,6 +1428,18 @@ function useDiscussionRoom(roomId: number, isValid: boolean) {
     hideMessagesMutation,
     deleteMessagesMutation,
     leaveMutation,
+    /* ----(앵커 모드 — RFC 0008)---- */
+    anchorId,
+    setAnchorId,
+    loadOlder,
+    loadNewer,
+    // 화면에 그릴 목록. 앵커 중에는 누적 목록, 평소에는 폴링 결과다.
+    messages: anchored
+      ? anchored.messages
+      : (messagesQuery.data?.messages ?? []),
+    // 앵커 조회는 react-query 를 안 타므로 로딩 판정도 여기서 한다.
+    listPending: anchorId === null ? messagesQuery.isPending : !anchored,
+    /* ----(~앵커 모드 여기까지)---- */
   };
 }
 
@@ -1167,7 +1471,13 @@ function NotFoundView({ t, topInset }: { t: MrTokens; topInset: number }) {
 export default function DiscussionRoomScreen() {
   const { t } = useMrTheme();
   const insets = useSafeAreaInsets();
-  const { id: idParam } = useLocalSearchParams<{ id: string }>();
+  /* ----(앵커 파라미터 — RFC 0008 §4-8)---- */
+  const { id: idParam, anchorId: anchorParam } = useLocalSearchParams<{
+    id: string;
+    anchorId?: string;
+  }>();
+  const initialAnchorId = parseAnchorParam(anchorParam);
+  /* ----(~앵커 파라미터 여기까지)---- */
   const roomId = Number(idParam);
   const isValidRoomId = Number.isFinite(roomId) && roomId > 0;
 
@@ -1180,7 +1490,13 @@ export default function DiscussionRoomScreen() {
     hideMessagesMutation,
     deleteMessagesMutation,
     leaveMutation,
-  } = useDiscussionRoom(roomId, isValidRoomId);
+    anchorId,
+    setAnchorId,
+    loadOlder,
+    loadNewer,
+    messages,
+    listPending,
+  } = useDiscussionRoom(roomId, isValidRoomId, initialAnchorId);
 
   const currentUserId = session?.user.id ?? null;
   const isAdmin = session?.user.role === "admin";
@@ -1188,6 +1504,17 @@ export default function DiscussionRoomScreen() {
   const [draft, setDraft] = useState("");
   const scrollRef = useRef<ScrollView>(null);
   const initialScrollDone = useRef(false);
+
+  /* ----(답글 작성 대상 — RFC 0008)---- */
+  // replyTo 가 있으면 입력창 위에 인용 미리보기가 뜨고, 전송 시 parentId 로 간다.
+  const [replyTo, setReplyTo] = useState<ReplyParent | null>(null);
+  /* ----(~답글 작성 대상 여기까지)---- */
+  const {
+    anchorHighlighted,
+    handleAnchorLayout,
+    resetCentering,
+    setViewportHeight,
+  } = useAnchorCentering(anchorId, scrollRef);
 
   // Admin 가림/삭제 UX 상태 (docs/rfcs/0004 기능2).
   // actionMessage: 롱프레스로 액션시트를 띄운 대상 메시지.
@@ -1272,10 +1599,19 @@ export default function DiscussionRoomScreen() {
       return;
     }
     sendMutation.mutate(
-      { roomId, content },
+      /* ----(답글이면 parentId 를 실어 보낸다 — RFC 0008 §4-5)---- */
+      { roomId, content, parentId: replyTo?.id },
+      /* ----(~답글이면 parentId 를 실어 보낸다 여기까지)---- */
       {
         onSuccess: () => {
           setDraft("");
+          /* ----(전송 후 앵커 해제 — RFC 0008)---- */
+          // 보낸 글은 맨 아래에 붙는다. 과거 지점(앵커)을 보던 중이었다면 그
+          // 목록에는 새 메시지가 안 들어오므로, 앵커를 풀어 폴링 꼬리로 돌아간 뒤
+          // 맨 아래로 내린다. 낙관적 append 는 하지 않는다(ADR 0001 #3).
+          setReplyTo(null);
+          setAnchorId(null);
+          /* ----(~전송 후 앵커 해제 여기까지)---- */
           requestAnimationFrame(() => {
             scrollRef.current?.scrollToEnd({ animated: true });
           });
@@ -1283,6 +1619,28 @@ export default function DiscussionRoomScreen() {
       }
     );
   };
+
+  /* ----(답글 시작 / 인용 점프 — RFC 0008 §4-5, D16)---- */
+  // 롱프레스 시트에서 [답글]을 누르면 시트를 닫고 인용 미리보기를 띄운다.
+  const startReply = (message: Message) => {
+    setActionMessage(null);
+    setReplyTo({
+      id: message.id,
+      userName: message.userName,
+      content: message.content,
+      type: message.type,
+      fileName: message.file?.name ?? null,
+      masked: null,
+    });
+  };
+
+  // 말풍선 안 인용을 누르면 그 원문으로 이동한다. 이미 화면에 있어도 위로 한참
+  // 떨어져 있을 수 있어 앵커 조회를 다시 태운다.
+  const jumpToParent = (parentId: number) => {
+    resetCentering();
+    setAnchorId(parentId);
+  };
+  /* ----(~답글 시작 / 인용 점프 여기까지)---- */
 
   const scrollToEnd = () => {
     requestAnimationFrame(() => {
@@ -1479,29 +1837,21 @@ export default function DiscussionRoomScreen() {
     uploadAndSendPhotos(photos);
   };
 
+  /* ----(롱프레스 분기 — RFC 0008 D3/D17)---- */
+  // 예전: admin+남의 글 → [숨김][삭제] 시트, 본인 글 → 삭제 Alert,
+  //       비관리자+남의 글 → 아무것도 없음.
+  // 지금: admin → [답글][숨김][삭제] 시트, 비관리자 → [답글] 시트.
+  //
+  // ⚠️ 일반 사용자는 이제 본인 메시지도 지울 수 없다. 삭제는 관리자만 한다(D17).
+  // 그래서 삭제 Alert 경로가 통째로 없어졌다.
   const handleLongPress = (message: Message) => {
     if (message.deletedAt || message.blindedAt) {
       return;
     }
-    // Admin이 남의 메시지를 롱프레스하면 [숨김][삭제] 액션시트를 연다.
-    if (isAdmin && message.userId !== currentUserId) {
-      setActionMessage(message);
-      return;
-    }
-    // 본인 메시지/비관리자는 기존 단건삭제 Alert 유지.
-    const canDelete = currentUserId === message.userId || isAdmin;
-    if (!canDelete) {
-      return;
-    }
-    Alert.alert("메시지 삭제", "이 메시지를 삭제할까요?", [
-      { text: "취소", style: "cancel" },
-      {
-        text: "삭제",
-        style: "destructive",
-        onPress: () => deleteMutation.mutate({ messageId: message.id }),
-      },
-    ]);
+    // admin 은 본인 글이든 남의 글이든 같은 시트를 쓴다 — 어차피 셋 다 할 수 있다.
+    setActionMessage(message);
   };
+  /* ----(~롱프레스 분기 여기까지)---- */
 
   const exitSelection = () => {
     setSelectionMode(null);
@@ -1593,7 +1943,6 @@ export default function DiscussionRoomScreen() {
 
   const mockStock = room.stockCode ? (findStock(room.stockCode) ?? null) : null;
   const stockLabel = room.stockName ?? mockStock?.name ?? null;
-  const messages = messagesQuery.data?.messages ?? [];
   const isLoggedIn = Boolean(session?.user);
   const inSelection = selectionMode !== null;
 
@@ -1646,18 +1995,27 @@ export default function DiscussionRoomScreen() {
         keyboardVerticalOffset={0}
         style={{ flex: 1 }}
       >
-        <View style={{ flex: 1 }}>
+        <View
+          onLayout={(e) => setViewportHeight(e.nativeEvent.layout.height)}
+          style={{ flex: 1 }}
+        >
           <MessageList
+            anchorHighlighted={anchorHighlighted}
+            anchorId={anchorId}
             currentUserId={currentUserId}
             fileStates={fileStates}
             hostUserId={room.createdBy?.id ?? null}
-            isEmpty={messagesQuery.isSuccess && messages.length === 0}
-            isPending={messagesQuery.isPending}
+            isEmpty={!listPending && messages.length === 0}
+            isPending={listPending}
             messages={messages}
+            onAnchorLayout={handleAnchorLayout}
             onDownloadFile={handleDownloadFile}
             onLongPress={handleLongPress}
             onOpenFile={handleOpenFile}
             onPressImage={handlePressImage}
+            onPressQuote={jumpToParent}
+            onReachBottom={loadNewer}
+            onReachTop={loadOlder}
             onToggleSelect={toggleSelect}
             scrollRef={scrollRef}
             selectedIds={selectedIds}
@@ -1680,17 +2038,30 @@ export default function DiscussionRoomScreen() {
           onAttach: () => setAttachMenuOpen(true),
           isSending: sendMutation.isPending || isUploading,
           attachDisabled: isUploading,
+          /* ----(답글 인용 미리보기 — RFC 0008 §4-5)---- */
+          replyTo,
+          onCancelReply: () => setReplyTo(null),
+          /* ----(~답글 인용 미리보기 여기까지)---- */
           bottomInset: insets.bottom,
           t,
         })}
       </KeyboardAvoidingView>
+      {/* ----(롱프레스 시트 — RFC 0008 D2/D3)---- */}
       <AdminMessageActionSheet
         onClose={() => setActionMessage(null)}
         onDelete={() => enterSelection("delete")}
         onHide={() => enterSelection("hide")}
+        onReply={() => actionMessage && startReply(actionMessage)}
         t={t}
-        visible={actionMessage !== null}
+        visible={isAdmin && actionMessage !== null}
       />
+      <ReplyActionSheet
+        onClose={() => setActionMessage(null)}
+        onReply={() => actionMessage && startReply(actionMessage)}
+        t={t}
+        visible={!isAdmin && actionMessage !== null}
+      />
+      {/* ----(~롱프레스 시트 여기까지)---- */}
       <BlindReasonSheet
         count={selectedIds.size}
         onCancel={() => setReasonSheetOpen(false)}
@@ -1751,6 +2122,8 @@ function renderBottom({
   onAttach,
   isSending,
   attachDisabled,
+  replyTo,
+  onCancelReply,
   bottomInset,
   t,
 }: {
@@ -1766,6 +2139,10 @@ function renderBottom({
   onAttach: () => void;
   isSending: boolean;
   attachDisabled: boolean;
+  /* ----(답글 인용 미리보기 — RFC 0008 §4-5)---- */
+  replyTo: ReplyParent | null;
+  onCancelReply: () => void;
+  /* ----(~답글 인용 미리보기 여기까지)---- */
   bottomInset: number;
   t: MrTokens;
 }) {
@@ -1789,7 +2166,9 @@ function renderBottom({
         draft={draft}
         isSending={isSending}
         onAttach={onAttach}
+        onCancelReply={onCancelReply}
         onSend={onSend}
+        replyTo={replyTo}
         setDraft={setDraft}
         t={t}
       />

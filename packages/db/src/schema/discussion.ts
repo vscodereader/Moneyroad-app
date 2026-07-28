@@ -1,4 +1,5 @@
 import {
+  type AnyPgColumn,
   index,
   integer,
   pgEnum,
@@ -92,12 +93,30 @@ export const discussionMessage = pgTable(
       onDelete: "set null",
     }),
     blindReason: text("blind_reason"),
+    /* ----(답글 부모 — RFC 0008)---- */
+    // NULL = 글(순수하게 올린 글), 값 있음 = 답글.
+    // 부모는 "직전에 롱프레스한 그 메시지"다 — 답글에 답글을 달면 최상위 글이
+    // 아니라 그 답글이 부모가 된다(트리). 예: 안녕하세요 ← 반갑습니다 ← 저두요
+    // 에서 저두요의 부모는 반갑습니다이지 안녕하세요가 아니다.
+    //
+    // cascade 지만 실제로 이 경로를 타는 건 토론방 삭제뿐이다. 메시지 삭제는
+    // 소프트 삭제(deletedAt)라 행이 남고, 그래서 원문을 지워도 답글은 그대로
+    // 붙어 있다 — 화면에서 인용만 "삭제된 글입니다"로 바뀐다(RFC 0008 D6).
+    parentId: integer("parent_id").references(
+      (): AnyPgColumn => discussionMessage.id,
+      { onDelete: "cascade" }
+    ),
+    /* ----(~답글 부모 여기까지)---- */
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (table) => [
     // Cursor pagination key for the "이력 fetch + 라이브 구독" model
     // (docs/adr/0001 #2). Composite (room_id, id desc) keeps room slices contiguous.
     index("discussion_message_room_id_idx").on(table.roomId, table.id),
+    /* ----(답글 개수·자식 조회용 — RFC 0008)---- */
+    // 목록의 [n] 서브쿼리와 인용 조회가 이 인덱스를 탄다.
+    index("discussion_message_parent_idx").on(table.parentId),
+    /* ----(~답글 개수·자식 조회용 여기까지)---- */
     // Used by room list queries that need MAX(createdAt) per room for the
     // "최신" tab and the "마지막 활동" label.
     index("discussion_message_room_created_at_idx").on(

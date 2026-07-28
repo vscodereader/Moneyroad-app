@@ -6,6 +6,7 @@ import type { FastifyInstance } from "fastify";
 import { triggerPinsRefresh } from "@/services/pinned-poller";
 import { refreshPriceAlerts } from "@/services/price-alert/evaluator";
 import { signalFeedHub } from "@/services/signal";
+import { notifySignal } from "@/services/signal-push";
 
 // Constant-time compare of the shared secret. Length-guarded since
 // timingSafeEqual throws on length mismatch.
@@ -70,5 +71,40 @@ export function registerInternalPlugin(app: FastifyInstance) {
       reply.send({ ok: true });
     }
   );
+  // ----(끝)----
+
+  // ----(시그널 푸시 알림 — RFC 0007)----
+  // 관리자가 시그널을 작성하면 그 종목을 관심종목에 넣고 알림을 켜 둔 사용자에게
+  // 푸시를 보낸다. 위 refresh-signal 과 분리한 이유: 저쪽은 "화면 새로고침해라"를
+  // 전 클라이언트에 broadcast 하고 삭제 때도 불리지만, 이쪽은 특정 사용자에게만
+  // 보내고 생성 때만 불린다(RFC 0007 §4-2).
+  app.post<{
+    Headers: { "x-internal-secret"?: string };
+    Body: {
+      action?: "buy" | "sell" | "hold";
+      signalId?: string;
+      stockCode?: string;
+      title?: string;
+    };
+  }>("/internal/notify-signal", (request, reply) => {
+    if (!secretMatches(request.headers["x-internal-secret"])) {
+      log.warn({ internal: { event: "notify_signal_unauthorized" } });
+      reply
+        .code(401)
+        .send({ error: "Unauthorized", code: "INVALID_INTERNAL_SECRET" });
+      return;
+    }
+    const { action, signalId, stockCode, title } = request.body ?? {};
+    if (!(action && signalId && stockCode && title)) {
+      reply.code(400).send({ error: "Bad Request", code: "MISSING_FIELDS" });
+      return;
+    }
+    // 발송을 기다리지 않고 응답한다 — 호출자(server)의 시그널 생성 응답이
+    // 푸시 왕복만큼 늦어지면 안 된다. 실패는 notifySignal 안에서 로그로 남는다.
+    notifySignal({ action, signalId, stockCode, title }).catch((err) => {
+      log.error({ err, internal: { event: "notify_signal_failed", signalId } });
+    });
+    reply.send({ ok: true });
+  });
   // ----(끝)----
 }

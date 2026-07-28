@@ -91,3 +91,57 @@ export function refreshRealtimeSignal(reason: string): void {
     });
 }
 // ----(끝)----
+
+// ----(시그널 푸시 알림 — RFC 0007)----
+const SIGNAL_NOTIFY_PATH = "/internal/notify-signal";
+
+export interface SignalNotifyInput {
+  action: "buy" | "sell" | "hold";
+  signalId: string;
+  stockCode: string;
+  title: string;
+}
+
+/**
+ * Fire-and-forget nudge so realtime pushes this new signal to users who watch
+ * the stock and have the matching alert enabled (docs/rfcs/0007).
+ *
+ * ⚠️ This is NOT `refreshRealtimeSignal`. That one broadcasts "refetch the
+ * list" to every connected client and also fires on delete; this one targets
+ * specific users and only fires on create. Both run on `signal.create`.
+ *
+ * 푸시 발송을 기다리지 않는다 — 알림이 실패해도 시그널 생성은 성공해야 한다.
+ */
+export function notifyRealtimeSignal(input: SignalNotifyInput): void {
+  const url = `${env.REALTIME_INTERNAL_URL}${SIGNAL_NOTIFY_PATH}`;
+  fetch(url, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-internal-secret": env.STREAM_TOKEN_SECRET,
+    },
+    body: JSON.stringify(input),
+    signal: AbortSignal.timeout(TIMEOUT_MS),
+  })
+    .then((res) => {
+      if (!res.ok) {
+        log.warn({
+          realtimeTrigger: {
+            event: "notify_signal_rejected",
+            status: res.status,
+            signalId: input.signalId,
+          },
+        });
+      }
+    })
+    .catch((error) => {
+      log.warn({
+        realtimeTrigger: {
+          event: "notify_signal_failed",
+          signalId: input.signalId,
+        },
+        error,
+      });
+    });
+}
+// ----(끝)----

@@ -5,6 +5,7 @@ import z from "zod";
 
 import { adminProcedure, protectedProcedure, publicProcedure } from "../index";
 import {
+  notifyRealtimeSignal,
   refreshRealtimePins,
   refreshRealtimeSignal,
 } from "../lib/realtime-trigger";
@@ -191,6 +192,16 @@ export const signalRouter = {
       // 불러오게 하려면 별도 broadcast가 필요하다 — 이게 없어서 관리자가 시그널을
       // 추가해도 유저 화면이 그대로였다.
       refreshRealtimeSignal("signal.create");
+      // ----(끝)----
+      // ----(시그널 푸시 알림 — RFC 0007)----
+      // 이 종목을 관심종목에 넣고 매수/매도 알림을 켜 둔 사용자에게 푸시한다.
+      // 삭제 때는 부르지 않는다 — 사라진 시그널을 알릴 이유가 없다.
+      notifyRealtimeSignal({
+        signalId: row.id,
+        stockCode: input.stockCode,
+        action: input.action,
+        title: input.title.trim(),
+      });
       // ----(끝)----
       return { id: row.id };
     }),

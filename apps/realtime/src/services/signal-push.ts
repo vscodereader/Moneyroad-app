@@ -20,23 +20,36 @@ export interface SignalPushInput {
   title: string;
 }
 
-// 액션별 (알림설정 컬럼, 알림 타입, 화면 문구).
-// 관망(hold)이 빠진 이유: notification_type enum 에 hold_signal 이 없어
-// notification_history 에 기록 자체가 불가능하다. 넣으려면 DB 마이그레이션이
-// 필요해 이번 범위에서 뺐다(RFC 0007 §4-4, D1). 팀장님 지침도
-// buy_signal/sell_signal 만 명시했고 설정 기본값도 관망만 false 다.
+/* ----(액션별 알림 메타 — 매수·매도·관망)---- */
+// 팀장님 문서가 "액션(매수/매도/관망)은 알림 설정(buySignal/sellSignal/
+// holdSignal)과 일치한다"고 정의하므로 3종 모두 발송한다
+// (docs/native/api/signals.md). 관망은 notification_type enum 에 hold_signal
+// 이 없어 한동안 빠져 있었다 — 마이그레이션 0013 으로 추가했다(RFC 0007 D1).
+//
+// defaultOn: 설정 행이 아직 없는 사용자에게 보낼지. user_notification_setting
+// 의 컬럼 기본값과 맞춘 값이다 — 매수/매도는 true, 관망만 false. 관망까지
+// true 로 두면 토글을 켠 적 없는 사용자에게 관망 알림이 가 버린다.
 const ACTION_META = {
-  buy: { type: "buy_signal", label: "매수" },
-  sell: { type: "sell_signal", label: "매도" },
+  buy: {
+    column: "buySignal",
+    defaultOn: true,
+    type: "buy_signal",
+    label: "매수",
+  },
+  sell: {
+    column: "sellSignal",
+    defaultOn: true,
+    type: "sell_signal",
+    label: "매도",
+  },
+  hold: {
+    column: "holdSignal",
+    defaultOn: false,
+    type: "hold_signal",
+    label: "관망",
+  },
 } as const;
-
-type PushableAction = keyof typeof ACTION_META;
-
-function isPushable(
-  action: SignalPushInput["action"]
-): action is PushableAction {
-  return action in ACTION_META;
-}
+/* ----(~액션별 알림 메타 여기까지)---- */
 
 /**
  * 시그널이 등록된 직후 호출된다. 뉴스 속보 경로(news/push.ts)를 그대로 옮겼고
@@ -47,9 +60,6 @@ function isPushable(
  * 삼켜서 시그널 생성을 실패시키지 않는다.
  */
 export async function notifySignal(input: SignalPushInput): Promise<void> {
-  if (!isPushable(input.action)) {
-    return;
-  }
   const meta = ACTION_META[input.action];
   const db = getDb();
 
@@ -76,6 +86,9 @@ export async function notifySignal(input: SignalPushInput): Promise<void> {
       userId: userNotificationSetting.userId,
       buySignal: userNotificationSetting.buySignal,
       sellSignal: userNotificationSetting.sellSignal,
+      /* ----(관망 설정 조회)---- */
+      holdSignal: userNotificationSetting.holdSignal,
+      /* ----(~관망 설정 조회 여기까지)---- */
     })
     .from(userNotificationSetting)
     .where(inArray(userNotificationSetting.userId, candidateUserIds));
@@ -84,10 +97,15 @@ export async function notifySignal(input: SignalPushInput): Promise<void> {
 
   const enabledUserIds = candidateUserIds.filter((uid) => {
     const s = settingsMap.get(uid);
+    /* ----(설정 행이 없을 때 — 액션별로 다르다)---- */
+    // 매수/매도는 컬럼 기본값이 true 라 보내고(속보와 동일), 관망은 false 라
+    // 보내지 않는다. 여기서 일괄 true 로 두면 관망을 켠 적 없는 사용자에게
+    // 관망 알림이 간다.
     if (!s) {
-      return true; // 설정 행이 없으면 ON — 컬럼 기본값이 true 라 속보와 동일
+      return meta.defaultOn;
     }
-    return input.action === "buy" ? s.buySignal : s.sellSignal;
+    return s[meta.column];
+    /* ----(~설정 행이 없을 때 여기까지)---- */
   });
 
   if (enabledUserIds.length === 0) {

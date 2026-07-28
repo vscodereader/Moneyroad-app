@@ -1,9 +1,9 @@
 # RFC 0007 — 시그널 푸시 알림 (signal-push-notification)
 
-- 상태: **Draft — §9 D1(관망) 외 확정.** 매수·매도는 구현 착수 가능.
+- 상태: **Draft — D1 확정(관망 포함).** 매수·매도·관망 구현 완료.
 - 작성일: 2026-07-28
 - 범위: 관리자가 시그널을 작성하면 **그 종목을 관심종목에 넣고 알림 설정을 켜 둔 사용자에게 푸시**를 보낸다.
-- 범위 밖: 시그널 자동생성 엔진(미구현), 관망(hold) 푸시(→ **D1**), 알림 화면 UI 변경, iOS 검증.
+- 범위 밖: 시그널 자동생성 엔진(미구현), 알림 화면 UI 변경, iOS 검증.
 - 관련 코드:
   - `apps/realtime/src/services/news/push.ts` (**본으로 삼는 원형** — 속보 푸시)
   - `apps/realtime/src/services/news/expo-push.ts` (`sendPushToUser` — 쿨다운·이력·토큰정리)
@@ -115,7 +115,6 @@ packages/api/src/routers/signal.ts:171   ← adminProcedure create
 - G5. 시그널 **삭제 시에는 푸시하지 않는다**.
 
 **비목표**
-- 관망(hold) 푸시 — **D1**
 - 자동생성 엔진, 알림 화면 UI 변경, iOS 실기기 검증
 
 ---
@@ -163,23 +162,45 @@ packages/api/src/routers/signal.ts:171   ← adminProcedure create
 | 발송 조건 판정 | 키워드 휴리스틱(속보/급등/…) | **불필요** — 관리자가 만든 것 자체가 알릴 거리 |
 | `stockCode` 없으면 | skip | 시그널은 종목이 **필수**라 항상 존재 |
 | 문구 | `"${종목명} 속보"` + 기사 제목 | `"${종목명} 매수 시그널"` + 시그널 제목 |
-| 알림 타입 | `breaking_news` | `buy_signal` / `sell_signal` |
+| 알림 타입 | `breaking_news` | `buy_signal` / `sell_signal` / `hold_signal` |
 
 > `user_watchlist`의 `type`은 enum `['signal','news']`이지만 **앱은 `'news'`만 쓴다** — `watchlist.ts:20`에 `WATCH_TYPE = "news"`로 고정되어 있고 add/remove/list가 모두 이 값을 쓴다. 그래서 시그널 푸시도 `'news'`를 봐야 한다. 직관과 어긋나므로 코드에 주석으로 남긴다.
 
-### 4-4. 관망(hold)을 제외하는 이유 — 알림 타입이 없다
+### 4-4. 관망(hold) — 알림 타입을 새로 추가한다
 
-```ts
-notificationType = pgEnum("notification_type", [
-  "buy_signal", "sell_signal", "price_alert", "breaking_news", "market_summary",
-]);   // ← hold_signal 없음
+팀장님 문서가 **액션 3종과 알림 설정 3종이 1:1로 대응한다**고 정의한다:
+
+> 시그널의 1차 분류는 **액션(매수/매도/관망)**이다. … 알림 설정
+> (`buySignal`/`sellSignal`/`holdSignal`)과 **일치한다.**
+> — `docs/native/api/signals.md:7-11`
+
+그런데 `notification_type` enum에만 `hold_signal`이 빠져 있었다. `notification_history.type`이
+이 enum이라 **관망 알림은 기록 자체가 불가능**했고, 그 결과 설정 화면의 "관망 시그널"
+토글이 켜도 아무 일이 없는 무동작 상태였다.
+
+설계상 3종이 일치해야 하므로 enum 누락은 의도가 아니라 빠뜨린 것으로 보고,
+**마이그레이션 `0013_cheerful_ghost_rider.sql`로 값을 추가**한다:
+
+```sql
+ALTER TYPE "public"."notification_type" ADD VALUE 'hold_signal' BEFORE 'price_alert';
 ```
 
-`notification_history.type`이 이 enum이라 **관망 알림은 기록 자체가 불가능**하다. 넣으려면 **DB 마이그레이션(enum 값 추가)** 이 필요하다.
+⚠️ **되돌리기 어렵다.** Postgres에는 `ALTER TYPE ... DROP VALUE`가 없어, 취소하려면 타입을
+통째로 재생성해야 한다. → **D1**
 
-팀장님 지침도 `buy_signal`/`sell_signal`만 명시했고, 설정 기본값도 관망만 `false`다(매수·매도는 `true`). 그래서 **이번 범위에서 제외**한다. → **D1**
+#### 설정 행이 없는 사용자 — 액션별로 다르다
 
-⚠️ 부작용: 설정 화면의 **"관망 시그널" 토글은 여전히 아무 동작도 하지 않는다.** 이 RFC가 고치려는 문제(설정만 있고 기능 없음)가 관망에만 남는다.
+`user_notification_setting`의 컬럼 기본값이 관망만 다르다:
+
+| 컬럼 | 기본값 |
+|---|---|
+| `buy_signal` | `true` |
+| `sell_signal` | `true` |
+| `hold_signal` | **`false`** |
+
+속보 경로를 그대로 옮기면 "설정 행이 없으면 발송"이 되는데, 관망에 그대로 적용하면
+**토글을 켠 적 없는 사용자에게 관망 알림이 간다.** 그래서 `ACTION_META`에 `defaultOn`을
+두어 컬럼 기본값과 맞춘다 — 매수·매도 `true`, 관망 `false`.
 
 ### 4-5. 실패 처리
 
@@ -244,7 +265,7 @@ notificationType = pgEnum("notification_type", [
 
 | # | 내용 | 추천 |
 |---|---|---|
-| **D1** | **관망(hold) 푸시를 지원할까?** 하려면 `notification_type` enum에 `hold_signal` 추가 = **DB 마이그레이션**이 필요하다. 안 하면 설정의 "관망 시그널" 토글이 계속 무동작으로 남는다 | **이번엔 제외.** 팀장님 지침이 `buy_signal`/`sell_signal`만 명시했고 기본값도 OFF다. 다만 **토글을 숨기거나 "준비 중" 표시**를 붙이는 후속이 필요 |
+| **D1** | **관망(hold) 푸시를 지원할까?** `notification_type` enum에 `hold_signal` 추가 = **DB 마이그레이션**이 필요하고, Postgres 특성상 **되돌리기 어렵다**(`DROP VALUE` 없음) | **포함하기로 확정(2026-07-28).** 팀장님 문서 `docs/native/api/signals.md:7-11`이 "액션 3종과 알림 설정이 일치한다"고 정의하므로 enum 누락은 의도가 아니라 빠뜨린 것으로 판단. 마이그레이션 `0013`으로 추가. 되돌리기 어려운 점은 머지 전 확인 요청 |
 | **D2** | 팀장님 문서는 **엔진이 생성한 시그널** 기준으로 쓰였다. **관리자 수동 작성**에도 같은 규칙을 적용하는 것을 승인하시는지 | 승인 요청. 지금은 수동 작성이 **유일한 경로**이고, 엔진이 생기기 전까지 알림 폭탄 위험도 없다 |
 | **D3** | 엔진이 생긴 뒤 **자동 생성 시그널도 푸시할지** — 하루 수십 건이면 알림 폭탄이 된다. 엔진 착수 시점에 다시 결정할 사항 | 엔진 RFC로 미룸 |
 | **D4** | 알림 문구 `"${종목명} 매수 시그널"` + 본문 = 시그널 제목. 속보(`"${종목명} 속보"`)와 같은 꼴 | 이대로 |

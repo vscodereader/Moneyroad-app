@@ -13,7 +13,20 @@ import {
   userWatchlist,
 } from "@moneyroad-app/db/schema";
 import { ORPCError } from "@orpc/server";
-import { and, desc, eq, inArray, isNull, lt, type SQL, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  gt,
+  inArray,
+  isNotNull,
+  isNull,
+  lt,
+  lte,
+  type SQL,
+  sql,
+} from "drizzle-orm";
 import z from "zod";
 
 import { adminProcedure, protectedProcedure, publicProcedure } from "../index";
@@ -116,6 +129,9 @@ async function sendMessage(args: {
   content: string;
   imageIds?: number[];
   file?: FileRef;
+  /* ----(답글 부모 — RFC 0008)---- */
+  parentId?: number;
+  /* ----(~답글 부모 여기까지)---- */
 }): Promise<{ id: number; createdAt: Date }> {
   const imageIds = args.imageIds ?? [];
   let type: MessageType = "text";
@@ -194,6 +210,34 @@ async function sendMessage(args: {
     }
   }
 
+  /* ----(답글 부모 검증 — RFC 0008)---- */
+  // 부모는 같은 방의 살아 있는 메시지여야 한다. 다른 방 메시지를 부모로 넘기면
+  // 인용이 방 경계를 넘어 새어 나가고, 삭제·가림된 메시지에 답글을 허용하면
+  // 마스킹된 본문이 인용을 통해 되살아난다(RFC 0004 기능5와 같은 이유).
+  if (args.parentId !== undefined) {
+    const [parent] = await db
+      .select({
+        id: discussionMessage.id,
+        roomId: discussionMessage.roomId,
+        deletedAt: discussionMessage.deletedAt,
+        blindedAt: discussionMessage.blindedAt,
+      })
+      .from(discussionMessage)
+      .where(eq(discussionMessage.id, args.parentId))
+      .limit(1);
+    if (!parent || parent.roomId !== args.roomId) {
+      throw new ORPCError("NOT_FOUND", {
+        message: "답글 대상 메시지가 없습니다.",
+      });
+    }
+    if (parent.deletedAt || parent.blindedAt) {
+      throw new ORPCError("BAD_REQUEST", {
+        message: "삭제되었거나 가려진 메시지에는 답글을 달 수 없습니다.",
+      });
+    }
+  }
+  /* ----(~답글 부모 검증 여기까지)---- */
+
   // Implicit join.
   await db
     .insert(discussionRoomMember)
@@ -213,6 +257,9 @@ async function sendMessage(args: {
         fileMime: args.file?.mime ?? null,
         fileSize: args.file?.size ?? null,
         fileName: args.file?.name ?? null,
+        /* ----(답글 부모 — RFC 0008)---- */
+        parentId: args.parentId ?? null,
+        /* ----(~답글 부모 여기까지)---- */
       })
       .returning({
         id: discussionMessage.id,
@@ -600,6 +647,293 @@ async function unblockMember(args: {
 
 // ── router ───────────────────────────────────────────────────────────
 
+/* ----(메시지 조회 공통부 — RFC 0008)---- */
+// messages(양방향 커서)와 messagesAround(앵커 주변)가 같은 행 모양·같은 후처리를
+// 쓰도록 한 곳에 모았다. 예전에는 messages 안에 인라인으로 있었는데, 앵커 조회가
+// 생기면서 이미지 로딩·마스킹 규칙이 두 벌로 갈릴 위험이 생겼다.
+
+const MESSAGE_COLUMNS = {
+  id: discussionMessage.id,
+  userId: discussionMessage.userId,
+  userName: user.name,
+  userImage: user.image,
+  content: discussionMessage.content,
+  type: discussionMessage.type,
+  fileMime: discussionMessage.fileMime,
+  fileSize: discussionMessage.fileSize,
+  fileName: discussionMessage.fileName,
+  createdAt: discussionMessage.createdAt,
+  deletedAt: discussionMessage.deletedAt,
+  blindedAt: discussionMessage.blindedAt,
+  blindReason: discussionMessage.blindReason,
+  parentId: discussionMessage.parentId,
+} as const;
+
+type RawMessageRow = {
+  [K in keyof typeof MESSAGE_COLUMNS]: (typeof MESSAGE_COLUMNS)[K] extends {
+    _: { data: infer D };
+  }
+    ? D
+    : never;
+};
+
+/** 한 방의 메시지 행을 id 순으로 뽑는다. 방향·경계는 호출부가 정한다. */
+function selectMessages(where: SQL, order: SQL, limit: number) {
+  return db
+    .select(MESSAGE_COLUMNS)
+    .from(discussionMessage)
+    .innerJoin(user, eq(discussionMessage.userId, user.id))
+    .where(where)
+    .orderBy(order)
+    .limit(limit);
+}
+
+/** 인용에 실을 원문 스냅샷. 마스킹된 원문은 본문을 비워서 내보낸다. */
+async function parentSnapshots(slice: RawMessageRow[]) {
+  const parentIds = [
+    ...new Set(
+      slice
+        .map((m) => m.parentId)
+        .filter((id): id is number => typeof id === "number")
+    ),
+  ];
+  const map = new Map<
+    number,
+    {
+      id: number;
+      userName: string;
+      content: string | null;
+      type: "text" | "image" | "file";
+      fileName: string | null;
+      masked: "deleted" | "blinded" | null;
+    }
+  >();
+  if (parentIds.length === 0) {
+    return map;
+  }
+  const rows = await db
+    .select({
+      id: discussionMessage.id,
+      userName: user.name,
+      content: discussionMessage.content,
+      type: discussionMessage.type,
+      fileName: discussionMessage.fileName,
+      deletedAt: discussionMessage.deletedAt,
+      blindedAt: discussionMessage.blindedAt,
+    })
+    .from(discussionMessage)
+    .innerJoin(user, eq(discussionMessage.userId, user.id))
+    .where(inArray(discussionMessage.id, parentIds));
+
+  for (const r of rows) {
+    // 삭제/가림된 원문의 본문은 응답에 싣지 않는다 — 인용을 통해 마스킹이
+    // 우회되면 RFC 0004 기능5가 무의미해진다. 화면은 masked 값만 보고
+    // "삭제된 글입니다"/"가려진 글입니다"를 그린다(RFC 0008 D7).
+    let masked: "deleted" | "blinded" | null = null;
+    if (r.deletedAt) {
+      masked = "deleted";
+    } else if (r.blindedAt) {
+      masked = "blinded";
+    }
+    map.set(r.id, {
+      id: r.id,
+      userName: masked ? "" : r.userName,
+      content: masked ? null : r.content,
+      type: r.type,
+      fileName: masked ? null : r.fileName,
+      masked,
+    });
+  }
+  return map;
+}
+
+/** 각 메시지에 달린 **직속** 답글 수 (RFC 0008 D4). 삭제된 답글은 세지 않는다. */
+async function replyCounts(ids: number[]) {
+  const map = new Map<number, number>();
+  if (ids.length === 0) {
+    return map;
+  }
+  const rows = await db
+    .select({
+      parentId: discussionMessage.parentId,
+      n: sql<number>`COUNT(*)::int`,
+    })
+    .from(discussionMessage)
+    .where(
+      and(
+        inArray(discussionMessage.parentId, ids),
+        isNull(discussionMessage.deletedAt)
+      )
+    )
+    .groupBy(discussionMessage.parentId);
+  for (const r of rows) {
+    if (r.parentId !== null) {
+      map.set(r.parentId, r.n);
+    }
+  }
+  return map;
+}
+
+/** 이미지 메시지의 첨부를 sortOrder 순으로 일괄 로드. 마스킹된 건 제외. */
+async function imagesFor(slice: RawMessageRow[]) {
+  const imageMessageIds = slice
+    .filter((m) => m.type === "image" && !(m.deletedAt || m.blindedAt))
+    .map((m) => m.id);
+  const imagesByMessage = new Map<
+    number,
+    { imageId: number; url: string; mime: string }[]
+  >();
+  if (imageMessageIds.length === 0) {
+    return imagesByMessage;
+  }
+  const links = await db
+    .select({
+      messageId: discussionMessageImage.messageId,
+      imageId: discussionMessageImage.imageId,
+      // The client needs the real type to pick a file extension before saving
+      // to the gallery — MediaStore rejects an asset it can't type (RFC 0005 §4-1).
+      mime: moneyroadImage.mime,
+    })
+    .from(discussionMessageImage)
+    .innerJoin(
+      moneyroadImage,
+      eq(discussionMessageImage.imageId, moneyroadImage.id)
+    )
+    .where(inArray(discussionMessageImage.messageId, imageMessageIds))
+    .orderBy(
+      discussionMessageImage.messageId,
+      discussionMessageImage.sortOrder
+    );
+  for (const link of links) {
+    const list = imagesByMessage.get(link.messageId) ?? [];
+    list.push({
+      imageId: link.imageId,
+      url: `/media/discussion-image/${link.imageId}`,
+      mime: link.mime,
+    });
+    imagesByMessage.set(link.messageId, list);
+  }
+  return imagesByMessage;
+}
+
+/* ----(내 글·답글 목록 공통부 — RFC 0008)---- */
+// 목록 2행의 날짜. my_chat_collect.jpg 처럼 "2026.07.28" 까지만 쓴다(D5).
+// 시각은 서버 created_at 을 그대로 KST 로 포매팅한다 — docs/adr/0001 #1.
+const listDateFmt = new Intl.DateTimeFormat("ko-KR", {
+  timeZone: "Asia/Seoul",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
+
+function formatListDate(date: Date): string {
+  const parts = listDateFmt.formatToParts(date);
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
+  return `${get("year")}.${get("month")}.${get("day")}`;
+}
+
+/**
+ * "내 글"/"답글" 목록. 둘은 `parent_id` 조건만 다르다 — 글은 NULL, 답글은 NOT NULL.
+ * 삭제한 내 메시지는 제외한다(기존 myReplies 와 동일).
+ */
+async function myMessages(args: {
+  userId: string;
+  limit: number;
+  kind: "post" | "reply";
+}) {
+  const rows = await db
+    .select({
+      id: discussionMessage.id,
+      roomId: discussionRoom.id,
+      roomName: discussionRoom.name,
+      stockCode: discussionRoom.stockCode,
+      stockName: stockMaster.htsKorIsnm,
+      content: discussionMessage.content,
+      type: discussionMessage.type,
+      fileName: discussionMessage.fileName,
+      createdAt: discussionMessage.createdAt,
+    })
+    .from(discussionMessage)
+    .innerJoin(discussionRoom, eq(discussionMessage.roomId, discussionRoom.id))
+    .leftJoin(
+      stockMaster,
+      eq(discussionRoom.stockCode, stockMaster.mkscShrnIscd)
+    )
+    .where(
+      and(
+        eq(discussionMessage.userId, args.userId),
+        isNull(discussionMessage.deletedAt),
+        args.kind === "post"
+          ? isNull(discussionMessage.parentId)
+          : isNotNull(discussionMessage.parentId)
+      )
+    )
+    .orderBy(desc(discussionMessage.id))
+    .limit(args.limit);
+
+  // 각 항목에 달린 직속 답글 수 — 목록의 [n] (D4, D14).
+  const counts = await replyCounts(rows.map((r) => r.id));
+
+  return rows.map((r) => ({
+    id: r.id,
+    roomId: r.roomId,
+    roomName: r.roomName,
+    stockCode: r.stockCode,
+    stockName: r.stockName,
+    content: r.content,
+    // 사진·파일 메시지는 본문이 비어 있을 수 있어 화면이 "사진"/"파일"로 대체한다(D8).
+    type: r.type,
+    fileName: r.fileName,
+    replyCount: counts.get(r.id) ?? 0,
+    date: formatListDate(r.createdAt),
+    createdAt: r.createdAt.toISOString(),
+  }));
+}
+/* ----(~내 글·답글 목록 공통부 여기까지)---- */
+
+/** 원시 행 → 화면용 메시지. 마스킹·첨부·인용·답글수를 모두 적용한다. */
+async function hydrateMessages(slice: RawMessageRow[]) {
+  const [imagesByMessage, parents, counts_] = await Promise.all([
+    imagesFor(slice),
+    parentSnapshots(slice),
+    replyCounts(slice.map((m) => m.id)),
+  ]);
+
+  return slice.map((m) => {
+    const masked = Boolean(m.deletedAt || m.blindedAt);
+    return {
+      id: m.id,
+      userId: m.userId,
+      userName: m.userName,
+      userImage: m.userImage,
+      // Mask content when soft-deleted OR admin-blinded.
+      content: masked ? null : m.content,
+      type: m.type,
+      images:
+        m.type === "image" && !masked
+          ? (imagesByMessage.get(m.id) ?? [])
+          : null,
+      file:
+        m.type === "file" && !masked
+          ? {
+              url: `/media/discussion-file/${m.id}`,
+              name: m.fileName ?? "",
+              mime: m.fileMime ?? "application/octet-stream",
+              size: m.fileSize ?? 0,
+            }
+          : null,
+      createdAt: m.createdAt.toISOString(),
+      deletedAt: m.deletedAt?.toISOString() ?? null,
+      blindedAt: m.blindedAt?.toISOString() ?? null,
+      blindReason: m.blindReason ?? null,
+      parentId: m.parentId,
+      parent: m.parentId === null ? null : (parents.get(m.parentId) ?? null),
+      replyCount: counts_.get(m.id) ?? 0,
+    };
+  });
+}
+/* ----(~메시지 조회 공통부 여기까지)---- */
+
 export const discussionRouter = {
   /**
    * Room list for the Discuss tab.
@@ -793,128 +1127,130 @@ export const discussionRouter = {
     .input(
       z.object({
         roomId: z.number().int(),
+        // 과거 방향(위로 스크롤). id < cursor
         cursor: z.number().int().optional(),
+        /* ----(최신 방향 커서 — RFC 0008 D15)---- */
+        // 앵커로 진입하면 아래쪽도 잘려 있어서 최신 방향으로도 이어 붙여야 한다.
+        // id > after. cursor 와 동시에 주면 after 가 우선한다.
+        after: z.number().int().optional(),
+        /* ----(~최신 방향 커서 여기까지)---- */
         limit: z.number().int().min(1).max(100).default(50),
       })
     )
     .handler(async ({ input }) => {
-      const where = input.cursor
-        ? and(
-            eq(discussionMessage.roomId, input.roomId),
-            lt(discussionMessage.id, input.cursor)
-          )
-        : eq(discussionMessage.roomId, input.roomId);
+      const inRoom = eq(discussionMessage.roomId, input.roomId);
 
-      const rows = await db
-        .select({
-          id: discussionMessage.id,
-          userId: discussionMessage.userId,
-          userName: user.name,
-          userImage: user.image,
-          content: discussionMessage.content,
-          type: discussionMessage.type,
-          fileMime: discussionMessage.fileMime,
-          fileSize: discussionMessage.fileSize,
-          fileName: discussionMessage.fileName,
-          createdAt: discussionMessage.createdAt,
-          deletedAt: discussionMessage.deletedAt,
-          blindedAt: discussionMessage.blindedAt,
-          blindReason: discussionMessage.blindReason,
-        })
-        .from(discussionMessage)
-        .innerJoin(user, eq(discussionMessage.userId, user.id))
-        .where(where)
-        .orderBy(desc(discussionMessage.id))
-        .limit(input.limit + 1);
+      /* ----(방향별 조회 — RFC 0008 D15)---- */
+      if (input.after !== undefined) {
+        // 최신 방향: id 오름차순으로 뽑으면 그대로 화면 순서가 된다.
+        const rows = (await selectMessages(
+          and(inRoom, gt(discussionMessage.id, input.after)) as SQL,
+          asc(discussionMessage.id),
+          input.limit + 1
+        )) as RawMessageRow[];
+        const hasMore = rows.length > input.limit;
+        const slice = hasMore ? rows.slice(0, input.limit) : rows;
+        return {
+          messages: await hydrateMessages(slice),
+          nextCursor: null,
+          nextAfter: hasMore ? (slice.at(-1)?.id ?? null) : null,
+        };
+      }
+      /* ----(~방향별 조회 여기까지)---- */
+
+      const where = input.cursor
+        ? (and(inRoom, lt(discussionMessage.id, input.cursor)) as SQL)
+        : inRoom;
+      const rows = (await selectMessages(
+        where,
+        desc(discussionMessage.id),
+        input.limit + 1
+      )) as RawMessageRow[];
 
       const hasMore = rows.length > input.limit;
       const slice = hasMore ? rows.slice(0, input.limit) : rows;
       // Oldest first for append-friendly rendering.
       slice.reverse();
 
-      // Batch-load image attachments for the visible image messages, ordered by
-      // sortOrder. Masked (deleted/blinded) messages are excluded — their
-      // attachments must not resolve (docs/rfcs/0004 기능5).
-      const imageMessageIds = slice
-        .filter((m) => m.type === "image" && !(m.deletedAt || m.blindedAt))
-        .map((m) => m.id);
-      const imagesByMessage = new Map<
-        number,
-        /* ----(이미지 payload 의 mime — RFC 0005 §4-1)---- */
-        { imageId: number; url: string; mime: string }[]
-        /* ----(~이미지 payload 의 mime 여기까지)---- */
-      >();
-      if (imageMessageIds.length > 0) {
-        const links = await db
-          .select({
-            messageId: discussionMessageImage.messageId,
-            imageId: discussionMessageImage.imageId,
-            /* ----(갤러리 저장용 mime 선택 — RFC 0005 §4-1)---- */
-            // The client needs the real type to pick a file extension before
-            // saving to the gallery — MediaStore rejects an asset it can't type.
-            mime: moneyroadImage.mime,
-            /* ----(~갤러리 저장용 mime 선택 여기까지)---- */
-          })
-          .from(discussionMessageImage)
-          /* ----(mime 을 얻기 위한 이미지 조인 — RFC 0005 §4-1)---- */
-          .innerJoin(
-            moneyroadImage,
-            eq(discussionMessageImage.imageId, moneyroadImage.id)
-          )
-          /* ----(~mime 을 얻기 위한 이미지 조인 여기까지)---- */
-          .where(inArray(discussionMessageImage.messageId, imageMessageIds))
-          .orderBy(
-            discussionMessageImage.messageId,
-            discussionMessageImage.sortOrder
-          );
-        for (const link of links) {
-          const list = imagesByMessage.get(link.messageId) ?? [];
-          list.push({
-            imageId: link.imageId,
-            url: `/media/discussion-image/${link.imageId}`,
-            /* ----(갤러리 저장용 mime 전달 — RFC 0005 §4-1)---- */
-            mime: link.mime,
-            /* ----(~갤러리 저장용 mime 전달 여기까지)---- */
-          });
-          imagesByMessage.set(link.messageId, list);
-        }
-      }
-
       return {
-        messages: slice.map((m) => {
-          const masked = Boolean(m.deletedAt || m.blindedAt);
-          return {
-            id: m.id,
-            userId: m.userId,
-            userName: m.userName,
-            userImage: m.userImage,
-            // Mask content when soft-deleted OR admin-blinded.
-            content: masked ? null : m.content,
-            type: m.type,
-            // Attachment projections — null unless the message carries that kind
-            // and is not masked.
-            images:
-              m.type === "image" && !masked
-                ? (imagesByMessage.get(m.id) ?? [])
-                : null,
-            file:
-              m.type === "file" && !masked
-                ? {
-                    url: `/media/discussion-file/${m.id}`,
-                    name: m.fileName ?? "",
-                    mime: m.fileMime ?? "application/octet-stream",
-                    size: m.fileSize ?? 0,
-                  }
-                : null,
-            createdAt: m.createdAt.toISOString(),
-            deletedAt: m.deletedAt?.toISOString() ?? null,
-            blindedAt: m.blindedAt?.toISOString() ?? null,
-            blindReason: m.blindReason ?? null,
-          };
-        }),
+        messages: await hydrateMessages(slice),
         nextCursor: hasMore ? (slice[0]?.id ?? null) : null,
+        nextAfter: null,
       };
     }),
+
+  /* ----(앵커 주변 조회 — RFC 0008 §4-3)---- */
+  /**
+   * "내 글·답글" 목록에서 항목을 눌렀을 때 쓴다. 그 메시지가 화면 가운데 오도록
+   * **앵커를 포함한 과거 쪽 + 앵커보다 최신 쪽**을 한 번에 준다.
+   *
+   * 기존 messages 는 과거 방향으로만 커서를 밀 수 있어서, 오래된 메시지를 열려면
+   * 맨 아래부터 수십 번 더 불러와야 했다. 인덱스는 (room_id, id) 를 그대로 탄다.
+   *
+   * 앵커가 그 방에 없으면 NOT_FOUND — 다른 방 메시지 id 로 남의 방 내용을
+   * 들여다볼 수 없게 한다.
+   */
+  messagesAround: publicProcedure
+    .input(
+      z.object({
+        roomId: z.number().int(),
+        anchorId: z.number().int(),
+        // 앵커 위/아래로 각각 이만큼. 총 반환은 최대 limit*2 + 1 근처가 된다.
+        limit: z.number().int().min(1).max(50).default(25),
+      })
+    )
+    .handler(async ({ input }) => {
+      const inRoom = eq(discussionMessage.roomId, input.roomId);
+
+      const [anchor] = await db
+        .select({ id: discussionMessage.id })
+        .from(discussionMessage)
+        .where(and(inRoom, eq(discussionMessage.id, input.anchorId)))
+        .limit(1);
+      if (!anchor) {
+        throw new ORPCError("NOT_FOUND", {
+          message: "해당 메시지를 찾을 수 없습니다.",
+        });
+      }
+
+      const [olderRaw, newerRaw] = await Promise.all([
+        // 앵커 포함 과거 방향
+        selectMessages(
+          and(inRoom, lte(discussionMessage.id, input.anchorId)) as SQL,
+          desc(discussionMessage.id),
+          input.limit + 1
+        ),
+        // 앵커보다 최신
+        selectMessages(
+          and(inRoom, gt(discussionMessage.id, input.anchorId)) as SQL,
+          asc(discussionMessage.id),
+          input.limit + 1
+        ),
+      ]);
+
+      const hasOlder = olderRaw.length > input.limit;
+      const older = (
+        hasOlder ? olderRaw.slice(0, input.limit) : olderRaw
+      ) as RawMessageRow[];
+      older.reverse(); // 오래된 것부터
+
+      const hasNewer = newerRaw.length > input.limit;
+      const newer = (
+        hasNewer ? newerRaw.slice(0, input.limit) : newerRaw
+      ) as RawMessageRow[];
+
+      const slice = [...older, ...newer];
+
+      return {
+        messages: await hydrateMessages(slice),
+        // 위로 더 있으면 이 id 를 messages({ cursor }) 로 넘긴다.
+        nextCursor: hasOlder ? (slice[0]?.id ?? null) : null,
+        // 아래로 더 있으면 이 id 를 messages({ after }) 로 넘긴다.
+        nextAfter: hasNewer ? (slice.at(-1)?.id ?? null) : null,
+        anchorId: input.anchorId,
+      };
+    }),
+  /* ----(~앵커 주변 조회 여기까지)---- */
 
   /**
    * "내가 쓴 글" — distinct rooms the signed-in user has posted a (non-deleted)
@@ -978,55 +1314,47 @@ export const discussionRouter = {
    * "답글" — the signed-in user's own (non-deleted) messages, newest first,
    * each joined with its room for context (room name + stock chip + link).
    */
+  /* ----(내 글·답글 — RFC 0008 §2-2)---- */
+  /**
+   * "내 글" — 내가 **순수하게 올린 글**(`parent_id IS NULL`)만. 답글은 여기 안 나온다.
+   *
+   * 예전 `myRooms`는 "내가 참여한 토론방 목록"을 돌려줬는데, 글 내용이 아니라 방
+   * 카드가 나와 화면 이름("내가 쓴 글")과 어긋났다. 그건 남겨 두되(D12) 화면은
+   * 이걸 쓴다.
+   */
+  myPosts: protectedProcedure
+    .input(
+      z
+        .object({ limit: z.number().int().min(1).max(100).default(50) })
+        .optional()
+    )
+    .handler(async ({ context, input }) =>
+      myMessages({
+        userId: context.session.user.id,
+        limit: input?.limit ?? 50,
+        kind: "post",
+      })
+    ),
+
+  /**
+   * "답글" — 내가 **답글로 단 글**(`parent_id IS NOT NULL`)만.
+   *
+   * 예전에는 조건이 "내 메시지 전부"라 "아 졸려" 같은 혼잣말도 답글로 잡혔다.
+   */
   myReplies: protectedProcedure
     .input(
       z
         .object({ limit: z.number().int().min(1).max(100).default(50) })
         .optional()
     )
-    .handler(async ({ context, input }) => {
-      const userId = context.session.user.id;
-      const limit = input?.limit ?? 50;
-
-      const rows = await db
-        .select({
-          id: discussionMessage.id,
-          roomId: discussionRoom.id,
-          roomName: discussionRoom.name,
-          stockCode: discussionRoom.stockCode,
-          stockName: stockMaster.htsKorIsnm,
-          content: discussionMessage.content,
-          createdAt: discussionMessage.createdAt,
-        })
-        .from(discussionMessage)
-        .innerJoin(
-          discussionRoom,
-          eq(discussionMessage.roomId, discussionRoom.id)
-        )
-        .leftJoin(
-          stockMaster,
-          eq(discussionRoom.stockCode, stockMaster.mkscShrnIscd)
-        )
-        .where(
-          and(
-            eq(discussionMessage.userId, userId),
-            isNull(discussionMessage.deletedAt)
-          )
-        )
-        .orderBy(desc(discussionMessage.id))
-        .limit(limit);
-
-      return rows.map((r) => ({
-        id: r.id,
-        roomId: r.roomId,
-        roomName: r.roomName,
-        stockCode: r.stockCode,
-        stockName: r.stockName,
-        content: r.content,
-        time: relativeTime(r.createdAt),
-        createdAt: r.createdAt.toISOString(),
-      }));
-    }),
+    .handler(async ({ context, input }) =>
+      myMessages({
+        userId: context.session.user.id,
+        limit: input?.limit ?? 50,
+        kind: "reply",
+      })
+    ),
+  /* ----(~내 글·답글 여기까지)---- */
 
   send: protectedProcedure
     .input(
@@ -1053,6 +1381,10 @@ export const discussionRouter = {
               name: z.string().min(1),
             })
             .optional(),
+          /* ----(답글 부모 — RFC 0008)---- */
+          // 있으면 답글, 없으면 글. 부모는 "직전에 롱프레스한 그 메시지"다.
+          parentId: z.number().int().optional(),
+          /* ----(~답글 부모 여기까지)---- */
         })
         .refine(
           (v) =>
@@ -1069,6 +1401,9 @@ export const discussionRouter = {
         content: input.content.trim(),
         imageIds: input.imageIds,
         file: input.file,
+        /* ----(답글 부모 — RFC 0008)---- */
+        parentId: input.parentId,
+        /* ----(~답글 부모 여기까지)---- */
       });
       refreshRealtimeDiscussion("discussion.send");
       return {

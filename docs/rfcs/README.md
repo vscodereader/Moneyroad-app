@@ -24,3 +24,4 @@ RFC에서 합의가 끝나면, 필요 시 그 결정을 ADR로 남긴다.
 | [0003](0003-discussion-room-manage-and-live-counts.md) | 관리자 토론방 편집·삭제 + 카운트 실시간화 | Draft |
 | [0004](0004-discussion-moderation-sse-and-attachments.md) | 토론방 목록 SSE화 · 관리자 모더레이션 · 즐겨찾기/검색 · 첨부파일 | Draft |
 | [0005](0005-attachment-save-and-open.md) | 첨부 저장·열기 (갤러리 저장 · 파일 다운로드 · 시스템 앱으로 열기) | Draft |
+| [0008](0008-discussion-reply-thread.md) | 토론 답글 구조 (부모-자식) + 내 글·답글 분리 | 확정 |

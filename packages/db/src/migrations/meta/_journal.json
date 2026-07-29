@@ -148,6 +148,13 @@
       "when": 1785315035204,
       "tag": "0020_brave_lockheed",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1785315934905,
+      "tag": "0021_classy_omega_red",
+      "breakpoints": true
     }
   ]
 }

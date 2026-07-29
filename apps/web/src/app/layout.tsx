@@ -14,9 +14,9 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-const SITE_TITLE = "머니로드 — 한국 개인투자자를 위한 시그널·뉴스·토론 앱";
+const SITE_TITLE = "머니로드 — 관심 종목부터 목표가 알림까지";
 const SITE_DESCRIPTION =
-  "관심 종목의 시그널·뉴스·토론을 한 화면에서. 기술적·AI·이벤트·커뮤니티 신호를 0~100점으로 종합해 투자 결정을 돕는 머니로드. 지금 App Store와 Google Play에서 다운로드하세요.";
+  "관심 종목의 현재가와 뉴스, 머니로드 요약, 목표가 알림과 종목 토론을 한 흐름으로 확인하세요.";
 
 export const metadata: Metadata = {
   title: SITE_TITLE,

@@ -590,7 +590,9 @@ export async function saveImageToGallery(
   imageId: number,
   mime: string
 ): Promise<{ label: string }> {
-  const permission = await requestMediaLibraryPermissionsAsync();
+  const permission = await requestMediaLibraryPermissionsAsync(false, [
+    "photo",
+  ]);
   if (!permission.granted) {
     throw new Error("사진 저장 권한을 허용해야 갤러리에 저장할 수 있어요.");
   }

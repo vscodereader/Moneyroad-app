@@ -39,9 +39,15 @@ export function MemberListSheet({
     enabled: visible && isAdmin,
   });
   const membersQuery = useQuery(membersOptions);
+  const blockedOptions = orpc.discussion.blockedRoomMembers.queryOptions({
+    input: { roomId },
+    enabled: visible && isAdmin,
+  });
+  const blockedQuery = useQuery(blockedOptions);
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: membersOptions.queryKey });
+    queryClient.invalidateQueries({ queryKey: blockedOptions.queryKey });
     queryClient.invalidateQueries({
       queryKey: orpc.discussion.room.queryOptions({ input: { id: roomId } })
         .queryKey,
@@ -53,6 +59,9 @@ export function MemberListSheet({
   );
   const blockMutation = useMutation(
     orpc.discussion.blockMember.mutationOptions({ onSuccess: invalidate })
+  );
+  const unblockMutation = useMutation(
+    orpc.discussion.unblockMember.mutationOptions({ onSuccess: invalidate })
   );
 
   const closeDuration = () => {
@@ -93,7 +102,36 @@ export function MemberListSheet({
     ]);
   };
 
+  const handleUnblock = () => {
+    const target = actionTarget;
+    if (!target?.blocked) {
+      return;
+    }
+    Alert.alert("차단 해제", `${target.name}님의 차단을 해제하시겠습니까?`, [
+      { text: "취소", style: "cancel" },
+      {
+        text: "확인",
+        onPress: () =>
+          unblockMutation.mutate(
+            { roomId, userId: target.userId },
+            { onSuccess: () => setActionTarget(null) }
+          ),
+      },
+    ]);
+  };
+
   const members = membersQuery.data ?? [];
+  const blockedMembers: RoomMember[] = (blockedQuery.data ?? []).map(
+    (member) => ({
+      userId: member.userId,
+      name: member.name,
+      role: member.role,
+      joinedAt: member.blockedAt,
+      mutedUntil: null,
+      blocked: true,
+    })
+  );
+  const isPending = membersQuery.isPending || blockedQuery.isPending;
 
   return (
     <>
@@ -129,7 +167,7 @@ export function MemberListSheet({
           </Text>
         </View>
 
-        {membersQuery.isPending ? (
+        {isPending ? (
           <View style={{ paddingVertical: 40, alignItems: "center" }}>
             <ActivityIndicator color={t.primary} />
           </View>
@@ -159,20 +197,58 @@ export function MemberListSheet({
                 아직 참여한 멤버가 없습니다.
               </Text>
             ) : null}
+            {blockedMembers.length > 0 ? (
+              <>
+                <View
+                  style={{
+                    height: 1,
+                    backgroundColor: t.border,
+                    marginHorizontal: 20,
+                    marginTop: 8,
+                  }}
+                />
+                <Text
+                  style={{
+                    color: t.fgMuted,
+                    fontSize: 13,
+                    fontWeight: "700",
+                    paddingHorizontal: 20,
+                    paddingBottom: 6,
+                    paddingTop: 18,
+                  }}
+                >
+                  차단된 사용자 {blockedMembers.length}명
+                </Text>
+                {blockedMembers.map((member) => (
+                  <MemberRow
+                    key={member.userId}
+                    member={member}
+                    onLongPress={setActionTarget}
+                    t={t}
+                  />
+                ))}
+              </>
+            ) : null}
           </ScrollView>
         )}
       </MrBottomSheet>
 
       <MemberActionSheet
+        blocked={actionTarget?.blocked ?? false}
         memberName={actionTarget?.name ?? ""}
         onBlock={() => openDuration("block")}
         onClose={() => setActionTarget(null)}
         onMute={() => openDuration("mute")}
+        onUnblock={handleUnblock}
         t={t}
         visible={actionTarget !== null}
       />
       <MemberDurationSheet
-        isPending={muteMutation.isPending || blockMutation.isPending}
+        isPending={
+          muteMutation.isPending ||
+          blockMutation.isPending ||
+          unblockMutation.isPending
+        }
         memberName={durationTarget?.name ?? ""}
         mode={durationMode ?? "mute"}
         onClose={closeDuration}

@@ -4,6 +4,7 @@ import { Storage } from "@google-cloud/storage";
 import { auth } from "@moneyroad-app/auth";
 import { db } from "@moneyroad-app/db";
 import {
+  discussionFileAttachment,
   discussionMessage,
   discussionMessageImage,
   discussionRoom,
@@ -17,8 +18,15 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { fileTypeFromBuffer } from "file-type";
 import { Jimp, JimpMime } from "jimp";
 
+import {
+  isWithinImageDimensionLimits,
+  readImageDimensions,
+} from "../lib/image-dimensions";
+
 const MB = 1024 * 1024;
 const IMAGE_MAX_BYTES = 10 * MB;
+const IMAGE_MAX_EDGE = 8192;
+const IMAGE_MAX_PIXELS = 25_000_000;
 const FILE_MAX_BYTES = 20 * MB;
 // Object keys: discussion/images/{uuid}, discussion/files/{uuid}/{safeName}.
 // Objects uploaded before the CONTEXT.md 용어 정정 still sit under the previous
@@ -166,6 +174,28 @@ function outputMimeFor(
   }
 }
 
+function validateImageDimensions(
+  input: Buffer,
+  mime: string,
+  reply: FastifyReply
+): boolean {
+  const dimensions = readImageDimensions(input, mime);
+  if (!dimensions) {
+    reply.status(415).send({ error: "Unreadable image", code: "BAD_IMAGE" });
+    return false;
+  }
+  if (
+    !isWithinImageDimensionLimits(dimensions, IMAGE_MAX_EDGE, IMAGE_MAX_PIXELS)
+  ) {
+    reply.status(413).send({
+      error: "Image dimensions too large",
+      code: "IMAGE_DIMENSIONS_TOO_LARGE",
+    });
+    return false;
+  }
+  return true;
+}
+
 const PATH_SEP_RE = /[/\\]/;
 const UNSAFE_CHARS_RE = /[^\w.-]+/g;
 const LEADING_DOTS_RE = /^\.+/;
@@ -291,6 +321,13 @@ export function registerDiscussionMediaPlugin(app: FastifyInstance) {
         .send({ error: "Unsupported image type", code: "BAD_IMAGE_TYPE" });
     }
 
+    // Read dimensions from the format header before Jimp allocates the decoded
+    // bitmap. The compressed upload may be under 10MB while expanding to
+    // hundreds of megabytes in memory.
+    if (!validateImageDimensions(input, detected.mime, reply)) {
+      return;
+    }
+
     const outMime = outputMimeFor(detected.mime);
     let output: Buffer;
     let width: number;
@@ -323,6 +360,7 @@ export function registerDiscussionMediaPlugin(app: FastifyInstance) {
         objectKey: key,
         mime: outMime,
         byteSize: output.length,
+        originalByteSize: input.length,
         width,
         height,
         uploaderId: userId,
@@ -335,7 +373,7 @@ export function registerDiscussionMediaPlugin(app: FastifyInstance) {
   });
 
   // POST /upload/discussion-file — one file (allowlisted), stored in the
-  // private bucket verbatim. -> { bucket, key, mime, size, name }
+  // private bucket verbatim. -> { fileAttachmentId }
   app.post("/upload/discussion-file", async (request, reply) => {
     const userId = await requireUserId(request, reply);
     if (!userId) {
@@ -392,13 +430,21 @@ export function registerDiscussionMediaPlugin(app: FastifyInstance) {
         resumable: false,
       });
 
-    return reply.send({
-      bucket,
-      key,
-      mime,
-      size: input.length,
-      name: originalName,
-    });
+    const [attachment] = await db
+      .insert(discussionFileAttachment)
+      .values({
+        bucket,
+        objectKey: key,
+        mime,
+        byteSize: input.length,
+        fileName: originalName,
+        uploaderId: userId,
+      })
+      .returning({ id: discussionFileAttachment.id });
+    if (!attachment) {
+      throw new Error("파일 첨부 정보 저장 실패");
+    }
+    return reply.send({ fileAttachmentId: attachment.id });
   });
 
   // GET /media/discussion-image/:imageId — proxy an image's bytes after

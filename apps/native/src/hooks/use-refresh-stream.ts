@@ -97,6 +97,9 @@ export function useRefreshStream<E extends string>(
       source = new EventSource<E>(url, { pollingInterval: 0 });
       source.addEventListener("open", () => {
         backoff = RECONNECT_BASE_MS;
+        // SSE carries only refresh pings and has no replay cursor. Refetch once
+        // after every successful connection to recover events missed offline.
+        invalidate();
       });
       source.addEventListener(channel, () => invalidate());
       source.addEventListener("error", () => {
@@ -120,6 +123,9 @@ export function useRefreshStream<E extends string>(
         reconnectTimer = null;
       }
       backoff = RECONNECT_BASE_MS;
+      // Refresh immediately on foreground; the subsequent open invalidation is
+      // coalesced by INVALIDATE_DEBOUNCE_MS.
+      invalidate();
       connect();
     };
 

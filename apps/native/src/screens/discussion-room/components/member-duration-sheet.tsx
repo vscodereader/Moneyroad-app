@@ -1,15 +1,13 @@
 import { useState } from "react";
 import {
   ActivityIndicator,
-  Modal,
   Pressable,
-  StyleSheet,
   Text,
   TextInput,
   View,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { MrBottomSheet } from "@/components/mr-bottom-sheet";
 import { SegmentedControl } from "@/components/ui";
 import type { MrTokens } from "@/utils/theme";
 
@@ -67,7 +65,6 @@ export function MemberDurationSheet({
   onConfirm: (value: number, unit: DurationUnit) => void;
   t: MrTokens;
 }) {
-  const insets = useSafeAreaInsets();
   const [input, setInput] = useState("");
   const [unit, setUnit] = useState<DurationUnit>("hour");
 
@@ -90,180 +87,145 @@ export function MemberDurationSheet({
   };
 
   return (
-    <Modal
-      animationType="slide"
-      onRequestClose={onClose}
+    <MrBottomSheet
+      grabberPaddingBottom={4}
+      grabberPaddingTop={10}
+      onClose={onClose}
       onShow={reset}
-      transparent
+      paddingTop={0}
+      t={t}
       visible={visible}
     >
-      <View style={styles.root}>
-        <Pressable onPress={onClose} style={styles.backdrop} />
-        <View
+      <View style={{ paddingHorizontal: 20, paddingTop: 8 }}>
+        <Text
           style={{
-            backgroundColor: t.bg,
-            borderTopLeftRadius: 24,
-            borderTopRightRadius: 24,
-            paddingBottom: insets.bottom + 12,
+            color: t.fgStrong,
+            fontSize: 20,
+            fontWeight: "800",
+            letterSpacing: -0.4,
           }}
         >
-          <View
-            style={{ alignItems: "center", paddingBottom: 4, paddingTop: 10 }}
-          >
-            <View
-              style={{
-                backgroundColor: t.borderStrong,
-                borderRadius: 999,
-                height: 5,
-                width: 40,
-              }}
-            />
-          </View>
-
-          <View style={{ paddingHorizontal: 20, paddingTop: 8 }}>
-            <Text
-              style={{
-                color: t.fgStrong,
-                fontSize: 20,
-                fontWeight: "800",
-                letterSpacing: -0.4,
-              }}
-            >
-              {copy.title}
-            </Text>
-            <Text
-              style={{
-                color: t.fgMuted,
-                fontSize: 13,
-                fontWeight: "600",
-                marginTop: 6,
-              }}
-            >
-              {memberName}님 · {copy.notice}
-            </Text>
-          </View>
-
-          <View
-            style={{
-              alignItems: "center",
-              flexDirection: "row",
-              gap: 10,
-              paddingHorizontal: 20,
-              paddingTop: 16,
-            }}
-          >
-            <View
-              style={{
-                alignItems: "center",
-                backgroundColor: t.bgSubtle,
-                borderRadius: 10,
-                flex: 1,
-                flexDirection: "row",
-                height: 48,
-                paddingHorizontal: 14,
-              }}
-            >
-              <TextInput
-                autoFocus
-                keyboardType="number-pad"
-                onChangeText={setInput}
-                placeholder="기간 입력"
-                placeholderTextColor={t.fgSubtle}
-                style={{
-                  color: t.fgStrong,
-                  flex: 1,
-                  fontSize: 16,
-                  fontWeight: "700",
-                  padding: 0,
-                }}
-                value={input}
-              />
-            </View>
-            <SegmentedControl
-              onChange={setUnit}
-              options={UNIT_OPTIONS}
-              value={unit}
-            />
-          </View>
-
-          {value > 0 && !withinCap ? (
-            <Text
-              style={{
-                color: t.down,
-                fontSize: 12,
-                fontWeight: "600",
-                paddingHorizontal: 20,
-                paddingTop: 8,
-              }}
-            >
-              {copy.notice}
-            </Text>
-          ) : null}
-
-          <View
-            style={{
-              flexDirection: "row",
-              gap: 10,
-              paddingHorizontal: 20,
-              paddingTop: 16,
-            }}
-          >
-            <Pressable
-              onPress={onClose}
-              style={{
-                flex: 1,
-                height: 48,
-                borderRadius: 12,
-                backgroundColor: t.bgSubtle,
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <Text
-                style={{ fontSize: 15, fontWeight: "700", color: t.fgStrong }}
-              >
-                취소
-              </Text>
-            </Pressable>
-            <Pressable
-              disabled={!canConfirm}
-              onPress={handleConfirm}
-              style={{
-                flex: 1,
-                height: 48,
-                borderRadius: 12,
-                backgroundColor: canConfirm ? t.primary : t.bgMuted,
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              {isPending ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text
-                  style={{
-                    fontSize: 15,
-                    fontWeight: "800",
-                    color: canConfirm ? "#fff" : t.fgSubtle,
-                  }}
-                >
-                  {copy.confirm}
-                </Text>
-              )}
-            </Pressable>
-          </View>
-        </View>
+          {copy.title}
+        </Text>
+        <Text
+          style={{
+            color: t.fgMuted,
+            fontSize: 13,
+            fontWeight: "600",
+            marginTop: 6,
+          }}
+        >
+          {memberName}님 · {copy.notice}
+        </Text>
       </View>
-    </Modal>
+
+      <View
+        style={{
+          alignItems: "center",
+          flexDirection: "row",
+          gap: 10,
+          paddingHorizontal: 20,
+          paddingTop: 16,
+        }}
+      >
+        <View
+          style={{
+            alignItems: "center",
+            backgroundColor: t.bgSubtle,
+            borderRadius: 10,
+            flex: 1,
+            flexDirection: "row",
+            height: 48,
+            paddingHorizontal: 14,
+          }}
+        >
+          <TextInput
+            autoFocus
+            keyboardType="number-pad"
+            onChangeText={setInput}
+            placeholder="기간 입력"
+            placeholderTextColor={t.fgSubtle}
+            style={{
+              color: t.fgStrong,
+              flex: 1,
+              fontSize: 16,
+              fontWeight: "700",
+              padding: 0,
+            }}
+            value={input}
+          />
+        </View>
+        <SegmentedControl
+          onChange={setUnit}
+          options={UNIT_OPTIONS}
+          value={unit}
+        />
+      </View>
+
+      {value > 0 && !withinCap ? (
+        <Text
+          style={{
+            color: t.down,
+            fontSize: 12,
+            fontWeight: "600",
+            paddingHorizontal: 20,
+            paddingTop: 8,
+          }}
+        >
+          {copy.notice}
+        </Text>
+      ) : null}
+
+      <View
+        style={{
+          flexDirection: "row",
+          gap: 10,
+          paddingHorizontal: 20,
+          paddingTop: 16,
+        }}
+      >
+        <Pressable
+          onPress={onClose}
+          style={{
+            flex: 1,
+            height: 48,
+            borderRadius: 12,
+            backgroundColor: t.bgSubtle,
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <Text style={{ fontSize: 15, fontWeight: "700", color: t.fgStrong }}>
+            취소
+          </Text>
+        </Pressable>
+        <Pressable
+          disabled={!canConfirm}
+          onPress={handleConfirm}
+          style={{
+            flex: 1,
+            height: 48,
+            borderRadius: 12,
+            backgroundColor: canConfirm ? t.primary : t.bgMuted,
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          {isPending ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text
+              style={{
+                fontSize: 15,
+                fontWeight: "800",
+                color: canConfirm ? "#fff" : t.fgSubtle,
+              }}
+            >
+              {copy.confirm}
+            </Text>
+          )}
+        </Pressable>
+      </View>
+    </MrBottomSheet>
   );
 }
-
-const styles = StyleSheet.create({
-  backdrop: {
-    backgroundColor: "rgba(0,0,0,0.4)",
-    flex: 1,
-  },
-  root: {
-    flex: 1,
-  },
-});

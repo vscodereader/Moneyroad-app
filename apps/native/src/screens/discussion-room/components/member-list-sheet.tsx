@@ -1,17 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import {
-  ActivityIndicator,
-  Alert,
-  Modal,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { ActivityIndicator, Alert, ScrollView, Text, View } from "react-native";
 
+import { MrBottomSheet } from "@/components/mr-bottom-sheet";
 import { orpc } from "@/utils/orpc";
 import type { MrTokens } from "@/utils/theme";
 import { MemberActionSheet } from "./member-action-sheet";
@@ -37,7 +28,6 @@ export function MemberListSheet({
   onClose: () => void;
   t: MrTokens;
 }) {
-  const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
 
   const [actionTarget, setActionTarget] = useState<RoomMember | null>(null);
@@ -107,94 +97,71 @@ export function MemberListSheet({
 
   return (
     <>
-      <Modal
-        animationType="slide"
-        onRequestClose={onClose}
-        transparent
+      <MrBottomSheet
+        grabberPaddingBottom={4}
+        grabberPaddingTop={10}
+        maxHeight="88%"
+        onClose={onClose}
+        paddingTop={0}
+        t={t}
         visible={visible}
       >
-        <View style={styles.root}>
-          <Pressable onPress={onClose} style={styles.backdrop} />
-          <View
+        <View style={{ paddingHorizontal: 20, paddingTop: 8 }}>
+          <Text
             style={{
-              backgroundColor: t.bg,
-              borderTopLeftRadius: 24,
-              borderTopRightRadius: 24,
-              maxHeight: "88%",
-              paddingBottom: insets.bottom + 12,
+              color: t.fgStrong,
+              fontSize: 20,
+              fontWeight: "800",
+              letterSpacing: -0.4,
             }}
           >
-            <View
-              style={{ alignItems: "center", paddingBottom: 4, paddingTop: 10 }}
-            >
-              <View
-                style={{
-                  backgroundColor: t.borderStrong,
-                  borderRadius: 999,
-                  height: 5,
-                  width: 40,
-                }}
-              />
-            </View>
-
-            <View style={{ paddingHorizontal: 20, paddingTop: 8 }}>
-              <Text
-                style={{
-                  color: t.fgStrong,
-                  fontSize: 20,
-                  fontWeight: "800",
-                  letterSpacing: -0.4,
-                }}
-              >
-                멤버 {members.length}명
-              </Text>
-              <Text
-                style={{
-                  color: t.fgMuted,
-                  fontSize: 13,
-                  fontWeight: "600",
-                  marginTop: 6,
-                }}
-              >
-                멤버를 길게 눌러 뮤트하거나 차단할 수 있어요.
-              </Text>
-            </View>
-
-            {membersQuery.isPending ? (
-              <View style={{ paddingVertical: 40, alignItems: "center" }}>
-                <ActivityIndicator color={t.primary} />
-              </View>
-            ) : (
-              <ScrollView
-                showsVerticalScrollIndicator={false}
-                style={{ marginTop: 8 }}
-              >
-                {members.map((member) => (
-                  <MemberRow
-                    key={member.userId}
-                    member={member}
-                    onLongPress={setActionTarget}
-                    t={t}
-                  />
-                ))}
-                {members.length === 0 ? (
-                  <Text
-                    style={{
-                      color: t.fgSubtle,
-                      fontSize: 13,
-                      paddingHorizontal: 20,
-                      paddingVertical: 24,
-                      textAlign: "center",
-                    }}
-                  >
-                    아직 참여한 멤버가 없습니다.
-                  </Text>
-                ) : null}
-              </ScrollView>
-            )}
-          </View>
+            멤버 {members.length}명
+          </Text>
+          <Text
+            style={{
+              color: t.fgMuted,
+              fontSize: 13,
+              fontWeight: "600",
+              marginTop: 6,
+            }}
+          >
+            멤버를 길게 눌러 뮤트하거나 차단할 수 있어요.
+          </Text>
         </View>
-      </Modal>
+
+        {membersQuery.isPending ? (
+          <View style={{ paddingVertical: 40, alignItems: "center" }}>
+            <ActivityIndicator color={t.primary} />
+          </View>
+        ) : (
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            style={{ marginTop: 8 }}
+          >
+            {members.map((member) => (
+              <MemberRow
+                key={member.userId}
+                member={member}
+                onLongPress={setActionTarget}
+                t={t}
+              />
+            ))}
+            {members.length === 0 ? (
+              <Text
+                style={{
+                  color: t.fgSubtle,
+                  fontSize: 13,
+                  paddingHorizontal: 20,
+                  paddingVertical: 24,
+                  textAlign: "center",
+                }}
+              >
+                아직 참여한 멤버가 없습니다.
+              </Text>
+            ) : null}
+          </ScrollView>
+        )}
+      </MrBottomSheet>
 
       <MemberActionSheet
         memberName={actionTarget?.name ?? ""}
@@ -216,13 +183,3 @@ export function MemberListSheet({
     </>
   );
 }
-
-const styles = StyleSheet.create({
-  backdrop: {
-    backgroundColor: "rgba(0,0,0,0.4)",
-    flex: 1,
-  },
-  root: {
-    flex: 1,
-  },
-});

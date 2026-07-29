@@ -28,11 +28,14 @@ export function MrBottomSheet({
   grabberPaddingTop = 2,
   paddingTop = 8,
   maxHeight,
+  onShow,
 }: {
   visible: boolean;
   onClose: () => void;
   t: MrTokens;
   children: ReactNode;
+  /** 열릴 때 내부 상태를 되돌려야 하는 폼 시트만 준다. */
+  onShow?: () => void;
   /** 그랩바 아래 여백. 시트마다 달라 그대로 넘겨받는다. */
   grabberPaddingBottom?: number;
   /** 그랩바 위 여백. */
@@ -48,6 +51,7 @@ export function MrBottomSheet({
     <Modal
       animationType="slide"
       onRequestClose={onClose}
+      onShow={onShow}
       transparent
       visible={visible}
     >

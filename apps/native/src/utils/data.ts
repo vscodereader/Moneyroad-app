@@ -48,9 +48,15 @@ export interface Signal {
 
 export interface NewsItem {
   ai: string;
+  /** True only when `ai` is a real AI-generated summary (not a description fallback). */
+  aiGenerated?: boolean;
   category: string;
   code: string;
+  /** 머니로드가 직접 쓴 독점 기사(sourceType === "manual"). 칩 문구가 달라진다. */
+  exclusive?: boolean;
   id: string;
+  /** 실제 대표 이미지(GCS 재호스팅). 없으면 UI에서 번들 기본 이미지 폴백. */
+  imageUrl?: string | null;
   sentiment: "up" | "down";
   source: string;
   /** Stock name resolved from the API (real codes not in the dummy `stocks`). */

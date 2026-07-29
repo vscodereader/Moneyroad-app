@@ -13,7 +13,12 @@ import {
 } from "react-native";
 
 import { Icon } from "@/components/icons";
-import { BackButton, MrHeader, MrScreen } from "@/components/ui";
+import {
+  BackButton,
+  MrHeader,
+  MrScreen,
+  StockResourceLogo,
+} from "@/components/ui";
 import { useLiveQuote } from "@/hooks/use-live-quotes";
 import { useMrTheme } from "@/hooks/use-mr-theme";
 import type { LiveQuote } from "@/stores/quotes-store";
@@ -24,27 +29,11 @@ import type { MrTokens } from "@/utils/theme";
 
 interface StockEntry {
   code: string;
+  // ----(추가: 종목 아이콘 URL)----
+  iconUrl?: null | string;
   market: string;
   name: string;
-}
-
-function Avatar({ name, t }: { name: string; t: MrTokens }) {
-  return (
-    <View
-      style={{
-        width: 36,
-        height: 36,
-        borderRadius: 10,
-        backgroundColor: t.bgSubtle,
-        alignItems: "center",
-        justifyContent: "center",
-      }}
-    >
-      <Text style={{ fontSize: 15, fontWeight: "800", color: t.fgMuted }}>
-        {name.charAt(0)}
-      </Text>
-    </View>
-  );
+  // ----(추가 끝)----
 }
 
 function MarketBadge({ market, t }: { market: string; t: MrTokens }) {
@@ -91,7 +80,9 @@ function EntryRow({
         borderBottomColor: t.border,
       })}
     >
-      <Avatar name={entry.name} t={t} />
+      {/* ----(변경: 이름 이니셜 Avatar → 실제 종목 아이콘 로고)---- */}
+      <StockResourceLogo iconUrl={entry.iconUrl} name={entry.name} />
+      {/* ----(변경 끝)---- */}
       <View style={{ flex: 1, minWidth: 0 }}>
         <Text style={{ fontSize: 15, fontWeight: "700", color: t.fgStrong }}>
           {entry.name}

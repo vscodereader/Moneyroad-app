@@ -10,6 +10,8 @@ import { evlog, useLogger } from "evlog/fastify";
 import Fastify from "fastify";
 import { registerAiPlugin } from "./plugins/ai";
 import { registerAuthPlugin } from "./plugins/auth";
+import { registerDiscussionMediaPlugin } from "./plugins/discussion-media";
+import { registerNewsMediaPlugin } from "./plugins/news-media";
 import { registerOrpcPlugin } from "./plugins/orpc";
 import { registerStreamTokenPlugin } from "./plugins/stream-token";
 
@@ -48,6 +50,8 @@ export function buildServer() {
   app.register(registerAuthPlugin);
   app.register(registerAiPlugin);
   app.register(registerStreamTokenPlugin);
+  app.register(registerDiscussionMediaPlugin);
+  app.register(registerNewsMediaPlugin);
 
   app.get("/", () => "OK API");
 

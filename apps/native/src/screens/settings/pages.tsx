@@ -591,36 +591,90 @@ export function DisplaySettings() {
 }
 
 // ── 6. 내가 쓴 글·답글 ────────────────────────────────────────
-// 토론방은 관리자가 생성하므로 사용자의 "글"은 본인이 참여(메시지 작성)한 토론방을,
-// "답글"은 본인이 작성한 개별 메시지를 의미한다. 둘 다 실데이터(discussion).
+/* ----(글/답글 정의 변경 — RFC 0008 §2-2)---- */
+// 예전에는 "글" = 내가 참여한 토론방 목록, "답글" = 내 메시지 전부였다. 그래서
+// "아 졸려" 같은 혼잣말도 답글로 잡히고, 글 탭에는 글 내용이 아니라 방 카드가
+// 떴다. 이제 parent_id 로 가른다 — 글은 parent 없는 내 메시지, 답글은 parent 가
+// 있는 내 메시지다.
+//
+// 행 모양은 my_chat_collect.jpg 를 따른다:
+//   내용 [답글수]
+//   토론방이름 ｜ 2026.07.28      (회색)
+// 누르면 그 토론방의 해당 메시지 위치로 이동한다(RFC 0008 §4-8).
+
+type MyMessageRow = {
+  id: number;
+  roomId: number;
+  roomName: string;
+  stockCode: string | null;
+  stockName: string | null;
+  content: string;
+  type: "text" | "image" | "file";
+  fileName: string | null;
+  replyCount: number;
+  date: string;
+};
+
+// 첨부 메시지는 본문이 비어 있을 수 있다(RFC 0008 D8).
+function myRowPreview(row: MyMessageRow): string {
+  if (row.type === "image") {
+    return "사진";
+  }
+  if (row.type === "file") {
+    return row.fileName ? `파일 · ${row.fileName}` : "파일";
+  }
+  return row.content;
+}
+
+function MyMessageItem({ row, t }: { row: MyMessageRow; t: MrTokens }) {
+  const stockLabel = row.stockName ?? row.stockCode;
+  return (
+    <Pressable
+      onPress={() => nav.openDiscussionRoom(row.roomId, row.id)}
+      style={{
+        paddingVertical: 14,
+        paddingHorizontal: 16,
+        backgroundColor: t.bg,
+        borderBottomWidth: 1,
+        borderBottomColor: t.border,
+      }}
+    >
+      <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 4 }}>
+        <Text
+          numberOfLines={2}
+          style={{
+            flexShrink: 1,
+            fontSize: 15,
+            color: t.fgStrong,
+            lineHeight: 21,
+          }}
+        >
+          {myRowPreview(row)}
+        </Text>
+        {row.replyCount > 0 ? (
+          <Text style={{ fontSize: 14, color: t.fgSubtle, lineHeight: 21 }}>
+            [{row.replyCount}]
+          </Text>
+        ) : null}
+      </View>
+      <Text style={{ fontSize: 12, color: t.fgSubtle, marginTop: 6 }}>
+        {stockLabel ? `${row.roomName} · ${stockLabel}` : row.roomName}
+        {"  \uFF5C  "}
+        {row.date}
+      </Text>
+    </Pressable>
+  );
+}
+
 export function MyPosts() {
   const { t } = useMrTheme();
   const [tab, setTab] = useState<"posts" | "replies">("posts");
-  const roomsQuery = useQuery(orpc.discussion.myRooms.queryOptions());
+  const postsQuery = useQuery(orpc.discussion.myPosts.queryOptions());
   const repliesQuery = useQuery(orpc.discussion.myReplies.queryOptions());
-  const myRooms = roomsQuery.data ?? [];
+  const myPosts = postsQuery.data ?? [];
   const myReplies = repliesQuery.data ?? [];
-  const activeQuery = tab === "posts" ? roomsQuery : repliesQuery;
-
-  const stockChip = (name: string | null) => {
-    if (!name) {
-      return null;
-    }
-    return (
-      <View
-        style={{
-          paddingHorizontal: 6,
-          paddingVertical: 2,
-          backgroundColor: t.bgSubtle,
-          borderRadius: 4,
-        }}
-      >
-        <Text style={{ fontSize: 10, fontWeight: "700", color: t.fgMuted }}>
-          {name}
-        </Text>
-      </View>
-    );
-  };
+  const activeQuery = tab === "posts" ? postsQuery : repliesQuery;
+  const rows = tab === "posts" ? myPosts : myReplies;
 
   const tabChip = (key: "posts" | "replies", label: string) => {
     const active = tab === key;
@@ -653,8 +707,8 @@ export function MyPosts() {
 
   const emptyText =
     tab === "posts"
-      ? "참여한 토론방이 없어요.\n관심 종목 토론방에 의견을 남겨보세요."
-      : "작성한 답글이 없어요.\n토론방에서 첫 의견을 남겨보세요.";
+      ? "작성한 글이 없어요.\n관심 종목 토론방에 의견을 남겨보세요."
+      : "작성한 답글이 없어요.\n메시지를 길게 눌러 답글을 달 수 있어요.";
 
   return (
     <SettingsScreen title="내가 쓴 글·답글">
@@ -666,7 +720,7 @@ export function MyPosts() {
           paddingVertical: 10,
         }}
       >
-        {tabChip("posts", `내 글 ${myRooms.length}`)}
+        {tabChip("posts", `내 글 ${myPosts.length}`)}
         {tabChip("replies", `답글 ${myReplies.length}`)}
       </View>
 
@@ -676,8 +730,7 @@ export function MyPosts() {
         </View>
       ) : null}
 
-      {activeQuery.isSuccess &&
-      (tab === "posts" ? myRooms.length === 0 : myReplies.length === 0) ? (
+      {activeQuery.isSuccess && rows.length === 0 ? (
         <View
           style={{
             paddingVertical: 48,
@@ -700,125 +753,14 @@ export function MyPosts() {
         </View>
       ) : null}
 
-      {tab === "posts"
-        ? myRooms.map((p) => (
-            <Pressable
-              key={p.id}
-              onPress={() => nav.openDiscussionRoom(p.id)}
-              style={{
-                paddingVertical: 14,
-                paddingHorizontal: 16,
-                backgroundColor: t.bg,
-                borderBottomWidth: 1,
-                borderBottomColor: t.border,
-              }}
-            >
-              <View
-                style={{ flexDirection: "row", gap: 6, alignItems: "center" }}
-              >
-                {stockChip(p.stockName ?? p.stockCode)}
-                <Text style={{ fontSize: 11, color: t.fgSubtle }}>
-                  {p.time}
-                </Text>
-              </View>
-              <Text
-                style={{
-                  fontSize: 14,
-                  fontWeight: "700",
-                  color: t.fgStrong,
-                  marginTop: 6,
-                  lineHeight: 20,
-                }}
-              >
-                {p.name}
-              </Text>
-              <View style={{ flexDirection: "row", gap: 14, marginTop: 8 }}>
-                <View
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    gap: 3,
-                  }}
-                >
-                  <Icon.thumbsUp color={t.fgMuted} size={13} />
-                  <Text
-                    style={{
-                      fontSize: 12,
-                      fontWeight: "600",
-                      color: t.fgMuted,
-                    }}
-                  >
-                    {p.likesCount}
-                  </Text>
-                </View>
-                <View
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    gap: 3,
-                  }}
-                >
-                  <Icon.reply color={t.fgMuted} size={13} />
-                  <Text
-                    style={{
-                      fontSize: 12,
-                      fontWeight: "600",
-                      color: t.fgMuted,
-                    }}
-                  >
-                    {p.repliesCount}
-                  </Text>
-                </View>
-              </View>
-            </Pressable>
-          ))
-        : myReplies.map((r) => (
-            <Pressable
-              key={r.id}
-              onPress={() => nav.openDiscussionRoom(r.roomId)}
-              style={{
-                paddingVertical: 14,
-                paddingHorizontal: 16,
-                backgroundColor: t.bg,
-                borderBottomWidth: 1,
-                borderBottomColor: t.border,
-              }}
-            >
-              <View
-                style={{ flexDirection: "row", gap: 6, alignItems: "center" }}
-              >
-                {stockChip(r.stockName ?? r.stockCode)}
-                <Text style={{ fontSize: 11, color: t.fgSubtle }}>
-                  {r.time}
-                </Text>
-              </View>
-              <Text
-                style={{
-                  fontSize: 12,
-                  fontWeight: "700",
-                  color: t.fgMuted,
-                  marginTop: 6,
-                  lineHeight: 18,
-                }}
-              >
-                ↳ {r.roomName}
-              </Text>
-              <Text
-                style={{
-                  fontSize: 13,
-                  color: t.fgStrong,
-                  marginTop: 4,
-                  lineHeight: 20,
-                }}
-              >
-                {r.content}
-              </Text>
-            </Pressable>
-          ))}
+      {rows.map((row) => (
+        <MyMessageItem key={row.id} row={row} t={t} />
+      ))}
       <View style={{ height: 16 }} />
     </SettingsScreen>
   );
 }
+/* ----(~글/답글 정의 변경 여기까지)---- */
 
 // ── 7. 공유 및 친구 초대 ──────────────────────────────────────
 export function Invite() {

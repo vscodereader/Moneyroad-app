@@ -1,7 +1,7 @@
-import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Pressable, Text, View } from "react-native";
 
 import { Icon } from "@/components/icons";
+import { MrBottomSheet } from "@/components/mr-bottom-sheet";
 import type { MrTokens } from "@/utils/theme";
 
 // Composer의 [+] 버튼이 여는 첨부 메뉴 (docs/rfcs/0004 기능5).
@@ -20,98 +20,59 @@ export function AttachMenu({
   onPickPhotos: () => void;
   t: MrTokens;
 }) {
-  const insets = useSafeAreaInsets();
-
   return (
-    <Modal
-      animationType="slide"
-      onRequestClose={onClose}
-      transparent
+    // 그랩바 아래 여백만 6 으로 다르다 — 다른 시트는 10 이다. 의도된 차이는
+    // 아니지만 지금 맞추면 이 메뉴의 모습이 바뀌므로 그대로 둔다.
+    <MrBottomSheet
+      grabberPaddingBottom={6}
+      onClose={onClose}
+      t={t}
       visible={visible}
     >
-      <View style={styles.root}>
-        <Pressable onPress={onClose} style={styles.backdrop} />
-        <View
-          style={{
-            backgroundColor: t.bg,
-            borderTopLeftRadius: 24,
-            borderTopRightRadius: 24,
-            paddingBottom: insets.bottom + 12,
-            paddingTop: 8,
-          }}
-        >
-          <View
-            style={{ alignItems: "center", paddingBottom: 6, paddingTop: 2 }}
-          >
-            <View
-              style={{
-                backgroundColor: t.borderStrong,
-                borderRadius: 999,
-                height: 5,
-                width: 40,
-              }}
-            />
-          </View>
-          <Text
-            style={{
-              fontSize: 12,
-              fontWeight: "800",
-              color: t.fgSubtle,
-              letterSpacing: 0.3,
-              paddingHorizontal: 20,
-              paddingTop: 8,
-              paddingBottom: 4,
-            }}
-          >
-            파일
-          </Text>
-          <Pressable
-            onPress={onPickFile}
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              gap: 12,
-              paddingHorizontal: 20,
-              paddingVertical: 16,
-            }}
-          >
-            <Icon.file color={t.fgStrong} size={20} />
-            <Text
-              style={{ fontSize: 16, fontWeight: "700", color: t.fgStrong }}
-            >
-              파일에서 선택
-            </Text>
-          </Pressable>
-          <View style={{ height: 1, backgroundColor: t.border }} />
-          <Pressable
-            onPress={onPickPhotos}
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              gap: 12,
-              paddingHorizontal: 20,
-              paddingVertical: 16,
-            }}
-          >
-            <Icon.image color={t.fgStrong} size={20} />
-            <Text
-              style={{ fontSize: 16, fontWeight: "700", color: t.fgStrong }}
-            >
-              앨범에서 선택
-            </Text>
-          </Pressable>
-        </View>
-      </View>
-    </Modal>
+      <Text
+        style={{
+          fontSize: 12,
+          fontWeight: "800",
+          color: t.fgSubtle,
+          letterSpacing: 0.3,
+          paddingHorizontal: 20,
+          paddingTop: 8,
+          paddingBottom: 4,
+        }}
+      >
+        파일
+      </Text>
+      <Pressable
+        onPress={onPickFile}
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 12,
+          paddingHorizontal: 20,
+          paddingVertical: 16,
+        }}
+      >
+        <Icon.file color={t.fgStrong} size={20} />
+        <Text style={{ fontSize: 16, fontWeight: "700", color: t.fgStrong }}>
+          파일에서 선택
+        </Text>
+      </Pressable>
+      <View style={{ height: 1, backgroundColor: t.border }} />
+      <Pressable
+        onPress={onPickPhotos}
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 12,
+          paddingHorizontal: 20,
+          paddingVertical: 16,
+        }}
+      >
+        <Icon.image color={t.fgStrong} size={20} />
+        <Text style={{ fontSize: 16, fontWeight: "700", color: t.fgStrong }}>
+          앨범에서 선택
+        </Text>
+      </Pressable>
+    </MrBottomSheet>
   );
 }
-
-const styles = StyleSheet.create({
-  backdrop: {
-    backgroundColor: "rgba(0,0,0,0.4)",
-    flex: 1,
-  },
-  root: {
-    flex: 1,
-  },
-});

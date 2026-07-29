@@ -8,6 +8,7 @@ import { registerInternalPlugin } from "./plugins/internal";
 import { registerNewsPlugin } from "./plugins/news";
 import { registerQuotesPlugin } from "./plugins/quotes";
 import { registerSchedulerPlugin } from "./plugins/scheduler";
+import { registerSignalPlugin } from "./plugins/signal";
 
 initLogger({
   env: { service: "moneyroad-app-realtime" },
@@ -24,6 +25,7 @@ export function buildServer() {
   app.register(registerQuotesPlugin);
   app.register(registerNewsPlugin);
   app.register(registerDiscussionPlugin);
+  app.register(registerSignalPlugin);
   app.register(registerSchedulerPlugin);
   app.register(registerInternalPlugin);
 

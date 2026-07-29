@@ -141,6 +141,13 @@
       "when": 1785228232854,
       "tag": "0019_remarkable_martin_li",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1785283813070,
+      "tag": "0020_signal_hold_notification_type",
+      "breakpoints": true
     }
   ]
 }

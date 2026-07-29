@@ -27,6 +27,3 @@ RFC에서 합의가 끝나면, 필요 시 그 결정을 ADR로 남긴다.
 | [0006](0006-news-thumbnail-default-and-upload.md) | 뉴스 썸네일 (기본 이미지 · 관리자 업로드 · 머니로드 독점 칩) | Draft |
 | [0007](0007-signal-push-notification.md) | 시그널 푸시 알림 (관심종목 보유자 대상 · 매수/매도/관망) | Draft |
 | [0008](0008-discussion-reply-thread.md) | 토론 답글 구조 (부모-자식) + 내 글·답글 분리 | 확정 |
-
-> 0007 문서 파일은 `feat/signal-feed-realtime` 브랜치에 있다. 그 브랜치가 머지되기
-> 전까지 위 0007 링크는 이 브랜치에서 열리지 않는다.

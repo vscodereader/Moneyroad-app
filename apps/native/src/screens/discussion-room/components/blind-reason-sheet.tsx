@@ -1,14 +1,7 @@
 import { useState } from "react";
-import {
-  Modal,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Pressable, ScrollView, Text, View } from "react-native";
 
+import { MrBottomSheet } from "@/components/mr-bottom-sheet";
 import type { MrTokens } from "@/utils/theme";
 
 // 가림(숨김) 사유 — 순서/문구 고정(docs/rfcs/0004 기능2).
@@ -36,7 +29,6 @@ export function BlindReasonSheet({
   onSave: (reason: string) => void;
   t: MrTokens;
 }) {
-  const insets = useSafeAreaInsets();
   const [selected, setSelected] = useState<string | null>(null);
 
   const handleSave = () => {
@@ -51,178 +43,143 @@ export function BlindReasonSheet({
   };
 
   return (
-    <Modal
-      animationType="slide"
-      onRequestClose={handleClose}
+    <MrBottomSheet
+      grabberPaddingBottom={4}
+      grabberPaddingTop={10}
+      maxHeight="88%"
+      onClose={handleClose}
       onShow={() => setSelected(null)}
-      transparent
+      paddingTop={0}
+      t={t}
       visible={visible}
     >
-      <View style={styles.root}>
-        <Pressable onPress={handleClose} style={styles.backdrop} />
-        <View
+      <View style={{ paddingHorizontal: 20, paddingTop: 8 }}>
+        <Text
           style={{
-            backgroundColor: t.bg,
-            borderTopLeftRadius: 24,
-            borderTopRightRadius: 24,
-            maxHeight: "88%",
-            paddingBottom: insets.bottom + 12,
+            color: t.fgStrong,
+            fontSize: 20,
+            fontWeight: "800",
+            letterSpacing: -0.4,
           }}
         >
-          <View
-            style={{ alignItems: "center", paddingBottom: 4, paddingTop: 10 }}
-          >
-            <View
-              style={{
-                backgroundColor: t.borderStrong,
-                borderRadius: 999,
-                height: 5,
-                width: 40,
-              }}
-            />
-          </View>
+          가림 사유를 선택하세요
+        </Text>
+        <Text
+          style={{
+            color: t.fgMuted,
+            fontSize: 13,
+            fontWeight: "600",
+            marginTop: 6,
+          }}
+        >
+          메시지 {count}개를 가림 처리합니다.
+        </Text>
+      </View>
 
-          <View style={{ paddingHorizontal: 20, paddingTop: 8 }}>
-            <Text
-              style={{
-                color: t.fgStrong,
-                fontSize: 20,
-                fontWeight: "800",
-                letterSpacing: -0.4,
-              }}
-            >
-              가림 사유를 선택하세요
-            </Text>
-            <Text
-              style={{
-                color: t.fgMuted,
-                fontSize: 13,
-                fontWeight: "600",
-                marginTop: 6,
-              }}
-            >
-              메시지 {count}개를 가림 처리합니다.
-            </Text>
-          </View>
-
-          <ScrollView
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
-            style={{ marginTop: 8 }}
-          >
-            {BLIND_REASONS.map((reason) => {
-              const active = selected === reason;
-              return (
-                <Pressable
-                  key={reason}
-                  onPress={() => setSelected(reason)}
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    gap: 12,
-                    paddingHorizontal: 20,
-                    paddingVertical: 14,
-                  }}
-                >
-                  <View
-                    style={{
-                      width: 20,
-                      height: 20,
-                      borderRadius: 999,
-                      borderWidth: 2,
-                      borderColor: active ? t.primary : t.borderStrong,
-                      alignItems: "center",
-                      justifyContent: "center",
-                    }}
-                  >
-                    {active ? (
-                      <View
-                        style={{
-                          width: 10,
-                          height: 10,
-                          borderRadius: 999,
-                          backgroundColor: t.primary,
-                        }}
-                      />
-                    ) : null}
-                  </View>
-                  <Text
-                    style={{
-                      flex: 1,
-                      fontSize: 14,
-                      color: t.fgStrong,
-                      fontWeight: active ? "700" : "500",
-                    }}
-                  >
-                    {reason}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </ScrollView>
-
-          <View
-            style={{
-              flexDirection: "row",
-              gap: 10,
-              paddingHorizontal: 20,
-              paddingTop: 12,
-              borderTopWidth: 1,
-              borderTopColor: t.border,
-            }}
-          >
+      <ScrollView
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+        style={{ marginTop: 8 }}
+      >
+        {BLIND_REASONS.map((reason) => {
+          const active = selected === reason;
+          return (
             <Pressable
-              onPress={handleClose}
+              key={reason}
+              onPress={() => setSelected(reason)}
               style={{
-                flex: 1,
-                height: 48,
-                borderRadius: 12,
-                backgroundColor: t.bgSubtle,
+                flexDirection: "row",
                 alignItems: "center",
-                justifyContent: "center",
+                gap: 12,
+                paddingHorizontal: 20,
+                paddingVertical: 14,
               }}
             >
-              <Text
-                style={{ fontSize: 15, fontWeight: "700", color: t.fgStrong }}
-              >
-                취소
-              </Text>
-            </Pressable>
-            <Pressable
-              disabled={!selected}
-              onPress={handleSave}
-              style={{
-                flex: 1,
-                height: 48,
-                borderRadius: 12,
-                backgroundColor: selected ? t.primary : t.bgMuted,
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <Text
+              <View
                 style={{
-                  fontSize: 15,
-                  fontWeight: "800",
-                  color: selected ? "#fff" : t.fgSubtle,
+                  width: 20,
+                  height: 20,
+                  borderRadius: 999,
+                  borderWidth: 2,
+                  borderColor: active ? t.primary : t.borderStrong,
+                  alignItems: "center",
+                  justifyContent: "center",
                 }}
               >
-                저장
+                {active ? (
+                  <View
+                    style={{
+                      width: 10,
+                      height: 10,
+                      borderRadius: 999,
+                      backgroundColor: t.primary,
+                    }}
+                  />
+                ) : null}
+              </View>
+              <Text
+                style={{
+                  flex: 1,
+                  fontSize: 14,
+                  color: t.fgStrong,
+                  fontWeight: active ? "700" : "500",
+                }}
+              >
+                {reason}
               </Text>
             </Pressable>
-          </View>
-        </View>
+          );
+        })}
+      </ScrollView>
+
+      <View
+        style={{
+          flexDirection: "row",
+          gap: 10,
+          paddingHorizontal: 20,
+          paddingTop: 12,
+          borderTopWidth: 1,
+          borderTopColor: t.border,
+        }}
+      >
+        <Pressable
+          onPress={handleClose}
+          style={{
+            flex: 1,
+            height: 48,
+            borderRadius: 12,
+            backgroundColor: t.bgSubtle,
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <Text style={{ fontSize: 15, fontWeight: "700", color: t.fgStrong }}>
+            취소
+          </Text>
+        </Pressable>
+        <Pressable
+          disabled={!selected}
+          onPress={handleSave}
+          style={{
+            flex: 1,
+            height: 48,
+            borderRadius: 12,
+            backgroundColor: selected ? t.primary : t.bgMuted,
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <Text
+            style={{
+              fontSize: 15,
+              fontWeight: "800",
+              color: selected ? "#fff" : t.fgSubtle,
+            }}
+          >
+            저장
+          </Text>
+        </Pressable>
       </View>
-    </Modal>
+    </MrBottomSheet>
   );
 }
-
-const styles = StyleSheet.create({
-  backdrop: {
-    backgroundColor: "rgba(0,0,0,0.4)",
-    flex: 1,
-  },
-  root: {
-    flex: 1,
-  },
-});

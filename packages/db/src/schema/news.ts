@@ -1,5 +1,13 @@
-import { index, jsonb, pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import {
+  boolean,
+  index,
+  jsonb,
+  pgTable,
+  text,
+  timestamp,
+} from "drizzle-orm/pg-core";
 
+import { user } from "./auth";
 import { stockMaster } from "./stock-master";
 
 export const news = pgTable(
@@ -25,6 +33,19 @@ export const news = pgTable(
     sourceType: text("source_type", { enum: ["auto", "manual"] })
       .notNull()
       .default("auto"),
+    // ----(관리자 뉴스 작성: 다중 카테고리·상단고정·작성자)----
+    /** 수동 기사의 다중 카테고리. 자동수집 기사는 null(단일 category만). */
+    categories: jsonb("categories").$type<string[]>(),
+    /** 상단 고정. 선택 카테고리 탭에서만 최상단(전체/watch 탭은 시간순). */
+    pinned: boolean("pinned").notNull().default(false),
+    /** 작성 관리자(감사용). 작성자가 삭제돼도 기사 보존(→ NULL). */
+    authorId: text("author_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    // ----(끝)----
+    // ----(뉴스 썸네일: GCS 공개 URL. null이면 UI에서 텍스트 박스 폴백)----
+    newsThumbnail: text("news_thumbnail"),
+    // ----(끝)----
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (table) => [
@@ -32,5 +53,7 @@ export const news = pgTable(
     index("news_query_idx").on(table.query),
     index("news_stock_code_idx").on(table.stockCode),
     index("news_source_type_idx").on(table.sourceType),
+    // ----(관리자 뉴스: 핀 우선 정렬 지원)----
+    index("news_pinned_pub_date_idx").on(table.pinned, table.pubDate),
   ]
 );

@@ -316,6 +316,19 @@ function StockDetailContent({ stock }: { stock: Stock }) {
     toggleLike.mutate({ roomId });
   };
 
+  const toggleFavorite = useMutation(
+    orpc.discussion.toggleFavorite.mutationOptions({
+      onSuccess: () =>
+        queryClient.invalidateQueries({ queryKey: relRoomsOptions.queryKey }),
+    })
+  );
+  const handleToggleFavorite = (roomId: number) => {
+    if (!isAuthed) {
+      return;
+    }
+    toggleFavorite.mutate({ roomId });
+  };
+
   return (
     <MrScreen>
       <MrHeader
@@ -498,6 +511,7 @@ function StockDetailContent({ stock }: { stock: Stock }) {
             <DiscussionRoomRow
               key={r.id}
               onPress={() => nav.openDiscussionRoom(r.id)}
+              onToggleFavorite={() => handleToggleFavorite(r.id)}
               onToggleLike={() => handleToggleLike(r.id)}
               room={r}
             />

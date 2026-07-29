@@ -1,7 +1,7 @@
-import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Pressable, Text } from "react-native";
 
 import { Icon } from "@/components/icons";
+import { MrBottomSheet } from "@/components/mr-bottom-sheet";
 import type { MrTokens } from "@/utils/theme";
 
 /* ----(비관리자 롱프레스 시트 — RFC 0008 D3/D17)---- */
@@ -20,68 +20,24 @@ export function ReplyActionSheet({
   onReply: () => void;
   t: MrTokens;
 }) {
-  const insets = useSafeAreaInsets();
-
   return (
-    <Modal
-      animationType="slide"
-      onRequestClose={onClose}
-      transparent
-      visible={visible}
-    >
-      <View style={styles.root}>
-        <Pressable onPress={onClose} style={styles.backdrop} />
-        <View
-          style={{
-            backgroundColor: t.bg,
-            borderTopLeftRadius: 24,
-            borderTopRightRadius: 24,
-            paddingBottom: insets.bottom + 12,
-            paddingTop: 8,
-          }}
-        >
-          <View
-            style={{ alignItems: "center", paddingBottom: 10, paddingTop: 2 }}
-          >
-            <View
-              style={{
-                backgroundColor: t.borderStrong,
-                borderRadius: 999,
-                height: 5,
-                width: 40,
-              }}
-            />
-          </View>
-          <Pressable
-            onPress={onReply}
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              gap: 12,
-              paddingHorizontal: 20,
-              paddingVertical: 16,
-            }}
-          >
-            <Icon.navDiscuss color={t.fgStrong} size={20} />
-            <Text
-              style={{ fontSize: 16, fontWeight: "700", color: t.fgStrong }}
-            >
-              답글
-            </Text>
-          </Pressable>
-        </View>
-      </View>
-    </Modal>
+    <MrBottomSheet onClose={onClose} t={t} visible={visible}>
+      <Pressable
+        onPress={onReply}
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 12,
+          paddingHorizontal: 20,
+          paddingVertical: 16,
+        }}
+      >
+        <Icon.navDiscuss color={t.fgStrong} size={20} />
+        <Text style={{ fontSize: 16, fontWeight: "700", color: t.fgStrong }}>
+          답글
+        </Text>
+      </Pressable>
+    </MrBottomSheet>
   );
 }
 /* ----(~비관리자 롱프레스 시트 여기까지)---- */
-
-const styles = StyleSheet.create({
-  backdrop: {
-    backgroundColor: "rgba(0,0,0,0.4)",
-    flex: 1,
-  },
-  root: {
-    flex: 1,
-  },
-});

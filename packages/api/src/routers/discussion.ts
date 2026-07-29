@@ -1,5 +1,6 @@
 import { db } from "@moneyroad-app/db";
 import {
+  discussionFileAttachment,
   discussionMessage,
   discussionMessageImage,
   discussionRoom,
@@ -91,6 +92,33 @@ function blockedExpr(userId: string | null): SQL<boolean> {
   return sql<boolean>`EXISTS (SELECT 1 FROM ${discussionRoomBlock} WHERE ${discussionRoomBlock.roomId} = ${discussionRoom.id} AND ${discussionRoomBlock.userId} = ${userId} AND ${discussionRoomBlock.blockedUntil} > now())`;
 }
 
+/**
+ * Public room reads remain anonymous, but an authenticated user with an active
+ * per-room block must not bypass the app UI by calling message RPCs directly.
+ */
+async function assertRoomReadable(
+  userId: string | null,
+  roomId: number
+): Promise<void> {
+  if (!userId) {
+    return;
+  }
+  const [blocked] = await db
+    .select({ userId: discussionRoomBlock.userId })
+    .from(discussionRoomBlock)
+    .where(
+      and(
+        eq(discussionRoomBlock.userId, userId),
+        eq(discussionRoomBlock.roomId, roomId),
+        sql`${discussionRoomBlock.blockedUntil} > now()`
+      )
+    )
+    .limit(1);
+  if (blocked) {
+    throw new ORPCError("FORBIDDEN", { message: "차단된 방입니다." });
+  }
+}
+
 // Duration caps (docs/rfcs/0004 기능4). value+unit are collapsed to hours here.
 const MUTE_MAX_HOURS = 24; // 1일
 const BLOCK_MAX_HOURS = 168; // 7일
@@ -104,14 +132,42 @@ function toHours(value: number, unit: "hour" | "day"): number {
 
 // Max images per image message (docs/rfcs/0004 기능5).
 const MAX_MESSAGE_IMAGES = 8;
+const MAX_MESSAGE_IMAGE_BYTES = 10 * 1024 * 1024;
 
 type MessageType = "text" | "image" | "file";
-interface FileRef {
-  bucket: string;
-  key: string;
-  mime: string;
-  name: string;
-  size: number;
+
+type DiscussionTransaction = Parameters<
+  Parameters<typeof db.transaction>[0]
+>[0];
+
+async function getAvailableFileAttachment(
+  tx: DiscussionTransaction,
+  type: MessageType,
+  fileAttachmentId: string | undefined,
+  userId: string
+) {
+  if (type !== "file") {
+    return;
+  }
+  const [fileAttachment] = await tx
+    .select({
+      id: discussionFileAttachment.id,
+      bucket: discussionFileAttachment.bucket,
+      objectKey: discussionFileAttachment.objectKey,
+      mime: discussionFileAttachment.mime,
+      byteSize: discussionFileAttachment.byteSize,
+      fileName: discussionFileAttachment.fileName,
+    })
+    .from(discussionFileAttachment)
+    .where(
+      and(
+        eq(discussionFileAttachment.id, fileAttachmentId ?? ""),
+        eq(discussionFileAttachment.uploaderId, userId),
+        isNull(discussionFileAttachment.messageId)
+      )
+    )
+    .limit(1);
+  return fileAttachment;
 }
 
 /**
@@ -120,22 +176,22 @@ interface FileRef {
  *
  * Attachments (docs/rfcs/0004 기능5): pass `imageIds` (already uploaded via
  * POST /upload/discussion-image, must belong to the sender) for an image
- * message, or `file` (from POST /upload/discussion-file). The message `type`
- * is derived from what's attached; text messages are unchanged.
+ * message, or an opaque `fileAttachmentId` returned by the file upload route.
+ * The message `type` is derived from what's attached.
  */
 async function sendMessage(args: {
   roomId: number;
   userId: string;
   content: string;
   imageIds?: number[];
-  file?: FileRef;
+  fileAttachmentId?: string;
   /* ----(답글 부모 — RFC 0008)---- */
   parentId?: number;
   /* ----(~답글 부모 여기까지)---- */
 }): Promise<{ id: number; createdAt: Date }> {
   const imageIds = args.imageIds ?? [];
   let type: MessageType = "text";
-  if (args.file) {
+  if (args.fileAttachmentId) {
     type = "file";
   } else if (imageIds.length > 0) {
     type = "image";
@@ -159,23 +215,8 @@ async function sendMessage(args: {
     throw new ORPCError("NOT_FOUND", { message: "토론방이 없습니다." });
   }
 
-  // Moderation gate (docs/rfcs/0004 기능4): an active block bars the user from
-  // the room entirely; an active mute lets them read but not post.
-  const [block] = await db
-    .select({ userId: discussionRoomBlock.userId })
-    .from(discussionRoomBlock)
-    .where(
-      and(
-        eq(discussionRoomBlock.userId, args.userId),
-        eq(discussionRoomBlock.roomId, args.roomId),
-        sql`${discussionRoomBlock.blockedUntil} > now()`
-      )
-    )
-    .limit(1);
-  if (block) {
-    throw new ORPCError("FORBIDDEN", { message: "차단된 방입니다." });
-  }
-
+  await assertRoomReadable(args.userId, args.roomId);
+  // An active mute still permits reads but bars every message type.
   const [muted] = await db
     .select({ userId: discussionRoomMember.userId })
     .from(discussionRoomMember)
@@ -191,11 +232,16 @@ async function sendMessage(args: {
     throw new ORPCError("FORBIDDEN", { message: "뮤트 상태입니다." });
   }
 
-  // Attachments must reference the sender's own uploads (prevents linking
-  // someone else's private image / storage object).
+  // Images must reference the sender's own uploads. The original byte count is
+  // used for RFC 0004's per-message 10MB limit; older rows fall back to the
+  // stored output size because they predate originalByteSize.
   if (type === "image") {
     const owned = await db
-      .select({ id: moneyroadImage.id })
+      .select({
+        id: moneyroadImage.id,
+        byteSize: moneyroadImage.byteSize,
+        originalByteSize: moneyroadImage.originalByteSize,
+      })
       .from(moneyroadImage)
       .where(
         and(
@@ -206,6 +252,15 @@ async function sendMessage(args: {
     if (owned.length !== imageIds.length) {
       throw new ORPCError("BAD_REQUEST", {
         message: "첨부한 이미지를 찾을 수 없습니다.",
+      });
+    }
+    const totalBytes = owned.reduce(
+      (sum, image) => sum + (image.originalByteSize ?? image.byteSize),
+      0
+    );
+    if (totalBytes > MAX_MESSAGE_IMAGE_BYTES) {
+      throw new ORPCError("BAD_REQUEST", {
+        message: "이미지 원본 크기 합계는 10MB 이하여야 합니다.",
       });
     }
   }
@@ -245,6 +300,18 @@ async function sendMessage(args: {
     .onConflictDoNothing();
 
   const row = await db.transaction(async (tx) => {
+    const fileAttachment = await getAvailableFileAttachment(
+      tx,
+      type,
+      args.fileAttachmentId,
+      args.userId
+    );
+    if (type === "file" && !fileAttachment) {
+      throw new ORPCError("BAD_REQUEST", {
+        message: "첨부한 파일을 찾을 수 없습니다.",
+      });
+    }
+
     const [inserted] = await tx
       .insert(discussionMessage)
       .values({
@@ -252,11 +319,11 @@ async function sendMessage(args: {
         userId: args.userId,
         content: args.content,
         type,
-        fileBucket: args.file?.bucket ?? null,
-        fileKey: args.file?.key ?? null,
-        fileMime: args.file?.mime ?? null,
-        fileSize: args.file?.size ?? null,
-        fileName: args.file?.name ?? null,
+        fileBucket: fileAttachment?.bucket ?? null,
+        fileKey: fileAttachment?.objectKey ?? null,
+        fileMime: fileAttachment?.mime ?? null,
+        fileSize: fileAttachment?.byteSize ?? null,
+        fileName: fileAttachment?.fileName ?? null,
         /* ----(답글 부모 — RFC 0008)---- */
         parentId: args.parentId ?? null,
         /* ----(~답글 부모 여기까지)---- */
@@ -268,6 +335,27 @@ async function sendMessage(args: {
 
     if (!inserted) {
       throw new Error("메시지 저장 실패");
+    }
+
+    if (fileAttachment) {
+      const [claimed] = await tx
+        .update(discussionFileAttachment)
+        .set({ messageId: inserted.id })
+        .where(
+          and(
+            eq(discussionFileAttachment.id, fileAttachment.id),
+            eq(discussionFileAttachment.uploaderId, args.userId),
+            isNull(discussionFileAttachment.messageId)
+          )
+        )
+        .returning({ id: discussionFileAttachment.id });
+      if (!claimed) {
+        // A concurrent request already used this upload. Throwing rolls back the
+        // message insert, so one upload can never back multiple messages.
+        throw new ORPCError("BAD_REQUEST", {
+          message: "이미 사용된 파일입니다.",
+        });
+      }
     }
 
     if (type === "image") {
@@ -476,8 +564,8 @@ async function toggleFavorite(args: {
 }
 
 /**
- * Room member roster for the admin moderation panel. Joins each member to their
- * user row and flags whether an active block exists (docs/rfcs/0004 기능4).
+ * Active room members for the admin moderation panel. Blocked users are stored
+ * outside this table and are returned by blockedRoomMembers below.
  */
 async function roomMembers(args: { roomId: number }): Promise<
   {
@@ -496,7 +584,6 @@ async function roomMembers(args: { roomId: number }): Promise<
       role: user.role,
       joinedAt: discussionRoomMember.joinedAt,
       mutedUntil: discussionRoomMember.mutedUntil,
-      blocked: sql<boolean>`EXISTS (SELECT 1 FROM ${discussionRoomBlock} WHERE ${discussionRoomBlock.userId} = ${discussionRoomMember.userId} AND ${discussionRoomBlock.roomId} = ${discussionRoomMember.roomId} AND ${discussionRoomBlock.blockedUntil} > now())`,
     })
     .from(discussionRoomMember)
     .innerJoin(user, eq(discussionRoomMember.userId, user.id))
@@ -509,7 +596,47 @@ async function roomMembers(args: { roomId: number }): Promise<
     role: r.role,
     joinedAt: r.joinedAt.toISOString(),
     mutedUntil: r.mutedUntil?.toISOString() ?? null,
-    blocked: r.blocked,
+    blocked: false,
+  }));
+}
+
+/**
+ * Active blocks are sourced from discussion_room_block, because blocking
+ * deliberately removes the corresponding member row.
+ */
+async function blockedRoomMembers(args: { roomId: number }): Promise<
+  {
+    userId: string;
+    name: string;
+    role: string;
+    blockedAt: string;
+    blockedUntil: string;
+  }[]
+> {
+  const rows = await db
+    .select({
+      userId: discussionRoomBlock.userId,
+      name: user.name,
+      role: user.role,
+      blockedAt: discussionRoomBlock.blockedAt,
+      blockedUntil: discussionRoomBlock.blockedUntil,
+    })
+    .from(discussionRoomBlock)
+    .innerJoin(user, eq(discussionRoomBlock.userId, user.id))
+    .where(
+      and(
+        eq(discussionRoomBlock.roomId, args.roomId),
+        sql`${discussionRoomBlock.blockedUntil} > now()`
+      )
+    )
+    .orderBy(desc(discussionRoomBlock.blockedAt));
+
+  return rows.map((row) => ({
+    userId: row.userId,
+    name: row.name,
+    role: row.role,
+    blockedAt: row.blockedAt.toISOString(),
+    blockedUntil: row.blockedUntil.toISOString(),
   }));
 }
 
@@ -542,8 +669,8 @@ async function assertModeratable(args: {
 }
 
 /**
- * Temporarily mute a member (뮤트) — total duration capped at 1 day. Ensures a
- * member row exists first, then stamps mutedUntil / mutedBy.
+ * Temporarily mute an existing member (뮤트) — total duration capped at 1 day.
+ * A moderation action must never manufacture membership.
  */
 async function muteMember(args: {
   roomId: number;
@@ -559,11 +686,7 @@ async function muteMember(args: {
   await assertModeratable({ actorId: args.actorId, targetUserId: args.userId });
 
   const mutedUntil = new Date(Date.now() + args.hours * MS.hour);
-  await db
-    .insert(discussionRoomMember)
-    .values({ userId: args.userId, roomId: args.roomId })
-    .onConflictDoNothing();
-  await db
+  const [updated] = await db
     .update(discussionRoomMember)
     .set({ mutedUntil, mutedBy: args.actorId })
     .where(
@@ -571,7 +694,11 @@ async function muteMember(args: {
         eq(discussionRoomMember.userId, args.userId),
         eq(discussionRoomMember.roomId, args.roomId)
       )
-    );
+    )
+    .returning({ userId: discussionRoomMember.userId });
+  if (!updated) {
+    throw new ORPCError("NOT_FOUND", { message: "방 멤버가 아닙니다." });
+  }
 }
 
 /** Clear a member's mute. */
@@ -579,7 +706,7 @@ async function unmuteMember(args: {
   roomId: number;
   userId: string;
 }): Promise<void> {
-  await db
+  const [updated] = await db
     .update(discussionRoomMember)
     .set({ mutedUntil: null, mutedBy: null })
     .where(
@@ -587,7 +714,11 @@ async function unmuteMember(args: {
         eq(discussionRoomMember.userId, args.userId),
         eq(discussionRoomMember.roomId, args.roomId)
       )
-    );
+    )
+    .returning({ userId: discussionRoomMember.userId });
+  if (!updated) {
+    throw new ORPCError("NOT_FOUND", { message: "방 멤버가 아닙니다." });
+  }
 }
 
 /**
@@ -608,26 +739,33 @@ async function blockMember(args: {
   await assertModeratable({ actorId: args.actorId, targetUserId: args.userId });
 
   const blockedUntil = new Date(Date.now() + args.hours * MS.hour);
-  await db
-    .delete(discussionRoomMember)
-    .where(
-      and(
-        eq(discussionRoomMember.userId, args.userId),
-        eq(discussionRoomMember.roomId, args.roomId)
+  await db.transaction(async (tx) => {
+    const [removed] = await tx
+      .delete(discussionRoomMember)
+      .where(
+        and(
+          eq(discussionRoomMember.userId, args.userId),
+          eq(discussionRoomMember.roomId, args.roomId)
+        )
       )
-    );
-  await db
-    .insert(discussionRoomBlock)
-    .values({
-      userId: args.userId,
-      roomId: args.roomId,
-      blockedBy: args.actorId,
-      blockedUntil,
-    })
-    .onConflictDoUpdate({
-      target: [discussionRoomBlock.userId, discussionRoomBlock.roomId],
-      set: { blockedBy: args.actorId, blockedUntil, blockedAt: new Date() },
-    });
+      .returning({ userId: discussionRoomMember.userId });
+    if (!removed) {
+      throw new ORPCError("NOT_FOUND", { message: "방 멤버가 아닙니다." });
+    }
+
+    await tx
+      .insert(discussionRoomBlock)
+      .values({
+        userId: args.userId,
+        roomId: args.roomId,
+        blockedBy: args.actorId,
+        blockedUntil,
+      })
+      .onConflictDoUpdate({
+        target: [discussionRoomBlock.userId, discussionRoomBlock.roomId],
+        set: { blockedBy: args.actorId, blockedUntil, blockedAt: new Date() },
+      });
+  });
 }
 
 /** Lift a member's block. */
@@ -635,14 +773,18 @@ async function unblockMember(args: {
   roomId: number;
   userId: string;
 }): Promise<void> {
-  await db
+  const [removed] = await db
     .delete(discussionRoomBlock)
     .where(
       and(
         eq(discussionRoomBlock.userId, args.userId),
         eq(discussionRoomBlock.roomId, args.roomId)
       )
-    );
+    )
+    .returning({ userId: discussionRoomBlock.userId });
+  if (!removed) {
+    throw new ORPCError("NOT_FOUND", { message: "차단된 사용자가 아닙니다." });
+  }
 }
 
 // ── router ───────────────────────────────────────────────────────────
@@ -1137,7 +1279,8 @@ export const discussionRouter = {
         limit: z.number().int().min(1).max(100).default(50),
       })
     )
-    .handler(async ({ input }) => {
+    .handler(async ({ context, input }) => {
+      await assertRoomReadable(context.session?.user?.id ?? null, input.roomId);
       const inRoom = eq(discussionMessage.roomId, input.roomId);
 
       /* ----(방향별 조회 — RFC 0008 D15)---- */
@@ -1199,7 +1342,8 @@ export const discussionRouter = {
         limit: z.number().int().min(1).max(50).default(25),
       })
     )
-    .handler(async ({ input }) => {
+    .handler(async ({ context, input }) => {
+      await assertRoomReadable(context.session?.user?.id ?? null, input.roomId);
       const inRoom = eq(discussionMessage.roomId, input.roomId);
 
       const [anchor] = await db
@@ -1371,16 +1515,8 @@ export const discussionRouter = {
             .array(z.number().int())
             .max(MAX_MESSAGE_IMAGES)
             .optional(),
-          // File message: ref returned by POST /upload/discussion-file.
-          file: z
-            .object({
-              bucket: z.string().min(1),
-              key: z.string().min(1),
-              mime: z.string().min(1),
-              size: z.number().int().nonnegative(),
-              name: z.string().min(1),
-            })
-            .optional(),
+          // File message: opaque id returned by POST /upload/discussion-file.
+          fileAttachmentId: z.string().uuid().optional(),
           /* ----(답글 부모 — RFC 0008)---- */
           // 있으면 답글, 없으면 글. 부모는 "직전에 롱프레스한 그 메시지"다.
           parentId: z.number().int().optional(),
@@ -1390,7 +1526,7 @@ export const discussionRouter = {
           (v) =>
             v.content.trim().length > 0 ||
             (v.imageIds?.length ?? 0) > 0 ||
-            v.file !== undefined,
+            v.fileAttachmentId !== undefined,
           { message: "내용 또는 첨부가 필요합니다." }
         )
     )
@@ -1400,7 +1536,7 @@ export const discussionRouter = {
         userId: context.session.user.id,
         content: input.content.trim(),
         imageIds: input.imageIds,
-        file: input.file,
+        fileAttachmentId: input.fileAttachmentId,
         /* ----(답글 부모 — RFC 0008)---- */
         parentId: input.parentId,
         /* ----(~답글 부모 여기까지)---- */
@@ -1592,6 +1728,13 @@ export const discussionRouter = {
     .input(z.object({ roomId: z.number().int() }))
     .handler(async ({ input }) => await roomMembers({ roomId: input.roomId })),
 
+  /** Active blocks for the separate admin blocked-user section. */
+  blockedRoomMembers: adminProcedure
+    .input(z.object({ roomId: z.number().int() }))
+    .handler(
+      async ({ input }) => await blockedRoomMembers({ roomId: input.roomId })
+    ),
+
   /** Admin mute (뮤트) — value+unit, total capped at 1 day. */
   muteMember: adminProcedure
     .input(
@@ -1664,6 +1807,7 @@ export const discussionDomain = {
   toggleLike,
   toggleFavorite,
   roomMembers,
+  blockedRoomMembers,
   muteMember,
   unmuteMember,
   blockMember,

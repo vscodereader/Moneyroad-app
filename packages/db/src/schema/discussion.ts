@@ -8,6 +8,8 @@ import {
   serial,
   text,
   timestamp,
+  uniqueIndex,
+  uuid,
 } from "drizzle-orm/pg-core";
 
 import { user } from "./auth";
@@ -205,6 +207,32 @@ export const discussionMessageImage = pgTable(
     sortOrder: integer("sort_order").notNull(),
   },
   (table) => [primaryKey({ columns: [table.messageId, table.imageId] })]
+);
+
+// A private file upload awaiting attachment to exactly one message. The client
+// receives only this opaque id; bucket/object metadata never crosses the
+// message RPC boundary. `messageId` is filled atomically with message creation.
+export const discussionFileAttachment = pgTable(
+  "discussion_file_attachment",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    bucket: text("bucket").notNull(),
+    objectKey: text("object_key").notNull(),
+    mime: text("mime").notNull(),
+    byteSize: integer("byte_size").notNull(),
+    fileName: text("file_name").notNull(),
+    uploaderId: text("uploader_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    messageId: integer("message_id").references(() => discussionMessage.id, {
+      onDelete: "cascade",
+    }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("discussion_file_attachment_message_id_uq").on(table.messageId),
+    index("discussion_file_attachment_uploader_id_idx").on(table.uploaderId),
+  ]
 );
 
 // Per-user favorite (별) on a room. Toggled by inserting / deleting this row.

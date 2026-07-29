@@ -9,16 +9,20 @@ import type { MrTokens } from "@/utils/theme";
 export function MemberActionSheet({
   visible,
   memberName,
+  blocked,
   onClose,
   onMute,
   onBlock,
+  onUnblock,
   t,
 }: {
   visible: boolean;
   memberName: string;
+  blocked: boolean;
   onClose: () => void;
   onMute: () => void;
   onBlock: () => void;
+  onUnblock: () => void;
   t: MrTokens;
 }) {
   return (
@@ -34,37 +38,59 @@ export function MemberActionSheet({
       >
         {memberName}
       </Text>
-      <Pressable
-        onPress={onMute}
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          gap: 12,
-          paddingHorizontal: 20,
-          paddingVertical: 16,
-        }}
-      >
-        <Icon.alert color={t.fgStrong} size={20} />
-        <Text style={{ fontSize: 16, fontWeight: "700", color: t.fgStrong }}>
-          mute
-        </Text>
-      </Pressable>
-      <View style={{ height: 1, backgroundColor: t.border }} />
-      <Pressable
-        onPress={onBlock}
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          gap: 12,
-          paddingHorizontal: 20,
-          paddingVertical: 16,
-        }}
-      >
-        <Icon.close color={t.up} size={20} />
-        <Text style={{ fontSize: 16, fontWeight: "700", color: t.up }}>
-          차단하기
-        </Text>
-      </Pressable>
+      {blocked ? (
+        <Pressable
+          onPress={onUnblock}
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 12,
+            paddingHorizontal: 20,
+            paddingVertical: 16,
+          }}
+        >
+          <Icon.check color={t.primary} size={20} />
+          <Text style={{ fontSize: 16, fontWeight: "700", color: t.primary }}>
+            차단 해제
+          </Text>
+        </Pressable>
+      ) : (
+        <>
+          <Pressable
+            onPress={onMute}
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 12,
+              paddingHorizontal: 20,
+              paddingVertical: 16,
+            }}
+          >
+            <Icon.alert color={t.fgStrong} size={20} />
+            <Text
+              style={{ fontSize: 16, fontWeight: "700", color: t.fgStrong }}
+            >
+              mute
+            </Text>
+          </Pressable>
+          <View style={{ height: 1, backgroundColor: t.border }} />
+          <Pressable
+            onPress={onBlock}
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 12,
+              paddingHorizontal: 20,
+              paddingVertical: 16,
+            }}
+          >
+            <Icon.close color={t.up} size={20} />
+            <Text style={{ fontSize: 16, fontWeight: "700", color: t.up }}>
+              차단하기
+            </Text>
+          </Pressable>
+        </>
+      )}
     </MrBottomSheet>
   );
 }

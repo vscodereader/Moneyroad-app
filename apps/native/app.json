@@ -11,7 +11,19 @@
     "slug": "moneyroad-app",
     "version": "1.0.4",
     "icon": "./assets/images/icon.png",
-    "plugins": ["expo-font", "expo-notifications", "expo-image"],
+    "plugins": [
+      "expo-font",
+      "expo-notifications",
+      "expo-image",
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "토론방에 사진을 첨부하기 위해 사진 보관함에 접근합니다.",
+          "savePhotosPermission": "받은 이미지를 사진 보관함에 저장하기 위해 접근합니다.",
+          "granularPermissions": ["photo"]
+        }
+      ]
+    ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true

@@ -303,7 +303,9 @@ export function PhotoGridPicker({
   t: MrTokens;
 }) {
   const insets = useSafeAreaInsets();
-  const [permission, requestPermission] = MediaLibrary.usePermissions();
+  const [permission, requestPermission] = MediaLibrary.usePermissions({
+    granularPermissions: ["photo"],
+  });
   const [assets, setAssets] = useState<MediaLibrary.Asset[]>([]);
   const [loading, setLoading] = useState(false);
   const [selected, setSelected] = useState<PickedPhoto[]>([]);

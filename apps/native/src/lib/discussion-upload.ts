@@ -8,13 +8,7 @@ import { authClient } from "@/lib/auth-client";
 // Expo forwards the session cookie manually on native, so every request to the
 // server's /upload/* and /media/* routes must carry it explicitly.
 
-export type UploadedFileRef = {
-  bucket: string;
-  key: string;
-  mime: string;
-  size: number;
-  name: string;
-};
+export type UploadedFileRef = { fileAttachmentId: string };
 
 type LocalFile = { uri: string; name: string; mime: string };
 
@@ -78,7 +72,7 @@ export async function uploadDiscussionImage(file: LocalFile): Promise<number> {
   return data.imageId;
 }
 
-// POST /upload/discussion-file → { bucket, key, mime, size, name }.
+// POST /upload/discussion-file → opaque { fileAttachmentId }.
 export async function uploadDiscussionFile(
   file: LocalFile
 ): Promise<UploadedFileRef> {

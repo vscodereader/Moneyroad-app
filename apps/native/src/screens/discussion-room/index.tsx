@@ -1773,7 +1773,10 @@ export default function DiscussionRoomScreen() {
         name: asset.name,
         mime: asset.mimeType ?? "application/octet-stream",
       });
-      await sendMutation.mutateAsync({ roomId, file: ref });
+      await sendMutation.mutateAsync({
+        roomId,
+        fileAttachmentId: ref.fileAttachmentId,
+      });
       scrollToEnd();
     } catch (err) {
       Alert.alert(

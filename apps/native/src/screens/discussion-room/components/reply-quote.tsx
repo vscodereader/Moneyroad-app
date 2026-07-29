@@ -59,8 +59,14 @@ export function ReplyQuote({
   const masked = parent.masked !== null;
   const body = quotePreviewText(parent);
 
+  // ⚠️ 여기에 flex:1 을 주면 안 된다. 이 블록은 레이아웃 방향이 반대인 두 곳에서
+  // 재사용된다 — 미리보기는 부모가 row(✕ 옆)라 flex:1 이 "남는 가로를 채워라"지만,
+  // 말풍선 안은 부모가 column 이라 같은 flex:1 이 "남는 세로를 채워라"가 된다.
+  // flex:1 은 flexBasis:0 을 포함하므로 고유 크기가 0으로 잡혀 말풍선 폭이
+  // 문자 몇 개로 줄고 높이는 화면 끝까지 늘어났다. 가로로 늘려야 하는 미리보기
+  // 쪽에서만 아래에서 감싸 준다.
   const inner = (
-    <View style={{ flexDirection: "row", gap: 8, flex: 1 }}>
+    <View style={{ flexDirection: "row", gap: 8 }}>
       <View
         style={{
           width: 3,
@@ -108,7 +114,8 @@ export function ReplyQuote({
           ...padding,
         }}
       >
-        {inner}
+        {/* 여기서만 가로로 늘린다 — ✕ 를 뺀 남는 폭을 인용이 차지해야 한다. */}
+        <View style={{ flex: 1 }}>{inner}</View>
         <Pressable
           accessibilityLabel="답글 취소"
           accessibilityRole="button"

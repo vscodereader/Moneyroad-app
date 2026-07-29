@@ -524,7 +524,11 @@ function MessageBubble({
           style={{
             flexDirection: "row",
             gap: 8,
-            alignItems: "flex-end",
+            // 아바타는 이름 바로 아래(=말풍선 윗줄)에 온다. 오른쪽은 세로 열이라
+            // 말풍선 밑에 시간이, 답글이면 말풍선 위에 인용까지 붙는다. flex-end
+            // 로 두면 아바타가 그 열의 바닥, 즉 "시간" 높이까지 내려가서 누가 한
+            // 말인지와 멀어진다. 답글에서 인용 높이만큼 더 벌어져 특히 어긋났다.
+            alignItems: "flex-start",
             maxWidth: "82%",
           }}
         >

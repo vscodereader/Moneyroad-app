@@ -27,3 +27,4 @@ RFC에서 합의가 끝나면, 필요 시 그 결정을 ADR로 남긴다.
 | [0006](0006-news-thumbnail-default-and-upload.md) | 뉴스 썸네일 (기본 이미지 · 관리자 업로드 · 머니로드 독점 칩) | Draft |
 | [0007](0007-signal-push-notification.md) | 시그널 푸시 알림 (관심종목 보유자 대상 · 매수/매도/관망) | Draft |
 | [0008](0008-discussion-reply-thread.md) | 토론 답글 구조 (부모-자식) + 내 글·답글 분리 | 확정 |
+| [0010](0010-company-website-redesign.md) | 머니게이트 회사 소개 웹사이트 전면 재설계 | Draft |

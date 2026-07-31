@@ -130,8 +130,8 @@ function requireBucket(reply: FastifyReply): string | null {
 }
 
 // A room is readable when it exists and the requester is not actively blocked
-// from it. Messages are public-read, so any signed-in, non-blocked user
-// qualifies (member or public read).
+// from it. Message reads require authentication, and an active room block
+// prevents the signed-in user from fetching attachment bytes.
 async function canAccessRoom(userId: string, roomId: number): Promise<boolean> {
   const [room] = await db
     .select({ id: discussionRoom.id })

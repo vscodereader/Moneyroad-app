@@ -17,9 +17,19 @@ const DAY_MS = 86_400_000;
 const actionSchema = z.enum(["buy", "sell", "hold"]);
 // 시그널은 관리자가 삭제하기 전까지 노출된다. 시간 윈도우는 기본적으로 무제한.
 const windowSchema = z.enum(["24h", "7d", "all"]).default("all");
+const feedInputSchema = z.object({
+  action: actionSchema.optional(),
+  // Limit to one stock (used by the stock detail screen).
+  code: z.string().optional(),
+  window: windowSchema,
+  // Keyset cursor: createdAt (ISO) of the last item from the prev page.
+  cursor: z.string().optional(),
+  limit: z.number().int().min(1).max(MAX_LIMIT).default(DEFAULT_LIMIT),
+});
 
 type Action = z.infer<typeof actionSchema>;
 type Window = z.infer<typeof windowSchema>;
+type FeedInput = z.infer<typeof feedInputSchema>;
 
 // Screen-facing item shape (mirrors apps/native Signal).
 export interface SignalItem {
@@ -70,77 +80,74 @@ async function stockNames(codes: string[]): Promise<Map<string, string>> {
   return new Map(rows.map((r) => [r.code, r.name]));
 }
 
+async function querySignals(input: FeedInput) {
+  const filters: SQL[] = [];
+  const since = sinceOf(input.window);
+  if (since) {
+    filters.push(gte(signal.createdAt, since));
+  }
+  if (input.action) {
+    filters.push(eq(signal.action, input.action));
+  }
+  if (input.code) {
+    filters.push(eq(signal.stockCode, input.code));
+  }
+  if (input.cursor) {
+    const cursorDate = new Date(input.cursor);
+    if (!Number.isNaN(cursorDate.getTime())) {
+      filters.push(lt(signal.createdAt, cursorDate));
+    }
+  }
+
+  const rows = await db
+    .select({
+      id: signal.id,
+      code: signal.stockCode,
+      action: signal.action,
+      source: signal.source,
+      strength: signal.strength,
+      title: signal.title,
+      body: signal.body,
+      createdAt: signal.createdAt,
+    })
+    .from(signal)
+    .where(filters.length > 0 ? and(...filters) : undefined)
+    .orderBy(desc(signal.createdAt))
+    .limit(input.limit + 1);
+
+  const hasMore = rows.length > input.limit;
+  const page = hasMore ? rows.slice(0, input.limit) : rows;
+  const names = await stockNames([...new Set(page.map((r) => r.code))]);
+
+  const items: SignalItem[] = page.map((r) => ({
+    id: r.id,
+    code: r.code,
+    action: r.action,
+    source: r.source,
+    strength: r.strength,
+    title: r.title,
+    body: r.body,
+    name: names.get(r.code) ?? r.code,
+    time: formatSignalDate(r.createdAt),
+  }));
+  const last = page.at(-1);
+  const nextCursor = hasMore && last ? last.createdAt.toISOString() : null;
+  return { items, nextCursor };
+}
+
 export const signalRouter = {
+  // Home-only public preview. No caller-controlled filters or cursor.
+  preview: publicProcedure.handler(() =>
+    querySignals({ window: "24h", limit: 3 })
+  ),
+
   // Global signal feed, newest first, optionally filtered by action/window.
-  feed: publicProcedure
-    .input(
-      z.object({
-        action: actionSchema.optional(),
-        // Limit to one stock (used by the stock detail screen).
-        code: z.string().optional(),
-        window: windowSchema,
-        // Keyset cursor: createdAt (ISO) of the last item from the prev page.
-        cursor: z.string().optional(),
-        limit: z.number().int().min(1).max(MAX_LIMIT).default(DEFAULT_LIMIT),
-      })
-    )
-    .handler(async ({ input }) => {
-      const filters: SQL[] = [];
-      const since = sinceOf(input.window);
-      if (since) {
-        filters.push(gte(signal.createdAt, since));
-      }
-      if (input.action) {
-        filters.push(eq(signal.action, input.action));
-      }
-      if (input.code) {
-        filters.push(eq(signal.stockCode, input.code));
-      }
-      if (input.cursor) {
-        const cursorDate = new Date(input.cursor);
-        if (!Number.isNaN(cursorDate.getTime())) {
-          filters.push(lt(signal.createdAt, cursorDate));
-        }
-      }
-
-      const rows = await db
-        .select({
-          id: signal.id,
-          code: signal.stockCode,
-          action: signal.action,
-          source: signal.source,
-          strength: signal.strength,
-          title: signal.title,
-          body: signal.body,
-          createdAt: signal.createdAt,
-        })
-        .from(signal)
-        .where(filters.length > 0 ? and(...filters) : undefined)
-        .orderBy(desc(signal.createdAt))
-        .limit(input.limit + 1);
-
-      const hasMore = rows.length > input.limit;
-      const page = hasMore ? rows.slice(0, input.limit) : rows;
-      const names = await stockNames([...new Set(page.map((r) => r.code))]);
-
-      const items: SignalItem[] = page.map((r) => ({
-        id: r.id,
-        code: r.code,
-        action: r.action,
-        source: r.source,
-        strength: r.strength,
-        title: r.title,
-        body: r.body,
-        name: names.get(r.code) ?? r.code,
-        time: formatSignalDate(r.createdAt),
-      }));
-      const last = page.at(-1);
-      const nextCursor = hasMore && last ? last.createdAt.toISOString() : null;
-      return { items, nextCursor };
-    }),
+  feed: protectedProcedure
+    .input(feedInputSchema)
+    .handler(({ input }) => querySignals(input)),
 
   // Per-action counts within the window (for the filter chips).
-  counts: publicProcedure
+  counts: protectedProcedure
     .input(z.object({ window: windowSchema }))
     .handler(async ({ input }) => {
       const since = sinceOf(input.window);

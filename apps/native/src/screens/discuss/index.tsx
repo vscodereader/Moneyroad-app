@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Pressable,
   RefreshControl,
@@ -17,11 +17,13 @@ import { Icon } from "@/components/icons";
 import { Chip, IconButton, MrHeader, MrScreen } from "@/components/ui";
 import { useDiscussionListStream } from "@/hooks/use-discussion-list-stream";
 import { useMrTheme } from "@/hooks/use-mr-theme";
+import { useProtectedAction } from "@/hooks/use-protected-action";
 import { authClient } from "@/lib/auth-client";
+import type { MoneyRoadReturnTo } from "@/utils/auth-navigation";
 import { nav } from "@/utils/nav";
 import { orpc } from "@/utils/orpc";
 
-type DiscussTab = "hot" | "watch" | "recent" | "favorite";
+export type DiscussTab = "hot" | "watch" | "recent" | "favorite";
 
 const TABS: { k: DiscussTab; l: string }[] = [
   { k: "hot", l: "인기" },
@@ -66,20 +68,49 @@ function EmptyState({ title, body }: { title: string; body: string }) {
   );
 }
 
-export default function DiscussScreen() {
+function discussionReturnTo(
+  tab: DiscussTab,
+  searchOpen = false
+): MoneyRoadReturnTo {
+  const params = new URLSearchParams({ tab });
+  if (searchOpen) {
+    params.set("search", "1");
+  }
+  return `/(moneyroad)/(tabs)/discuss?${params.toString()}` as MoneyRoadReturnTo;
+}
+
+export default function DiscussScreen({
+  initialSearchOpen = false,
+  initialTab,
+}: {
+  initialSearchOpen?: boolean;
+  initialTab?: DiscussTab;
+}) {
   const { t } = useMrTheme();
-  const [tab, setTab] = useState<DiscussTab>("watch");
+  const [tab, setTab] = useState<DiscussTab>(initialTab ?? "hot");
   // 검색: 아이콘으로 입력창 토글, 제출(엔터) 시에만 query에 반영해 rooms 쿼리로 넘긴다.
   // q가 있으면 백엔드가 탭을 무시하고 이름/종목명 부분일치로 검색한다.
-  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(initialSearchOpen);
   const [searchInput, setSearchInput] = useState("");
   const [query, setQuery] = useState("");
   // 당겨서 새로고침 스피너는 "사용자가 당길 때"만. 5초 백그라운드 폴링엔 안 뜨게.
   const [refreshing, setRefreshing] = useState(false);
-  const { data: session } = authClient.useSession();
+  const { data: session, isPending: sessionPending } = authClient.useSession();
   const isAdmin = session?.user.role === "admin";
   const isAuthed = Boolean(session?.user);
+  const { runProtected } = useProtectedAction();
   const queryClient = useQueryClient();
+  const defaultSeeded = useRef(Boolean(initialTab));
+
+  useEffect(() => {
+    if (defaultSeeded.current || sessionPending) {
+      return;
+    }
+    if (isAuthed) {
+      setTab("watch");
+    }
+    defaultSeeded.current = true;
+  }, [isAuthed, sessionPending]);
 
   // RFC 0004: 목록 폴링을 SSE 구독으로 교체. 이벤트 수신 시 rooms 쿼리를 무효화한다.
   useDiscussionListStream();
@@ -88,7 +119,12 @@ export default function DiscussScreen() {
   const roomsOptions = orpc.discussion.rooms.queryOptions({
     input: { tab, q: trimmedQuery ? trimmedQuery : undefined },
   });
-  const roomsQuery = useQuery(roomsOptions);
+  const protectedSelection =
+    tab === "watch" || tab === "favorite" || trimmedQuery.length > 0;
+  const roomsQuery = useQuery({
+    ...roomsOptions,
+    enabled: !sessionPending && (isAuthed || !protectedSelection),
+  });
 
   const toggleLike = useMutation(
     orpc.discussion.toggleLike.mutationOptions({
@@ -118,27 +154,42 @@ export default function DiscussScreen() {
   );
 
   const handleToggleLike = (roomId: number) => {
-    if (!isAuthed) {
-      // TODO: open login sheet (consistent with other protected actions).
-      return;
-    }
-    toggleLike.mutate({ roomId });
+    runProtected({
+      returnTo: discussionReturnTo(tab, searchOpen),
+      action: () => toggleLike.mutate({ roomId }),
+    });
   };
 
   const handleToggleFavorite = (roomId: number) => {
-    if (!isAuthed) {
-      return;
-    }
-    toggleFavorite.mutate({ roomId });
+    runProtected({
+      returnTo: discussionReturnTo(tab, searchOpen),
+      action: () => toggleFavorite.mutate({ roomId }),
+    });
   };
 
   const toggleSearch = () => {
-    if (searchOpen) {
-      // 닫을 때 검색을 초기화해 탭 결과로 되돌린다.
-      setSearchInput("");
-      setQuery("");
+    runProtected({
+      returnTo: discussionReturnTo(tab, true),
+      action: () => {
+        if (searchOpen) {
+          // 닫을 때 검색을 초기화해 탭 결과로 되돌린다.
+          setSearchInput("");
+          setQuery("");
+        }
+        setSearchOpen(!searchOpen);
+      },
+    });
+  };
+
+  const selectTab = (nextTab: DiscussTab) => {
+    if (nextTab === "watch" || nextTab === "favorite") {
+      runProtected({
+        returnTo: discussionReturnTo(nextTab),
+        action: () => setTab(nextTab),
+      });
+      return;
     }
-    setSearchOpen(!searchOpen);
+    setTab(nextTab);
   };
 
   const clearSearch = () => {
@@ -186,7 +237,7 @@ export default function DiscussScreen() {
                 active={tab === c.k}
                 key={c.k}
                 label={c.l}
-                onPress={() => setTab(c.k)}
+                onPress={() => selectTab(c.k)}
               />
             ))}
           </ScrollView>

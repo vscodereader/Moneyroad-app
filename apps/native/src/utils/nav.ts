@@ -4,9 +4,11 @@
 
 import { type Href, router } from "expo-router";
 
-import { setOnboarded } from "@/utils/onboarding";
+import type { MoneyRoadReturnTo } from "@/utils/auth-navigation";
 
 const BASE = "/(moneyroad)";
+const HOME = `${BASE}/(tabs)` as Href;
+const MYPAGE = `${BASE}/(tabs)/mypage` as Href;
 
 export type TabName = "home" | "signals" | "news" | "discuss" | "mypage";
 
@@ -21,7 +23,13 @@ export const nav = {
   openSearch: () => router.push(`${BASE}/search` as Href),
   openAlerts: () => router.push(`${BASE}/alerts` as Href),
   openWatchlist: () => router.push(`${BASE}/watchlist` as Href),
-  openLogin: () => router.push(`${BASE}/login` as Href),
+  openLogin: ({ returnTo }: { returnTo?: MoneyRoadReturnTo } = {}) =>
+    router.push(
+      (returnTo
+        ? `${BASE}/login?returnTo=${encodeURIComponent(returnTo)}`
+        : `${BASE}/login`) as Href
+    ),
+  openOnboarding: () => router.replace(`${BASE}/onboarding` as Href),
   /* ----(앵커 지정 진입 — RFC 0008 §4-8)---- */
   // anchorId 를 주면 그 메시지가 화면 가운데 오도록 스크롤한다. "내 글·답글"
   // 목록에서 항목을 눌렀을 때, 그리고 말풍선의 인용을 눌렀을 때(D16) 쓴다.
@@ -48,10 +56,10 @@ export const nav = {
     router.navigate(
       `${BASE}/(tabs)${name === "home" ? "" : `/${name}`}` as Href
     ),
-  finishOnboarding: () => {
-    setOnboarded(true);
-    router.replace(`${BASE}/(tabs)` as Href);
-  },
+  afterLogin: (returnTo: MoneyRoadReturnTo | null) =>
+    router.replace((returnTo ?? MYPAGE) as Href),
+  finishOnboarding: () => router.replace(HOME),
+  home: () => router.replace(HOME),
   back: () => {
     if (router.canGoBack()) {
       router.back();

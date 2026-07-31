@@ -24,24 +24,32 @@
 
 ## 메뉴 → 라우트 매핑 (대부분 네비게이션)
 
+<!-- vscodereader 2026-07-30 수정: 기존 필요 상태였던 내 글·답글 API가
+discussion.myPosts/myReplies로 구현되어 메뉴 매핑에 실제 엔드포인트를 반영. -->
 | 그룹 | 항목 | 이동 | 비고 |
 |---|---|---|---|
 | 알림 관리 | 알림함 | `alerts` | badge=unread |
 | 알림 관리 | 시그널/뉴스·공시/가격 알림 설정 | `settings/[page]` | `settings.update` 토글 |
 | 투자 환경 | 관심 종목 관리 | `watchlist` | value=관심종목 수 |
 | 투자 환경 | AI 시그널 학습 데이터 / 화면 표시 설정 | `settings/[page]` | |
-| 계정 | 내가 쓴 글·답글 | `settings/[page]` | `discuss.myPosts` 필요 |
+| 계정 | 내가 쓴 글·답글 | `settings/[page]` | `discussion.myPosts/myReplies` |
 | 계정 | 공유·초대 / 공지·고객지원 | `settings/[page]` | 정적/외부 |
 
-> 알림 설정 화면(`screens/settings`)은 `settings.get`으로 현재 토글 상태를 읽고
-> `settings.update`로 저장한다. 푸시 알림 토큰 등록(Expo Push)은 별도 검토.
+<!-- vscodereader 2026-07-30 수정: 기존 별도 검토였던 Expo 권한·토큰 등록과
+notification 설정 저장이 구현되어 실제 훅·라우터 기준으로 갱신. -->
+> 알림 설정 화면은 `notification.getSettings/updateSettings`로 토글을 저장한다.
+> 로그인 시 `usePushRegistration`이 권한을 요청하고 Expo Push Token을
+> `notification.registerPushToken`으로 저장한다.
 
 ## 상호작용
-- 프로필 편집(`프로필` 버튼) → 편집 화면(미구현) + `user.update`.
-- 로그아웃 → better-auth `signOut` 후 온보딩/로그인으로.
+<!-- vscodereader 2026-07-30 수정: 기존 미구현이었던 이름 편집·내 글/답글을
+Better Auth updateUser와 discussion.myPosts/myReplies로 구현한 상태 반영. -->
+- 프로필 편집 → Better Auth `authClient.updateUser({ name })`. 아바타 업로드는 미구현.
+- 로그아웃 → better-auth `signOut` 후 비로그인 공개 홈으로.
 
 ## 미정 / 결정 필요
 - [ ] `user.stats` 단일 엔드포인트 vs 개별(`watchlist.count` 등) 조합.
-- [ ] 알림 설정 스키마(`NotificationSettings`) 필드 정의 + 푸시 토큰 등록.
-- [ ] "내가 쓴 글·답글"(`discuss.myPosts`) 제공 여부.
-- [ ] 프로필 수정(`user.update`)·아바타 업로드 범위.
+- [x] 알림 설정 스키마와 Expo Push Token 등록
+- [x] "내가 쓴 글·답글"(`discussion.myPosts/myReplies`) 제공
+- [x] 프로필 이름 수정
+- [ ] 프로필 아바타 업로드

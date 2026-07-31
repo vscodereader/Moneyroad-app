@@ -1,11 +1,19 @@
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import {
+  ActivityIndicator,
+  Pressable,
+  ScrollView,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Icon, SIGNAL_TYPE_ICON } from "@/components/icons";
-import { MrScreen } from "@/components/ui";
+import { MrScreen, StockResourceLogo } from "@/components/ui";
 import { useMrTheme } from "@/hooks/use-mr-theme";
-import { stocks } from "@/utils/data";
 import { nav } from "@/utils/nav";
+import { orpc } from "@/utils/orpc";
 import {
   SIGNAL_TYPE_KEYS,
   type SignalTypeKey,
@@ -22,6 +30,13 @@ const SIGNAL_DESC: Record<SignalTypeKey, string> = {
 const STEP_KEYS = ["intro", "watchlist", "signals", "ready"] as const;
 const TOTAL_STEPS = STEP_KEYS.length;
 
+interface StockEntry {
+  code: string;
+  iconUrl?: null | string;
+  market: string;
+  name: string;
+}
+
 function toggle(set: Set<string>, key: string): Set<string> {
   const next = new Set(set);
   if (next.has(key)) {
@@ -32,20 +47,189 @@ function toggle(set: Set<string>, key: string): Set<string> {
   return next;
 }
 
+function OnboardingFooter({
+  bottomInset,
+  error,
+  isLast,
+  isPending,
+  nextDisabled,
+  onBack,
+  onNext,
+  onSkip,
+  step,
+  t,
+}: {
+  bottomInset: number;
+  error: string | null;
+  isLast: boolean;
+  isPending: boolean;
+  nextDisabled: boolean;
+  onBack: () => void;
+  onNext: () => void;
+  onSkip: () => void;
+  step: number;
+  t: ReturnType<typeof useMrTheme>["t"];
+}) {
+  return (
+    <View
+      style={{
+        paddingHorizontal: 24,
+        paddingTop: 12,
+        paddingBottom: bottomInset + 16,
+        backgroundColor: t.bg,
+      }}
+    >
+      {error ? (
+        <Text
+          style={{
+            color: t.downStrong,
+            fontSize: 13,
+            marginBottom: 4,
+            textAlign: "center",
+          }}
+        >
+          {error}
+        </Text>
+      ) : null}
+      <View
+        style={{
+          flexDirection: "row",
+          gap: 6,
+          justifyContent: "center",
+          paddingVertical: 16,
+        }}
+      >
+        {STEP_KEYS.map((key, index) => (
+          <View
+            key={key}
+            style={{
+              width: index === step ? 22 : 6,
+              height: 6,
+              borderRadius: 999,
+              backgroundColor: index === step ? t.primary : t.borderStrong,
+            }}
+          />
+        ))}
+      </View>
+      <Pressable
+        disabled={nextDisabled || isPending}
+        onPress={onNext}
+        style={{
+          height: 52,
+          borderRadius: 12,
+          alignItems: "center",
+          justifyContent: "center",
+          backgroundColor: nextDisabled ? t.bgMuted : t.primary,
+        }}
+      >
+        {isPending ? (
+          <ActivityIndicator color="#fff" />
+        ) : (
+          <Text
+            style={{
+              fontSize: 16,
+              fontWeight: "800",
+              color: nextDisabled ? t.fgSubtle : "#fff",
+            }}
+          >
+            {isLast ? "시작하기" : "다음"}
+          </Text>
+        )}
+      </Pressable>
+      {step > 0 && !isLast ? (
+        <Pressable
+          onPress={onBack}
+          style={{
+            height: 40,
+            marginTop: 6,
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <Text style={{ color: t.fgMuted, fontSize: 14, fontWeight: "600" }}>
+            이전
+          </Text>
+        </Pressable>
+      ) : null}
+      {step === 0 ? (
+        <Pressable
+          disabled={isPending}
+          onPress={onSkip}
+          style={{
+            height: 40,
+            marginTop: 6,
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <Text style={{ color: t.fgMuted, fontSize: 14, fontWeight: "600" }}>
+            건너뛰기
+          </Text>
+        </Pressable>
+      ) : null}
+    </View>
+  );
+}
+
 export default function OnboardingScreen() {
   const { t } = useMrTheme();
   const insets = useSafeAreaInsets();
   const meta = signalMeta(t);
+  const queryClient = useQueryClient();
   const [step, setStep] = useState(0);
-  const [picked, setPicked] = useState<Set<string>>(
-    new Set(["005930", "000660", "373220"])
+  const [picked, setPicked] = useState<Map<string, StockEntry>>(new Map());
+  const [sigTypes, setSigTypes] = useState<Set<string>>(new Set());
+  const [searchInput, setSearchInput] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const searchText = searchInput.trim();
+  const stockSearch = useQuery(
+    orpc.stock.search.queryOptions({
+      input: { query: searchText },
+      enabled: searchText.length > 0,
+    })
   );
-  const [sigTypes, setSigTypes] = useState<Set<string>>(
-    new Set(["tech", "event", "ai"])
+  const complete = useMutation(
+    orpc.onboarding.complete.mutationOptions({
+      onSuccess: () => {
+        queryClient.invalidateQueries({
+          queryKey: orpc.onboarding.status.key(),
+        });
+        queryClient.invalidateQueries({
+          queryKey: orpc.watchlist.list.queryKey(),
+        });
+        nav.finishOnboarding();
+      },
+      onError: (mutationError) => {
+        setError(
+          mutationError.message ||
+            "온보딩을 저장하지 못했어요. 잠시 후 다시 시도해 주세요."
+        );
+      },
+    })
   );
 
   const nextDisabled = step === 1 && picked.size < 3;
   const isLast = step === TOTAL_STEPS - 1;
+
+  const toggleStock = (entry: StockEntry) => {
+    setPicked((current) => {
+      const next = new Map(current);
+      if (next.has(entry.code)) {
+        next.delete(entry.code);
+      } else {
+        next.set(entry.code, entry);
+      }
+      return next;
+    });
+  };
+
+  const finish = (stockCodes: string[]) => {
+    if (complete.isPending) {
+      return;
+    }
+    setError(null);
+    complete.mutate({ stockCodes });
+  };
 
   return (
     <MrScreen>
@@ -147,46 +331,147 @@ export default function OnboardingScreen() {
             >
               최소 3개를 선택하면 시그널을 더 정확하게 학습합니다.
             </Text>
-            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-              {stocks.map((s) => {
-                const on = picked.has(s.code);
-                return (
+            {picked.size > 0 ? (
+              <View
+                style={{
+                  flexDirection: "row",
+                  flexWrap: "wrap",
+                  gap: 8,
+                  marginBottom: 14,
+                }}
+              >
+                {[...picked.values()].map((stock) => (
                   <Pressable
-                    key={s.code}
-                    onPress={() => setPicked(toggle(picked, s.code))}
+                    key={stock.code}
+                    onPress={() => toggleStock(stock)}
                     style={{
-                      paddingVertical: 10,
-                      paddingHorizontal: 14,
-                      borderRadius: 999,
-                      borderWidth: on ? 1.5 : 1,
-                      borderColor: on ? t.primary : t.borderStrong,
-                      backgroundColor: on ? t.primarySubtle : t.bg,
-                      flexDirection: "row",
                       alignItems: "center",
+                      backgroundColor: t.primarySubtle,
+                      borderColor: t.primary,
+                      borderRadius: 999,
+                      borderWidth: 1,
+                      flexDirection: "row",
                       gap: 6,
+                      paddingHorizontal: 12,
+                      paddingVertical: 8,
                     }}
                   >
-                    {on ? (
-                      <View style={{ transform: [{ rotate: "45deg" }] }}>
-                        <Icon.plus color={t.primary} size={14} />
-                      </View>
-                    ) : null}
                     <Text
                       style={{
-                        fontSize: 14,
+                        color: t.primary,
+                        fontSize: 13,
                         fontWeight: "700",
-                        color: on ? t.primary : t.fgStrong,
                       }}
                     >
-                      {s.name}
+                      {stock.name}
                     </Text>
+                    <Icon.close color={t.primary} size={14} />
                   </Pressable>
-                );
-              })}
+                ))}
+              </View>
+            ) : null}
+            <View
+              style={{
+                alignItems: "center",
+                backgroundColor: t.bgSubtle,
+                borderRadius: 10,
+                flexDirection: "row",
+                gap: 8,
+                height: 44,
+                paddingHorizontal: 12,
+              }}
+            >
+              <Icon.search color={t.fgSubtle} size={18} />
+              <TextInput
+                autoCapitalize="none"
+                onChangeText={setSearchInput}
+                placeholder="종목명 또는 코드 검색"
+                placeholderTextColor={t.fgSubtle}
+                style={{ color: t.fgStrong, flex: 1, fontSize: 15 }}
+                value={searchInput}
+              />
+              {searchInput ? (
+                <Pressable hitSlop={8} onPress={() => setSearchInput("")}>
+                  <Icon.close color={t.fgSubtle} size={16} />
+                </Pressable>
+              ) : null}
             </View>
             <Text style={{ marginTop: 18, fontSize: 13, color: t.fgMuted }}>
               선택 {picked.size}개
             </Text>
+            {stockSearch.isLoading ? (
+              <ActivityIndicator color={t.primary} style={{ marginTop: 28 }} />
+            ) : null}
+            {searchText && stockSearch.data?.length === 0 ? (
+              <Text
+                style={{
+                  color: t.fgSubtle,
+                  fontSize: 13,
+                  marginTop: 28,
+                  textAlign: "center",
+                }}
+              >
+                검색 결과가 없어요.
+              </Text>
+            ) : null}
+            {stockSearch.data?.map((stock) => {
+              const selected = picked.has(stock.code);
+              return (
+                <Pressable
+                  key={stock.code}
+                  onPress={() => toggleStock(stock)}
+                  style={{
+                    alignItems: "center",
+                    borderBottomColor: t.border,
+                    borderBottomWidth: 1,
+                    flexDirection: "row",
+                    gap: 12,
+                    paddingVertical: 12,
+                  }}
+                >
+                  <StockResourceLogo
+                    iconUrl={stock.iconUrl}
+                    name={stock.name}
+                  />
+                  <View style={{ flex: 1 }}>
+                    <Text
+                      style={{
+                        color: t.fgStrong,
+                        fontSize: 15,
+                        fontWeight: "700",
+                      }}
+                    >
+                      {stock.name}
+                    </Text>
+                    <Text
+                      style={{
+                        color: t.fgSubtle,
+                        fontSize: 11,
+                        marginTop: 3,
+                      }}
+                    >
+                      {stock.code} · {stock.market}
+                    </Text>
+                  </View>
+                  <View
+                    style={{
+                      alignItems: "center",
+                      backgroundColor: selected ? t.primary : t.bgSubtle,
+                      borderRadius: 999,
+                      height: 32,
+                      justifyContent: "center",
+                      width: 32,
+                    }}
+                  >
+                    {selected ? (
+                      <Icon.check color={t.primaryOn} size={18} />
+                    ) : (
+                      <Icon.plus color={t.fgStrong} size={18} />
+                    )}
+                  </View>
+                </Pressable>
+              );
+            })}
           </View>
         ) : null}
 
@@ -350,86 +635,21 @@ export default function OnboardingScreen() {
         ) : null}
       </ScrollView>
 
-      <View
-        style={{
-          paddingHorizontal: 24,
-          paddingTop: 12,
-          paddingBottom: insets.bottom + 16,
-          backgroundColor: t.bg,
+      <OnboardingFooter
+        bottomInset={insets.bottom}
+        error={error}
+        isLast={isLast}
+        isPending={complete.isPending}
+        nextDisabled={nextDisabled}
+        onBack={() => setStep(step - 1)}
+        onNext={() => (isLast ? finish([...picked.keys()]) : setStep(step + 1))}
+        onSkip={() => {
+          setSigTypes(new Set());
+          finish([]);
         }}
-      >
-        <View
-          style={{
-            flexDirection: "row",
-            gap: 6,
-            justifyContent: "center",
-            paddingVertical: 16,
-          }}
-        >
-          {STEP_KEYS.map((key, i) => (
-            <View
-              key={key}
-              style={{
-                width: i === step ? 22 : 6,
-                height: 6,
-                borderRadius: 999,
-                backgroundColor: i === step ? t.primary : t.borderStrong,
-              }}
-            />
-          ))}
-        </View>
-        <Pressable
-          disabled={nextDisabled}
-          onPress={() => (isLast ? nav.finishOnboarding() : setStep(step + 1))}
-          style={{
-            height: 52,
-            borderRadius: 12,
-            alignItems: "center",
-            justifyContent: "center",
-            backgroundColor: nextDisabled ? t.bgMuted : t.primary,
-          }}
-        >
-          <Text
-            style={{
-              fontSize: 16,
-              fontWeight: "800",
-              color: nextDisabled ? t.fgSubtle : "#fff",
-            }}
-          >
-            {isLast ? "시작하기" : "다음"}
-          </Text>
-        </Pressable>
-        {step > 0 && !isLast ? (
-          <Pressable
-            onPress={() => setStep(step - 1)}
-            style={{
-              height: 40,
-              marginTop: 6,
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <Text style={{ color: t.fgMuted, fontSize: 14, fontWeight: "600" }}>
-              이전
-            </Text>
-          </Pressable>
-        ) : null}
-        {step === 0 ? (
-          <Pressable
-            onPress={() => nav.finishOnboarding()}
-            style={{
-              height: 40,
-              marginTop: 6,
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <Text style={{ color: t.fgMuted, fontSize: 14, fontWeight: "600" }}>
-              건너뛰기
-            </Text>
-          </Pressable>
-        ) : null}
-      </View>
+        step={step}
+        t={t}
+      />
     </MrScreen>
   );
 }

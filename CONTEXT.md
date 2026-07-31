@@ -27,8 +27,11 @@ _Avoid_: Moderator, owner, host
 
 ## Example Dialogue
 
+<!-- vscodereader 2026-07-30 수정: 기존 비로그인 메시지 공개 정책을 RFC 0009에서
+로그인 필수로 변경·구현하여 현재 공개 shell/보호 메시지 정책을 반영. -->
 > **Dev**: "비로그인 사용자가 종목 토론방에 들어왔어. 메시지 보여줘야 해?"
-> **Domain expert**: "응, 읽기는 누구나 가능해. 글을 쓰려면 로그인 + 자동으로 **Member**가 돼. 좋아요도 로그인이 필요해."
+> **Domain expert**: "방 이름·설명 같은 공개 정보는 볼 수 있지만 실제 메시지·답글·
+> 첨부를 읽으려면 로그인과 온보딩 완료가 필요해. 글을 쓰면 자동으로 **Member**가 돼."
 
 > **Dev**: "관심 종목 탭에 일반방도 노출할까?"
 > **Domain expert**: "아니. 관심 종목 탭은 사용자 **Watchlist**에 있는 종목에 바인딩된 **DiscussionRoom**만 보여줘. 일반방은 인기·최신 탭에만 등장."
@@ -36,5 +39,8 @@ _Avoid_: Moderator, owner, host
 ## Flagged Ambiguities
 
 - UI 탭 라벨 "토론" 은 **DiscussionRoom** 영역.
-- mockup 코드의 `Thread` 네이밍 (`thread-room/`, `ThreadRow`, `openThread`, `type Thread`) 은 구현 시 `DiscussionRoom` 으로 리네임.
+<!-- vscodereader 2026-07-30 수정: 기존 구현 예정이었던 Thread → DiscussionRoom
+리네임이 라우트·API·DB·UI에서 완료되어 완료 상태로 변경. -->
+- mockup의 `Thread` 네이밍은 `DiscussionRoom`으로 리네임 완료. 현재 경로는
+  `discussion-room`, API는 `discussion.*`를 사용한다.
 - legacy 의 명시적 join CTA ("참여하기") 는 신규 모델에서 폐지. **Member** 발생은 첫 메시지 전송 시 자동.

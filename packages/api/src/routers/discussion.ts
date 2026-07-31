@@ -93,16 +93,13 @@ function blockedExpr(userId: string | null): SQL<boolean> {
 }
 
 /**
- * Public room reads remain anonymous, but an authenticated user with an active
- * per-room block must not bypass the app UI by calling message RPCs directly.
+ * Authenticated users with an active per-room block must not bypass the app UI
+ * by calling protected message RPCs directly.
  */
 async function assertRoomReadable(
-  userId: string | null,
+  userId: string,
   roomId: number
 ): Promise<void> {
-  if (!userId) {
-    return;
-  }
   const [blocked] = await db
     .select({ userId: discussionRoomBlock.userId })
     .from(discussionRoomBlock)
@@ -1080,7 +1077,7 @@ export const discussionRouter = {
   /**
    * Room list for the Discuss tab.
    *   - hot:    likes_count DESC, last_message_at DESC NULLS LAST
-   *   - watch:  stockCode ∈ user.watchlist; logged-out → []
+   *   - watch:  stockCode ∈ user.watchlist; authentication required
    *   - recent: last_message_at DESC NULLS LAST, created_at DESC
    */
   rooms: publicProcedure
@@ -1100,6 +1097,10 @@ export const discussionRouter = {
       const isSearch = query.length > 0;
       const filters: SQL[] = [];
 
+      if (!userId && isSearch) {
+        throw new ORPCError("UNAUTHORIZED");
+      }
+
       if (input.stockCode) {
         filters.push(eq(discussionRoom.stockCode, input.stockCode));
       }
@@ -1112,7 +1113,7 @@ export const discussionRouter = {
         );
       } else if (input.tab === "watch") {
         if (!userId) {
-          return [];
+          throw new ORPCError("UNAUTHORIZED");
         }
         const watched = await db
           .selectDistinct({ stockCode: userWatchlist.stockCode })
@@ -1130,7 +1131,7 @@ export const discussionRouter = {
         filters.push(inArray(discussionRoom.stockCode, codes));
       } else if (input.tab === "favorite") {
         if (!userId) {
-          return [];
+          throw new ORPCError("UNAUTHORIZED");
         }
         // Rooms the signed-in user has favorited (별).
         filters.push(favoritedExpr(userId));
@@ -1265,7 +1266,7 @@ export const discussionRouter = {
    * chat screen can append without re-sort. Soft-deleted rows are returned
    * with deletedAt non-null so the client renders the placeholder.
    */
-  messages: publicProcedure
+  messages: protectedProcedure
     .input(
       z.object({
         roomId: z.number().int(),
@@ -1280,7 +1281,7 @@ export const discussionRouter = {
       })
     )
     .handler(async ({ context, input }) => {
-      await assertRoomReadable(context.session?.user?.id ?? null, input.roomId);
+      await assertRoomReadable(context.session.user.id, input.roomId);
       const inRoom = eq(discussionMessage.roomId, input.roomId);
 
       /* ----(방향별 조회 — RFC 0008 D15)---- */
@@ -1333,7 +1334,7 @@ export const discussionRouter = {
    * 앵커가 그 방에 없으면 NOT_FOUND — 다른 방 메시지 id 로 남의 방 내용을
    * 들여다볼 수 없게 한다.
    */
-  messagesAround: publicProcedure
+  messagesAround: protectedProcedure
     .input(
       z.object({
         roomId: z.number().int(),
@@ -1343,7 +1344,7 @@ export const discussionRouter = {
       })
     )
     .handler(async ({ context, input }) => {
-      await assertRoomReadable(context.session?.user?.id ?? null, input.roomId);
+      await assertRoomReadable(context.session.user.id, input.roomId);
       const inRoom = eq(discussionMessage.roomId, input.roomId);
 
       const [anchor] = await db

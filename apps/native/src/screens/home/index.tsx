@@ -21,6 +21,7 @@ import { Icon } from "@/components/icons";
 import { IconButton, MrHeader, MrScreen, SectionHead } from "@/components/ui";
 import { useIndexStream } from "@/hooks/use-index-stream";
 import { useMrTheme } from "@/hooks/use-mr-theme";
+import { useProtectedAction } from "@/hooks/use-protected-action";
 import { authClient } from "@/lib/auth-client";
 import { nav } from "@/utils/nav";
 import { orpc } from "@/utils/orpc";
@@ -86,6 +87,7 @@ function EmptyHint({
 function WatchlistPreview({
   items,
   isLoading,
+  onOpenWatchlist,
   t,
 }: {
   items: {
@@ -95,6 +97,7 @@ function WatchlistPreview({
     name: string;
   }[];
   isLoading: boolean;
+  onOpenWatchlist: () => void;
   t: MrTokens;
 }) {
   if (isLoading) {
@@ -110,7 +113,7 @@ function WatchlistPreview({
     return (
       <EmptyHint
         label="관심 종목이 아직 없어요."
-        onPress={nav.openWatchlist}
+        onPress={onOpenWatchlist}
         t={t}
       />
     );
@@ -131,13 +134,12 @@ function WatchlistPreview({
 export default function HomeScreen() {
   const { t } = useMrTheme();
   const [openSigId, setOpenSigId] = useState<string | null>(null);
+  const { runProtected } = useProtectedAction();
   const { data: session } = authClient.useSession();
   const isLoggedIn = !!session?.user;
   const displayName = session?.user?.name?.trim() || "투자자";
   const indices = useIndexStream();
-  const topSignalsQuery = useQuery(
-    orpc.signal.feed.queryOptions({ input: { window: "all", limit: 3 } })
-  );
+  const topSignalsQuery = useQuery(orpc.signal.preview.queryOptions());
   const topSignals = topSignalsQuery.data?.items ?? [];
   const newsQuery = useQuery(
     orpc.news.feed.queryOptions({ input: { tab: "all", limit: 3 } })
@@ -155,6 +157,16 @@ export default function HomeScreen() {
     orpc.notification.unreadCount.queryOptions({ enabled: isLoggedIn })
   );
   const hasUnreadAlerts = (unreadCountQuery.data ?? 0) > 0;
+  const openAlerts = () =>
+    runProtected({
+      returnTo: "/(moneyroad)/alerts",
+      action: nav.openAlerts,
+    });
+  const openWatchlist = () =>
+    runProtected({
+      returnTo: "/(moneyroad)/watchlist",
+      action: nav.openWatchlist,
+    });
 
   return (
     <MrScreen>
@@ -165,7 +177,7 @@ export default function HomeScreen() {
             {/*<IconButton onPress={nav.openSearch}>*/}
             {/*  <Icon.search color={t.fgStrong} size={22} />*/}
             {/*</IconButton>*/}
-            <IconButton dot={hasUnreadAlerts} onPress={nav.openAlerts}>
+            <IconButton dot={hasUnreadAlerts} onPress={openAlerts}>
               <Icon.bell color={t.fgStrong} size={22} />
             </IconButton>
           </>
@@ -234,9 +246,7 @@ export default function HomeScreen() {
               ? `전체보기 (${watched.length}) →`
               : undefined
           }
-          onMore={
-            isLoggedIn && watched.length > 0 ? nav.openWatchlist : undefined
-          }
+          onMore={isLoggedIn && watched.length > 0 ? openWatchlist : undefined}
           title="내 관심 종목"
         />
         <View style={{ paddingBottom: 8 }}>
@@ -244,12 +254,13 @@ export default function HomeScreen() {
             <WatchlistPreview
               isLoading={watchlistQuery.isLoading}
               items={watchedPreview}
+              onOpenWatchlist={openWatchlist}
               t={t}
             />
           ) : (
             <EmptyHint
               label="로그인하고 관심 종목을 추가해 보세요."
-              onPress={nav.openLogin}
+              onPress={openWatchlist}
               t={t}
             />
           )}

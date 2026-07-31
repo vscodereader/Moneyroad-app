@@ -1,4 +1,3 @@
-import { type Href, router } from "expo-router";
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -13,7 +12,9 @@ import { z } from "zod";
 import { Icon, type IconProps } from "@/components/icons";
 import { BackButton, MrHeader, MrScreen } from "@/components/ui";
 import { useMrTheme } from "@/hooks/use-mr-theme";
+import { useOnboardingStatus } from "@/hooks/use-onboarding-status";
 import { authClient } from "@/lib/auth-client";
+import type { MoneyRoadReturnTo } from "@/utils/auth-navigation";
 import { nav } from "@/utils/nav";
 import type { MrTokens } from "@/utils/theme";
 import { getAuthModeSwitchAccessibility } from "./accessibility";
@@ -118,9 +119,13 @@ const signupSchema = z
     path: ["passwordConfirm"],
   });
 
-export default function LoginScreen() {
+export default function LoginScreen({
+  returnTo,
+}: {
+  returnTo: MoneyRoadReturnTo | null;
+}) {
   const { t } = useMrTheme();
-  const { data: session } = authClient.useSession();
+  const { completed, isAuthenticated, isPending } = useOnboardingStatus();
   const [mode, setMode] = useState<Mode>("signin");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -131,12 +136,18 @@ export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
   const [socialLoading, setSocialLoading] = useState<Provider | null>(null);
 
-  // Once authenticated (email or social), leave the login screen.
+  // The account-level DB status, not the temporary sign-in/sign-up mode,
+  // determines whether this session must complete onboarding.
   useEffect(() => {
-    if (session?.user) {
-      router.replace(AFTER_LOGIN as Href);
+    if (isPending || !isAuthenticated) {
+      return;
     }
-  }, [session?.user]);
+    if (!completed) {
+      nav.openOnboarding();
+      return;
+    }
+    nav.afterLogin(returnTo);
+  }, [completed, isAuthenticated, isPending, returnTo]);
 
   const isSignup = mode === "signup";
 

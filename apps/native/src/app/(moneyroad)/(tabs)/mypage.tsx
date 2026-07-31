@@ -3,7 +3,7 @@ import MyPageScreen from "@/screens/mypage";
 
 export default function MyPageRoute() {
   return (
-    <AuthGate>
+    <AuthGate returnTo="/(moneyroad)/(tabs)/mypage">
       <MyPageScreen />
     </AuthGate>
   );

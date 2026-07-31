@@ -169,4 +169,8 @@ gcloud run jobs update $JOB \
 ## 참고
 - ⚠️ min=max=1 + CPU 상시 할당이라 **항상 켜져 있어 지속 비용**이 발생한다(scale-to-zero 아님).
 - 클라이언트(앱): React Native에는 EventSource가 없으므로 `react-native-sse` 폴리필 사용. 웹은 브라우저 내장 `EventSource`.
-- KIS 어댑터(`src/feed/kis.ts`)는 스켈레톤이다. tr_id별 필드 파싱·PINGPONG·재연결은 KIS 문서로 검증 후 채운다.
+<!-- vscodereader 2026-07-30 수정: 기존 스켈레톤이었던 KIS 어댑터에
+tr_id 파싱·PINGPONG·구독/해제·지수 백오프 재연결이 구현되어 현재 상태 반영. -->
+- KIS 어댑터(`src/services/feed/kis.ts`)는 `H0STCNT0`·지수 체결 파싱,
+  PINGPONG echo, 다건 프레임, 40종목 가드, 구독/해제, 재연결·재구독까지 구현됐다.
+- 남은 검증은 장중 실제 틱과 장시간 운영, 선택 TR(호가 등)이다.

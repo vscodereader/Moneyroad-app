@@ -3,7 +3,6 @@ import "@/global.css";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Stack } from "expo-router";
 import { HeroUINativeProvider } from "heroui-native";
-import { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 
@@ -12,7 +11,6 @@ import { useLogCurrentScreen } from "@/hooks/use-log-current-screen";
 import { useNotificationResponse } from "@/hooks/use-notification-response";
 import { usePushRegistration } from "@/hooks/use-push-registration";
 import { useQuotesManager } from "@/hooks/use-quotes-manager";
-import { hydrateOnboarding } from "@/utils/onboarding";
 import { queryClient } from "@/utils/orpc";
 
 export const unstable_settings = {
@@ -41,10 +39,6 @@ function StackLayout() {
 }
 
 export default function Layout() {
-  useEffect(() => {
-    hydrateOnboarding();
-  }, []);
-
   return (
     <QueryClientProvider client={queryClient}>
       <GestureHandlerRootView style={{ flex: 1 }}>

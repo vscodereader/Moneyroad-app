@@ -19,9 +19,14 @@
 - [x] 도메인 라우터: `news` / `notification` / `signal` / `stock` / `watchlist` /
       `discussion` (+ `healthCheck`/`todo`). 남은 도메인: `market`(시세)
 - [x] 인증: 이메일 + 소셜(구글/애플/네이버/카카오) 로그인, 로그인 화면, mypage 게이트
-- [ ] KIS **REST** 클라이언트(서버측): 현재 `apps/realtime`엔 WS 어댑터만 있음
-      → 시세(market) + 시그널 엔진 양쪽에서 필요
-- [ ] 화면 mock 잔존: 시세(지수·현재가·차트), 종목 카드(price/score), 차트
+<!-- vscodereader 2026-07-30 수정: 기존 미구현이었던 KIS REST·native 시세 연결이
+realtime 서비스의 REST/SSE 경로로 구현되어 현재 상태를 분리해 기록. -->
+- [x] KIS **REST** 클라이언트: `apps/realtime/src/services/index-intraday.ts`의
+      OAuth 토큰 발급·영속화와 `stock-price.ts`/`stock-chart.ts`의 현재가·차트 조회
+- [x] 지수·현재가·차트·sparkline·관심종목 시세를 realtime REST/SSE로 앱에 연결
+- [ ] `market.*` oRPC 라우터는 없음. 현재 구조에서는 realtime 경로가 이 역할을 대체
+- [ ] mock 잔존: 정적 검색·일부 종목 메타데이터·타입. 시세성 숫자는 실데이터 또는
+      연결 중/데이터 없음 상태를 사용
 
 ---
 
@@ -62,15 +67,21 @@ oRPC 라우터 (입력검증·인증)
 
 ## 신설 DB 스키마
 
+<!-- vscodereader 2026-07-30 수정: 설계 당시의 watchlist/thread/userSettings
+가상 테이블명을 실제 생성된 snake_case 스키마와 첨부·모더레이션 테이블로 교체. -->
 | 테이블 | 용도 | 핵심 컬럼 | 화면 |
 |---|---|---|---|
-| `watchlist` | 사용자 관심종목 | `userId, code, createdAt` | 홈④·마이 |
-| `notification` | 알림함 | `userId, type, title, body, code, section, read, createdAt` | 홈헤더·마이·알림 |
-| `userSettings` | 알림/표시 설정 | `userId, signalAlert, newsAlert, priceAlert, display(json)` | 마이·설정 |
-| `news` | 뉴스 + AI요약 | `id, code, category, title, source, url, sentiment, ai, publishedAt` | 홈③·뉴스 |
-| `thread` | 토론 스레드 | `id, code, authorId, title, body, sentiment, likes, members, createdAt` | 토론 |
-| `threadMessage` | 채팅 메시지 | `id, threadId, authorId, text, sentiment, createdAt` | 채팅방 |
-| `threadLike` | 좋아요 | `userId, threadId` (복합 PK) | 토론 |
+| `user_watchlist` | 사용자 관심종목·구독 종류 | `userId, stockCode, type, createdAt` | 홈④·관심종목·알림 |
+| `notification_history` | 인앱·푸시 알림 이력 | `userId, type, title, body, readAt, createdAt` | 홈헤더·마이·알림 |
+| `user_notification_setting` | 시그널·뉴스·가격 알림 설정 | `userId, buySignal, sellSignal, holdSignal, breakingNews, disclosure, priceAlert` | 마이·설정 |
+| `user_push_token` | Expo Push Token | `userId, token, platform, active` | 푸시 |
+| `user_price_alert` | 종목 목표가 알림 | `userId, stockCode, targetPrice, direction, active` | 가격 알림 |
+| `news` | 뉴스 + 머니로드 요약 | `id, stockCode, category, title, summary, url, publishedAt` | 홈③·뉴스 |
+| `discussion_room` | 토론방 | `id, name, description, stockCode, sentiment, createdBy` | 토론 |
+| `discussion_message` | 텍스트·이미지·파일·답글·가림/삭제 상태 | `roomId, userId, type, content, parentId, deletedAt, blindedAt` | 채팅방 |
+| `discussion_room_member/block/like/favorite` | 멤버십·차단·좋아요·즐겨찾기 | 사용자·방 복합키와 상태 시각 | 토론 |
+| `moneyroad_image` / `discussion_message_image` | 공용 이미지 메타데이터·메시지 이미지 순서 | 버킷 키, MIME, 크기, `sortOrder` | 채팅 이미지 |
+| `discussion_file_attachment` | 메시지당 단일 파일 업로드 | 버킷 키, MIME, 크기, 파일명, `messageId` | 채팅 파일 |
 | `signal` | 엔진 산출 캐시 | `id, code, type, strength, title, body, createdAt` | 홈②·시그널 |
 
 > 시세(지수·현재가·차트)는 **DB 불필요** — KIS 패스스루 + 단기 캐시.
@@ -80,8 +91,10 @@ oRPC 라우터 (입력검증·인증)
 
 ## 공통 인프라 (선행 작업)
 
-- [ ] **KIS REST 클라이언트**: OAuth 토큰 발급/갱신, `inquire_*` 호출 래퍼,
-      레이트리밋·에러 정규화. (realtime의 approval_key 로직 참고, REST는 신설.)
+<!-- vscodereader 2026-07-30 수정: 기존 선행 작업이었던 KIS REST 클라이언트를
+realtime의 실제 구현 파일과 현재 한계로 갱신. -->
+- [x] **KIS REST 클라이언트**: OAuth 토큰 발급/DB 영속화, 지수·현재가·차트 호출,
+      throttle·캐시 구현. 현재 `apps/realtime/src/services/`에 위치
 - [ ] **공유 Zod 스키마/타입**: native data.ts 인터페이스 이관.
 - [ ] **서비스 레이어 스캐폴딩** + 라우터 등록 패턴(`routers/index.ts`).
 
@@ -91,12 +104,15 @@ oRPC 라우터 (입력검증·인증)
 
 의존성과 검증 난이도 순. 각 Phase는 독립 배포 가능 단위.
 
-### Phase 1 — 시세 읽기 (🟢 KIS, DB 불필요) ⭐ 먼저
-가장 독립적이고 검증이 쉬우며, 홈 지수/관심종목 시세에 즉시 효과.
-- [ ] `market.indices` → `MarketIndex[]` (KIS `inquire_index_price`)
-- [ ] `market.quote({ code })` / `market.quotes({ codes })` (KIS `inquire_price`)
-- [ ] `market.chart({ code, period, count })` (KIS `inquire_daily_itemchartprice`)
-- 검증: 장중 실제 시세 일치, 캐시 동작. `publicProcedure` 가능.
+### Phase 1 — 시세 읽기 (🟢 KIS, DB 불필요) — realtime 경로로 구현
+<!-- vscodereader 2026-07-30 수정: 기존 market oRPC 계획이 realtime REST/SSE로
+구현된 사실을 반영하되, market.* 라우터 자체는 만들지 않았음을 명시. -->
+- [x] `/index/intraday` → KOSPI/KOSDAQ 장중 지수
+- [x] `/quote/snapshot` → 종목 현재가·등락
+- [x] `/chart/stock` → 1D/3M/1Y/3Y 차트
+- [x] `/quote/sparkline` → 종목 sparkline
+- [x] `/stream/quotes` → 관심종목·화면별 실시간 체결 SSE
+- [ ] `market.indices/quote/chart` oRPC wrapper는 없음(현재 realtime 직접 연결 유지)
 
 ### Phase 2 — 사용자 데이터 (🔵 DB, 🔑 Auth) — 대부분 완료
 관심종목·알림·프로필. Phase 1 시세와 결합해 홈④·마이 완성.
@@ -107,7 +123,11 @@ oRPC 라우터 (입력검증·인증)
 - [x] `notification.getSettings` / `updateSettings` (알림설정 DB 저장, hold 포함)
 - [x] `notification.registerPushToken` / `unregisterPushToken` (단말 토큰 등록)
 - [x] mypage 프로필(세션) + 로그아웃 + 스탯(관심종목·활성시그널·안읽은알림) 실데이터
-- [ ] `watchlist`에 시세·spark 결합 (Phase 1 필요)
+<!-- vscodereader 2026-07-30 수정: watchlist.list 응답 병합 대신 화면 행 단위
+useLiveQuote 방식으로 현재가를 결합한 현재 구현 범위를 정확히 반영. -->
+- [x] 관심종목 화면에 실시간 현재가 결합. `watchlist.list` payload에 넣지 않고
+      native가 행별 `useLiveQuote`로 종목 구독을 등록
+- [ ] 관심종목 행 sparkline은 아직 연결하지 않음
 - [ ] `user.me` / `user.stats` (현재 세션·개별 쿼리로 대체 중)
 
 ### Phase 3 — 콘텐츠: 뉴스 (🟣 AI + 외부 + 🔵 DB) — 완료
@@ -122,19 +142,26 @@ oRPC 라우터 (입력검증·인증)
 종목 연결은 선택([ADR 0003](../../adr/0003-discussion-room-stock-binding.md),
 `stock_code` nullable), 멤버십은 첫 전송 시 암묵 등록([ADR 0002](../../adr/0002-implicit-membership.md)).
 - [x] `discussion.rooms({ tab })` / `room({ id })` / `toggleLike` (목록·상세·좋아요)
-- [x] `discussion.messages` / `send` / `deleteMessage`(soft delete) / `leaveRoom` (채팅)
+- [x] `discussion.messages` / `messagesAround` / `send` /
+      `deleteMessage`(soft delete) / `leaveRoom` (채팅, 메시지 읽기 포함 protected)
 - [x] 화면 연결: 토론 목록(`screens/discuss`) · 채팅방(`screens/discussion-room`) ·
       방 생성 admin(`screens/discussion-room-new`)
+<!-- vscodereader 2026-07-30 수정: 초기 DiscussionRoom 4개 테이블 이후
+즐겨찾기·모더레이션·답글·이미지/파일 첨부 스키마가 구현되어 목록에 추가. -->
 - [x] DB: `discussion_room` / `discussion_message` / `discussion_room_member` /
-      `discussion_room_like`
+      `discussion_room_block` / `discussion_room_like` / `discussion_room_favorite` /
+      `moneyroad_image` / `discussion_message_image` / `discussion_file_attachment`
+- [x] 관리자 메시지 가림·일괄 soft-delete, 멤버 mute·7일 차단
+- [x] 1단계 답글과 이미지 최대 8개·합계 10MB, 파일 1개·개당 20MB 첨부
 - [x] 실시간 채팅: **폴링 우선**(`refetchInterval: 5000`,
       [ADR 0001](../../adr/0001-polling-first-ws-later.md)). WS/SSE 전환은 Phase 6
 
 ### Phase 5 — 시그널 (⚙️) — 기반 완료, 엔진 남음
 **모델 전환**: 소스 기반 → **액션 기반(매수/매도/관망)**. 소스(`tech` 등)는 부가 필드.
 - [x] DB `signal` 테이블(action/source/strength/title/body/indicators) + 0003
-- [x] `signal.feed({ action?, code?, window, cursor?, limit })` / `signal.counts` /
-      `signal.activeCount`(protected, 내 관심종목 24h)
+- [x] `signal.preview`(public 홈 3건) /
+      `signal.feed({ action?, code?, window, cursor?, limit })` /
+      `signal.counts` / `signal.activeCount`(나머지 protected)
 - [x] 화면 연결: 시그널 화면(필터+무한스크롤)·home·mypage 스탯·stock-detail
 - [ ] **⚙️ 시그널 엔진(생성기)**: KIS 일봉 → 골든크로스/RSI/거래량 → 액션/strength 산출
       → `signal` 적재. realtime에 구현. 유니버스=관심종목 합집합.
@@ -143,7 +170,9 @@ oRPC 라우터 (입력검증·인증)
 - [ ] `score` / `signalBreakdown` 산출 → 홈④·종목상세 backfill
 
 ### Phase 6 — 실시간 전환 (⚡ RT)
-- [ ] 관심종목 현재가를 폴링 → SSE 구독으로 전환(`apps/realtime` 연동)
+<!-- vscodereader 2026-07-30 수정: 기존 미구현이었던 관심종목 시세 SSE는
+quotes-store/quotes-sse 싱글턴으로 구현 완료. 채팅 메시지 폴링은 의도대로 유지. -->
+- [x] 관심종목 현재가를 SSE 구독으로 전환(`apps/realtime` + `quotes-sse`)
 - [ ] 토론 채팅 폴링(`refetchInterval: 5000`) → WS/SSE 전환 (ADR 0001, PMF 검증 후)
 
 ---
@@ -169,20 +198,25 @@ oRPC 라우터 (입력검증·인증)
 | 작업 | 효과 / 비고 | 참고 |
 |---|---|---|
 | ⚙️ **시그널 엔진** | `signal` 테이블 채움 → 시그널 화면·home·mypage 활성화 | [realtime/plan.md](../../realtime/plan.md#시그널-엔진-신규) |
-| 🟢 **시세(market) 라우터 + KIS REST** | 홈 지수·관심종목 시세·종목상세 차트 실데이터화 | plan Phase 1, "공통 인프라" |
-| 관심종목 시세·spark 결합 | `watchlist.list`에 현재가/스파크 추가 | Phase 1 의존 |
+<!-- vscodereader 2026-07-30 수정: 완료된 KIS REST·native 시세 SSE 백로그를
+현재 구현 방식으로 완료 처리하고, 선택적으로 남은 oRPC wrapper만 분리. -->
+| ~~KIS REST + native 시세 연결~~ ✅ | realtime REST/SSE로 지수·현재가·차트·관심종목 실데이터화 | `apps/realtime/src/services`, `quotes-sse.ts` |
+| `market.*` oRPC wrapper | 현재 realtime 직접 연결을 server oRPC로 감쌀 필요가 생길 때만 검토 | Phase 1 대체 구현 |
 | ~~로그인 라우트 게이트 정리~~ ✅ | `AuthGate` 컴포넌트로 watchlist/alerts/settings/mypage 보호 | `components/auth-gate.tsx` |
 | 실기기 푸시 발송 검증 | dev build + 실기기에서 속보/시그널 푸시 e2e | [realtime/plan.md](../../realtime/plan.md#다음-단계--푸시-알림-보류) |
 | 웹 뉴스 화면 연동 | `apps/web` 뉴스 페이지(앱만 완료) | Phase 3 |
 | ~~토론(discuss) 도메인~~ ✅ | DiscussionRoom 채팅방·좋아요·폴링 채팅 (Phase 4 완료) | `routers/discussion.ts` |
-| realtime 시세 SSE 클라 연동 + 배포 | 관심종목 실시간 시세, Cloud Run 배포 | [realtime/plan.md](../../realtime/plan.md) |
+| realtime Cloud Run 운영 검증 | native SSE 클라이언트는 완료. 배포·장중 실기기 상태는 외부 환경에서 확인 | [realtime/plan.md](../../realtime/plan.md) |
 
 ---
 
 ## 미해결 결정사항 (전역)
 
 - [ ] 공유 스키마 위치: `packages/api` 내부 vs 신규 `packages/contracts`.
-- [ ] KIS REST를 `apps/server`에 둘지, `apps/realtime`과 공유 패키지로 뺄지.
+<!-- vscodereader 2026-07-30 수정: KIS REST 위치가 realtime으로 결정·구현되어
+기존 미해결 결정을 완료 상태로 변경. -->
+- [x] KIS REST는 현재 `apps/realtime/src/services`에 둔다. 추후 시그널 엔진도
+      기존 토큰·차트 함수를 재사용
 - [ ] 뉴스 원천 소스/라이선스, AI 요약 생성 시점(배치 vs 온디맨드).
 - [ ] 시그널 엔진 실행 형태(배치 잡 vs 온디맨드)와 저장(`signal` 캐시).
 - [ ] 실시간 범위: 시세만 vs 채팅 포함, SSE 재사용 vs 분리.

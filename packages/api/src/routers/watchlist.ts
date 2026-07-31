@@ -14,10 +14,7 @@ import {
   STOCK_ICON_RESOURCE_TYPE,
   STOCK_RESOURCE_READY_STATUS,
 } from "../lib/stock-resource";
-
-// The app's watchlist powers news features (watch tab + breaking push), so
-// entries are stored as type='news'. A signal-type watch is future work.
-const WATCH_TYPE = "news" as const;
+import { insertNewsWatchlist, WATCHLIST_NEWS_TYPE } from "../lib/watchlist";
 
 export const watchlistRouter = {
   // Current user's watchlist, newest first, joined with the stock name/market.
@@ -48,7 +45,7 @@ export const watchlistRouter = {
       .where(
         and(
           eq(userWatchlist.userId, userId),
-          eq(userWatchlist.type, WATCH_TYPE)
+          eq(userWatchlist.type, WATCHLIST_NEWS_TYPE)
         )
       )
       .orderBy(desc(userWatchlist.createdAt));
@@ -68,10 +65,7 @@ export const watchlistRouter = {
     .input(z.object({ stockCode: z.string().min(1) }))
     .handler(async ({ context, input }) => {
       const userId = context.session.user.id;
-      await db
-        .insert(userWatchlist)
-        .values({ userId, stockCode: input.stockCode, type: WATCH_TYPE })
-        .onConflictDoNothing();
+      await insertNewsWatchlist(db, userId, [input.stockCode]);
       // Newly watched stock → pin it on realtime now so quotes stream at once.
       refreshRealtimePins("watchlist.add");
       return { ok: true };
@@ -87,7 +81,7 @@ export const watchlistRouter = {
           and(
             eq(userWatchlist.userId, userId),
             eq(userWatchlist.stockCode, input.stockCode),
-            eq(userWatchlist.type, WATCH_TYPE)
+            eq(userWatchlist.type, WATCHLIST_NEWS_TYPE)
           )
         );
       // Possibly the last watcher → let realtime unpin promptly.

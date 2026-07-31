@@ -1,11 +1,14 @@
 import { type Href, Redirect } from "expo-router";
 import type { ReactNode } from "react";
 import { View } from "react-native";
-
 import { useMrTheme } from "@/hooks/use-mr-theme";
-import { authClient } from "@/lib/auth-client";
+import { useOnboardingStatus } from "@/hooks/use-onboarding-status";
+import {
+  buildLoginHref,
+  type MoneyRoadReturnTo,
+} from "@/utils/auth-navigation";
 
-const LOGIN_HREF = "/(moneyroad)/login" as Href;
+const ONBOARDING_HREF = "/(moneyroad)/onboarding" as Href;
 
 /**
  * Route guard for login-required screens. Use in the thin route file so screen
@@ -16,15 +19,24 @@ const LOGIN_HREF = "/(moneyroad)/login" as Href;
  * - no session → redirect to the login screen
  * - authenticated → render children
  */
-export function AuthGate({ children }: { children: ReactNode }) {
+export function AuthGate({
+  children,
+  returnTo,
+}: {
+  children: ReactNode;
+  returnTo: MoneyRoadReturnTo;
+}) {
   const { t } = useMrTheme();
-  const { data: session, isPending } = authClient.useSession();
+  const { completed, isAuthenticated, isPending } = useOnboardingStatus();
 
   if (isPending) {
     return <View style={{ backgroundColor: t.bg, flex: 1 }} />;
   }
-  if (!session?.user) {
-    return <Redirect href={LOGIN_HREF} />;
+  if (!isAuthenticated) {
+    return <Redirect href={buildLoginHref(returnTo)} />;
+  }
+  if (!completed) {
+    return <Redirect href={ONBOARDING_HREF} />;
   }
   return <>{children}</>;
 }

@@ -25,7 +25,15 @@ const RE_BRACKET_KEYWORD = /[[(【「『]([가-힣a-zA-Z0-9·\s]+)[\])】」』]
 const CRAWL_USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 
-/** Fetches the latest news items for a query from the Naver search API. */
+/**
+ * Fetches the latest news items for a query from the Naver news search API.
+ *
+ * Uses the NAVER API HUB (NAVER Cloud Platform) endpoint. NAVER migrated the
+ * search API off developers.naver.com, so newly issued credentials are NCP
+ * API-Gateway keys sent via `X-NCP-APIGW-API-KEY-ID` / `X-NCP-APIGW-API-KEY`
+ * (Client ID / Client Secret). The response payload is unchanged from the
+ * legacy openapi.naver.com shape.
+ */
 export async function fetchNaverNewsList(
   query: string,
   clientId: string,
@@ -36,14 +44,15 @@ export async function fetchNaverNewsList(
     query,
     display: String(display),
     sort: "date",
+    format: "json",
   });
 
   const res = await globalThis.fetch(
-    `https://openapi.naver.com/v1/search/news.json?${params}`,
+    `https://naverapihub.apigw.ntruss.com/search/v1/news?${params}`,
     {
       headers: {
-        "X-Naver-Client-Id": clientId,
-        "X-Naver-Client-Secret": clientSecret,
+        "X-NCP-APIGW-API-KEY-ID": clientId,
+        "X-NCP-APIGW-API-KEY": clientSecret,
       },
     }
   );

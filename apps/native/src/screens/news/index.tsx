@@ -1,5 +1,10 @@
 import { BottomTabBarHeightContext } from "@react-navigation/bottom-tabs";
-import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import {
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { router, useLocalSearchParams } from "expo-router";
 import { useContext, useEffect, useRef, useState } from "react";
 import {
@@ -17,33 +22,129 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { NewsCard } from "@/components/cards";
 import { Icon } from "@/components/icons";
 import { Chip, MrHeader, MrScreen, StockLogo } from "@/components/ui";
+import { useLiveQuote } from "@/hooks/use-live-quotes";
 import { useMrTheme } from "@/hooks/use-mr-theme";
 import { type NewsTab, useNewsStream } from "@/hooks/use-news-stream";
 import { authClient } from "@/lib/auth-client";
 import { findStock, type NewsItem } from "@/utils/data";
+import { changeColor, fmt } from "@/utils/format";
+import { nav } from "@/utils/nav";
 import { orpc } from "@/utils/orpc";
 
 const TABS: { k: NewsTab; l: string }[] = [
   { k: "watch", l: "관심 종목" },
   { k: "all", l: "전체" },
-  { k: "industry", l: "산업" },
   { k: "market", l: "시장" },
+  { k: "industry", l: "산업" },
+  // ----(추가: 기업·해외 탭)----
+  { k: "company", l: "기업" },
+  { k: "global", l: "해외" },
+  // ----(추가 끝)----
   { k: "policy", l: "정책" },
 ];
+
+/**
+ * 뉴스 상세의 종목 패널. 매칭된 종목의 실시간 시세(useLiveQuote)를 종목 상세와
+ * 동일 포맷으로 보여주고, 탭하면 종목 상세로 이동한다(nav.openStock 관례).
+ * 시세 tick이 아직 없거나 장 마감이면 문구로 폴백한다(패널은 유지).
+ */
+function NewsStockPanel({
+  code,
+  stockName,
+  dummyStock,
+  onOpen,
+}: {
+  code: string;
+  stockName: string;
+  dummyStock: ReturnType<typeof findStock>;
+  onOpen: () => void;
+}) {
+  const { t } = useMrTheme();
+  const live = useLiveQuote(code);
+  const panelStyle = {
+    marginTop: 14,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: t.border,
+    borderRadius: 12,
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    gap: 12,
+  };
+  const body = (
+    <>
+      {dummyStock ? <StockLogo size={40} stock={dummyStock} /> : null}
+      <View style={{ flex: 1 }}>
+        <Text style={{ fontSize: 14, fontWeight: "700", color: t.fgStrong }}>
+          {stockName}
+        </Text>
+        {live ? (
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "baseline",
+              gap: 6,
+              marginTop: 2,
+            }}
+          >
+            <Text
+              style={{ fontSize: 14, fontWeight: "800", color: t.fgStrong }}
+            >
+              {fmt.price(live.price)}
+            </Text>
+            <Text
+              style={{
+                fontSize: 12,
+                fontWeight: "700",
+                color: changeColor(live.change, t),
+              }}
+            >
+              {fmt.signedNum(live.change)} ({fmt.pct(live.changeRate)})
+            </Text>
+          </View>
+        ) : (
+          <Text style={{ fontSize: 12, color: t.fgMuted }}>
+            시세 정보는 준비 중입니다.
+          </Text>
+        )}
+      </View>
+    </>
+  );
+  if (!code) {
+    return <View style={panelStyle}>{body}</View>;
+  }
+  return (
+    <Pressable onPress={onOpen} style={panelStyle}>
+      {body}
+    </Pressable>
+  );
+}
 
 function NewsSheet({
   newsId,
   onClose,
   seed,
+  isAdmin,
 }: {
   newsId: string;
   onClose: () => void;
   seed?: NewsItem;
+  isAdmin: boolean;
 }) {
   const { t } = useMrTheme();
   const insets = useSafeAreaInsets();
+  const queryClient = useQueryClient();
   const detail = useQuery(
     orpc.news.detail.queryOptions({ input: { id: newsId } })
+  );
+  // 바로 삭제(확인창 없음, RFC 0002 D8) → 목록 무효화 후 시트 닫기.
+  const removeNews = useMutation(
+    orpc.news.remove.mutationOptions({
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: orpc.news.feed.key() });
+        onClose();
+      },
+    })
   );
   const d = detail.data;
   // 피드에서 연 경우 seed로 즉시 표시하고, 푸시 딥링크처럼 seed가 없으면 detail로 채운다.
@@ -116,7 +217,7 @@ function NewsSheet({
               </Text>
             </View>
             <Text style={{ fontSize: 11, color: t.fgSubtle }}>
-              Claude가 생성
+              머니로드가 요약함
             </Text>
             <Pressable
               hitSlop={8}
@@ -166,30 +267,15 @@ function NewsSheet({
           </View>
 
           {stockName ? (
-            <View
-              style={{
-                marginTop: 14,
-                padding: 12,
-                borderWidth: 1,
-                borderColor: t.border,
-                borderRadius: 12,
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 12,
+            <NewsStockPanel
+              code={code}
+              dummyStock={dummyStock}
+              onOpen={() => {
+                onClose();
+                nav.openStock(code);
               }}
-            >
-              {dummyStock ? <StockLogo size={40} stock={dummyStock} /> : null}
-              <View style={{ flex: 1 }}>
-                <Text
-                  style={{ fontSize: 14, fontWeight: "700", color: t.fgStrong }}
-                >
-                  {stockName}
-                </Text>
-                <Text style={{ fontSize: 12, color: t.fgMuted }}>
-                  시세 정보는 준비 중입니다.
-                </Text>
-              </View>
-            </View>
+              stockName={stockName}
+            />
           ) : null}
 
           <Text
@@ -235,6 +321,67 @@ function NewsSheet({
               원문 기사 보기
             </Text>
           </Pressable>
+
+          {/* 관리자 + 수동(머니로드 독점) 기사에만 편집/삭제 노출 */}
+          {isAdmin && d?.sourceType === "manual" ? (
+            <View style={{ flexDirection: "row", gap: 10, marginTop: 10 }}>
+              <Pressable
+                onPress={() => {
+                  onClose();
+                  nav.openEditNews(newsId);
+                }}
+                style={{
+                  flex: 1,
+                  height: 44,
+                  borderRadius: 10,
+                  borderWidth: 1,
+                  borderColor: t.border,
+                  backgroundColor: t.bgSubtle,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 6,
+                }}
+              >
+                <Icon.pencil color={t.fgStrong} size={16} />
+                <Text
+                  style={{ fontSize: 14, fontWeight: "800", color: t.fgStrong }}
+                >
+                  편집
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={() => removeNews.mutate({ id: newsId })}
+                style={{
+                  flex: 1,
+                  height: 44,
+                  borderRadius: 10,
+                  backgroundColor: t.downBg,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 6,
+                }}
+              >
+                {removeNews.isPending ? (
+                  <ActivityIndicator color={t.downStrong} size="small" />
+                ) : (
+                  <>
+                    <Icon.trash color={t.downStrong} size={16} />
+                    <Text
+                      style={{
+                        fontSize: 14,
+                        fontWeight: "800",
+                        color: t.downStrong,
+                      }}
+                    >
+                      삭제
+                    </Text>
+                  </>
+                )}
+              </Pressable>
+            </View>
+          ) : null}
         </ScrollView>
       </View>
     </Modal>
@@ -310,6 +457,7 @@ export default function NewsScreen() {
   const { t } = useMrTheme();
   const { data: session } = authClient.useSession();
   const isLoggedIn = !!session?.user;
+  const isAdmin = session?.user.role === "admin";
   // 기본 탭: 로그인 상태면 관심 종목, 비로그인이면 전체. 세션이 처음 resolve될 때
   // 한 번만 시드해, 이후 사용자가 직접 탭을 바꾸면 그 선택을 유지한다.
   const [tab, setTab] = useState<NewsTab>("all");
@@ -482,6 +630,7 @@ export default function NewsScreen() {
         if (openNews) {
           return (
             <NewsSheet
+              isAdmin={isAdmin}
               newsId={openNews.id}
               onClose={() => setOpenNews(null)}
               seed={openNews}
@@ -491,6 +640,7 @@ export default function NewsScreen() {
         if (deepLinkNewsId) {
           return (
             <NewsSheet
+              isAdmin={isAdmin}
               newsId={deepLinkNewsId}
               onClose={() => setDeepLinkNewsId(null)}
             />
@@ -498,6 +648,30 @@ export default function NewsScreen() {
         }
         return null;
       })()}
+
+      {isAdmin ? (
+        <Pressable
+          onPress={nav.openCreateNews}
+          style={{
+            position: "absolute",
+            right: 16,
+            bottom: tabBarHeight + 12,
+            width: 52,
+            height: 52,
+            borderRadius: 999,
+            backgroundColor: t.primary,
+            alignItems: "center",
+            justifyContent: "center",
+            shadowColor: t.primary,
+            shadowOffset: { width: 0, height: 8 },
+            shadowOpacity: 0.5,
+            shadowRadius: 12,
+            elevation: 6,
+          }}
+        >
+          <Icon.plus color="#fff" size={24} />
+        </Pressable>
+      ) : null}
     </MrScreen>
   );
 }

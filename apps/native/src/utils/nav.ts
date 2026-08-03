@@ -26,9 +26,14 @@ export const nav = {
     router.push(`${BASE}/discussion-room/${id}` as Href),
   openCreateDiscussionRoom: () =>
     router.push(`${BASE}/discussion-room/new` as Href),
+  openEditDiscussionRoom: (id: number | string) =>
+    router.push(`${BASE}/discussion-room/edit/${id}` as Href),
   openCreateSignal: () => router.push(`${BASE}/signal/new` as Href),
   openManageSignal: () => router.push(`${BASE}/signal/manage` as Href),
   openCreateNotice: () => router.push(`${BASE}/notice/new` as Href),
+  openCreateNews: () => router.push(`${BASE}/news/new` as Href),
+  openEditNews: (id: string) =>
+    router.push(`${BASE}/news/new?id=${id}` as Href),
   openSettings: (page: string) =>
     router.push(`${BASE}/settings/${page}` as Href),
   goTab: (name: TabName) =>

@@ -44,3 +44,45 @@ export function refreshRealtimePins(reason: string): void {
       });
     });
 }
+
+const NEWS_TRIGGER_PATH = "/internal/refresh-news";
+
+/**
+ * Fire-and-forget nudge to the realtime service so it broadcasts a "news" event
+ * to every connected client (→ they refetch the feed at once) right after an
+ * admin news create/update/remove — instead of waiting for the next collector
+ * broadcast or a manual refresh (RFC 0002 §4-6 option B).
+ *
+ * ⚠️ This is NOT `refreshRealtimePins`: it hits a separate
+ * `/internal/refresh-news` endpoint (news feed only), never the pin/price-alert
+ * domain. Best-effort — never blocks, swallows every failure after logging.
+ */
+export function refreshRealtimeNews(reason: string): void {
+  const url = `${env.REALTIME_INTERNAL_URL}${NEWS_TRIGGER_PATH}`;
+  fetch(url, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-internal-secret": env.STREAM_TOKEN_SECRET,
+    },
+    body: JSON.stringify({ reason }),
+    signal: AbortSignal.timeout(TIMEOUT_MS),
+  })
+    .then((res) => {
+      if (!res.ok) {
+        log.warn({
+          realtimeTrigger: {
+            event: "refresh_news_rejected",
+            status: res.status,
+            reason,
+          },
+        });
+      }
+    })
+    .catch((error) => {
+      log.warn({
+        realtimeTrigger: { event: "refresh_news_failed", reason },
+        error,
+      });
+    });
+}

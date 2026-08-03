@@ -1,9 +1,10 @@
 // MoneyRoad — composite cards & list rows
 
-import { Pressable, Text, View } from "react-native";
+import { Image, Pressable, Text, View } from "react-native";
 import { Gradient, IndexIntradayChart, Sparkline } from "@/components/charts";
 import { Icon, SIGNAL_ACTION_ICON } from "@/components/icons";
 import {
+  IconButton,
   Skeleton,
   StockLogo,
   StockResourceLogo,
@@ -529,6 +530,21 @@ export function SignalCard({
 
 // ── News thumbnail ────────────────────────────────────────────
 function NewsThumb({ news, t }: { news: NewsItem; t: MrTokens }) {
+  // 실제 썸네일(GCS 재호스팅)이 있으면 이미지, 없으면 감성색 텍스트 박스 폴백.
+  if (news.imageUrl) {
+    return (
+      <Image
+        resizeMode="cover"
+        source={{ uri: news.imageUrl }}
+        style={{
+          width: 78,
+          height: 78,
+          borderRadius: 8,
+          backgroundColor: t.bgSubtle,
+        }}
+      />
+    );
+  }
   const up = news.sentiment === "up";
   return (
     <View
@@ -772,10 +788,15 @@ export function DiscussionRoomRow({
   room,
   onToggleLike,
   onPress,
+  onEdit,
+  onDelete,
 }: {
   room: DiscussionRoomRowData;
   onToggleLike: () => void;
   onPress: () => void;
+  // 관리자에게만 전달된다(전달될 때만 편집/삭제 버튼 노출).
+  onEdit?: () => void;
+  onDelete?: () => void;
 }) {
   const { t } = useMrTheme();
   const stock = room.stockCode ? findStock(room.stockCode) : null;
@@ -831,16 +852,35 @@ export function DiscussionRoomRow({
             </Text>
           </View>
         ) : null}
-        <Text
+        <View
           style={{
             marginLeft: "auto",
-            fontSize: 11,
-            color: t.fgMuted,
-            fontWeight: "600",
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 2,
           }}
         >
-          {room.time}
-        </Text>
+          {onEdit ? (
+            <IconButton onPress={onEdit} size={28}>
+              <Icon.pencil color={t.fgMuted} size={16} />
+            </IconButton>
+          ) : null}
+          {onDelete ? (
+            <IconButton onPress={onDelete} size={28}>
+              <Icon.trash color={t.downStrong} size={16} />
+            </IconButton>
+          ) : null}
+          <Text
+            style={{
+              fontSize: 11,
+              color: t.fgMuted,
+              fontWeight: "600",
+              marginLeft: 2,
+            }}
+          >
+            {room.time}
+          </Text>
+        </View>
       </View>
       <Text
         style={{

@@ -105,6 +105,15 @@ export const Icon = {
       <Line x1="14" x2="14" y1="11" y2="17" {...stroke(color)} />
     </Base>
   ),
+  pencil: ({ size = DEFAULT_SIZE, color = DEFAULT_COLOR }: IconProps) => (
+    <Base size={size}>
+      <Path d="M12 20h9" {...stroke(color)} />
+      <Path
+        d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"
+        {...stroke(color)}
+      />
+    </Base>
+  ),
   check: ({ size = DEFAULT_SIZE, color = DEFAULT_COLOR }: IconProps) => (
     <Base size={size}>
       <Polyline points="20 6 9 17 4 12" {...stroke(color, 3)} />

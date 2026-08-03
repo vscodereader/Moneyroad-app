@@ -48,9 +48,13 @@ export interface Signal {
 
 export interface NewsItem {
   ai: string;
+  /** True only when `ai` is a real AI-generated summary (not a description fallback). */
+  aiGenerated?: boolean;
   category: string;
   code: string;
   id: string;
+  /** 실제 대표 이미지(GCS 재호스팅). 없으면 UI에서 텍스트 썸네일 폴백. */
+  imageUrl?: string | null;
   sentiment: "up" | "down";
   source: string;
   /** Stock name resolved from the API (real codes not in the dummy `stocks`). */

@@ -54,4 +54,16 @@ export class NewsHub {
       }
     }
   }
+
+  /**
+   * Nudge EVERY connected client to refetch, bypassing per-client filters.
+   * Used for admin news writes (RFC 0002 §4-6 B): the client ignores the
+   * payload and just invalidates its feed cache, so one event refreshes all
+   * tabs at once regardless of which category/symbol each client subscribed to.
+   */
+  broadcastRefresh(event: NewsEvent): void {
+    for (const client of this.clients) {
+      client.send(event);
+    }
+  }
 }

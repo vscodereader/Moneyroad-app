@@ -666,9 +666,14 @@ function useDiscussionRoom(roomId: number, isValid: boolean) {
   const { data: session } = authClient.useSession();
   const queryClient = useQueryClient();
 
+  const roomOptions = orpc.discussion.room.queryOptions({
+    input: { id: roomId },
+  });
   const roomQuery = useQuery({
-    ...orpc.discussion.room.queryOptions({ input: { id: roomId } }),
+    ...roomOptions,
     enabled: isValid,
+    // RFC 0003 G1: 방 안 참여자수(사람수)도 5초 폴링으로 실시간 갱신.
+    refetchInterval: POLL_INTERVAL_MS,
   });
 
   const messagesOptions = orpc.discussion.messages.queryOptions({
@@ -681,15 +686,22 @@ function useDiscussionRoom(roomId: number, isValid: boolean) {
     // TODO: pause polling on AppState=background via focusManager.
   });
 
-  const invalidateMessages = () =>
+  // RFC 0003 G3 (ADR-0001 #3 준수): 메시지 전송/삭제 후 메시지 목록뿐 아니라
+  // 토론 목록·방 카운트(사람수·말풍선)도 무효화해 즉시 반영되게 한다.
+  const invalidateAfterMessageChange = () => {
     queryClient.invalidateQueries({ queryKey: messagesOptions.queryKey });
+    queryClient.invalidateQueries({ queryKey: orpc.discussion.rooms.key() });
+    queryClient.invalidateQueries({ queryKey: roomOptions.queryKey });
+  };
 
   const sendMutation = useMutation(
-    orpc.discussion.send.mutationOptions({ onSuccess: invalidateMessages })
+    orpc.discussion.send.mutationOptions({
+      onSuccess: invalidateAfterMessageChange,
+    })
   );
   const deleteMutation = useMutation(
     orpc.discussion.deleteMessage.mutationOptions({
-      onSuccess: invalidateMessages,
+      onSuccess: invalidateAfterMessageChange,
     })
   );
   const leaveMutation = useMutation(

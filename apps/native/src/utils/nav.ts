@@ -22,8 +22,16 @@ export const nav = {
   openAlerts: () => router.push(`${BASE}/alerts` as Href),
   openWatchlist: () => router.push(`${BASE}/watchlist` as Href),
   openLogin: () => router.push(`${BASE}/login` as Href),
-  openDiscussionRoom: (id: number | string) =>
-    router.push(`${BASE}/discussion-room/${id}` as Href),
+  /* ----(앵커 지정 진입 — RFC 0008 §4-8)---- */
+  // anchorId 를 주면 그 메시지가 화면 가운데 오도록 스크롤한다. "내 글·답글"
+  // 목록에서 항목을 눌렀을 때, 그리고 말풍선의 인용을 눌렀을 때(D16) 쓴다.
+  openDiscussionRoom: (id: number | string, anchorId?: number) =>
+    router.push(
+      (anchorId === undefined
+        ? `${BASE}/discussion-room/${id}`
+        : `${BASE}/discussion-room/${id}?anchorId=${anchorId}`) as Href
+    ),
+  /* ----(~앵커 지정 진입 여기까지)---- */
   openCreateDiscussionRoom: () =>
     router.push(`${BASE}/discussion-room/new` as Href),
   openEditDiscussionRoom: (id: number | string) =>

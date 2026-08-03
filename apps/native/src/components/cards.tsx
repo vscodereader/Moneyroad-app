@@ -782,17 +782,188 @@ export type DiscussionRoomRowData = {
   repliesCount: number;
   membersCount: number;
   liked: boolean;
+  favorited: boolean;
 };
+
+/* ----(통계 한 칸 — 네 칸 규격을 한 곳에서 정한다)---- */
+// 별·하트·답글·인원은 뜻만 다를 뿐 같은 종류의 지표라 칸 규격이 같아야 한다.
+// 예전엔 칸마다 gap을 따로 주고 인원 아이콘만 13이라 눈에 띄게 어긋났다.
+// 이제 크기·간격·정렬을 이 상수와 StatItem 하나로 묶어, 칸을 더 늘려도
+// 자동으로 같은 규격을 따라가게 한다. flex:1이라 네 칸이 폭을 똑같이 나눠 갖고,
+// 각 칸 안에서 내용이 가운데로 온다(별처럼 숫자가 없는 칸도 중앙).
+const STAT_ICON_SIZE = 20;
+const STAT_GAP = 4;
+
+const STAT_ITEM_STYLE = {
+  flex: 1,
+  flexDirection: "row" as const,
+  alignItems: "center" as const,
+  justifyContent: "center" as const,
+  gap: STAT_GAP,
+};
+
+function StatItem({
+  children,
+  label,
+  onPress,
+}: {
+  children: React.ReactNode;
+  label?: string;
+  onPress?: () => void;
+}) {
+  if (!onPress) {
+    return <View style={STAT_ITEM_STYLE}>{children}</View>;
+  }
+  return (
+    <Pressable
+      accessibilityLabel={label}
+      accessibilityRole="button"
+      hitSlop={6}
+      onPress={onPress}
+      style={STAT_ITEM_STYLE}
+    >
+      {children}
+    </Pressable>
+  );
+}
+/* ----(~통계 한 칸 여기까지)---- */
+
+function RoomStatsRow({
+  room,
+  onToggleLike,
+  onToggleFavorite,
+}: {
+  room: DiscussionRoomRowData;
+  onToggleLike: () => void;
+  onToggleFavorite?: () => void;
+}) {
+  const { t } = useMrTheme();
+  /* ----(켜진 상태 아이콘 색 — 브랜드 primary 하나로 통일)---- */
+  // 즐겨찾기 별·좋아요 하트는 "내가 켰다"는 같은 뜻이라 색도 같아야 한다.
+  // 예전엔 별=warning(노랑), 하트=upStrong(빨강)으로 따로 놀았는데, upStrong은
+  // 원래 주가 상승(한국식 빨강)을 뜻하는 토큰이라 좋아요에 쓰면 의미가 겹친다.
+  // 빨강은 알림 배지(MrIconButton의 dot)만 쓰도록 남겨 둔다.
+  const activeColor = t.primary;
+  /* ----(~켜진 상태 아이콘 색 여기까지)---- */
+  const countStyle = { fontSize: 12, fontWeight: "700" as const };
+  return (
+    <View
+      style={{
+        flexDirection: "row",
+        gap: 8,
+        marginTop: 10,
+        alignItems: "center",
+      }}
+    >
+      {/* ----(네 칸을 같은 폭으로 나눠 갖는 통계 줄)---- */}
+      <View style={{ flex: 1, flexDirection: "row", alignItems: "center" }}>
+        {onToggleFavorite ? (
+          <StatItem label="즐겨찾기" onPress={onToggleFavorite}>
+            <Icon.star
+              color={room.favorited ? activeColor : t.fgMuted}
+              filled={room.favorited}
+              size={STAT_ICON_SIZE}
+            />
+          </StatItem>
+        ) : null}
+        <StatItem label="좋아요" onPress={onToggleLike}>
+          <Icon.heart
+            color={room.liked ? activeColor : t.fgMuted}
+            filled={room.liked}
+            size={STAT_ICON_SIZE}
+          />
+          <Text
+            style={{
+              ...countStyle,
+              color: room.liked ? activeColor : t.fgMuted,
+            }}
+          >
+            {room.likesCount}
+          </Text>
+        </StatItem>
+        <StatItem>
+          <Icon.reply color={t.fgMuted} size={STAT_ICON_SIZE} />
+          <Text style={{ ...countStyle, color: t.fgMuted }}>
+            {room.repliesCount}
+          </Text>
+        </StatItem>
+        <StatItem>
+          <Icon.sigComm color={t.fgMuted} size={STAT_ICON_SIZE} />
+          <Text style={{ ...countStyle, color: t.fgMuted }}>
+            {room.membersCount}
+          </Text>
+        </StatItem>
+      </View>
+      {/* ----(~네 칸을 같은 폭으로 나눠 갖는 통계 줄 여기까지)---- */}
+      {room.sentiment === "neutral" ? null : (
+        <View
+          style={{
+            paddingHorizontal: 8,
+            paddingVertical: 2,
+            borderRadius: 999,
+            backgroundColor: room.sentiment === "up" ? t.upBg : t.downBg,
+          }}
+        >
+          <Text
+            style={{
+              fontSize: 11,
+              fontWeight: "700",
+              color: room.sentiment === "up" ? t.upStrong : t.downStrong,
+            }}
+          >
+            {room.sentiment === "up" ? "긍정" : "부정"}
+          </Text>
+        </View>
+      )}
+    </View>
+  );
+}
+
+function RoomAdminButtons({
+  onEdit,
+  onDelete,
+}: {
+  onEdit?: () => void;
+  onDelete?: () => void;
+}) {
+  const { t } = useMrTheme();
+  if (!(onEdit || onDelete)) {
+    return null;
+  }
+  return (
+    <View
+      style={{
+        width: 44,
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 4,
+      }}
+    >
+      {onEdit ? (
+        <IconButton onPress={onEdit} size={40}>
+          <Icon.pencil color={t.fgMuted} size={18} />
+        </IconButton>
+      ) : null}
+      {onDelete ? (
+        <IconButton onPress={onDelete} size={40}>
+          <Icon.trash color={t.downStrong} size={18} />
+        </IconButton>
+      ) : null}
+    </View>
+  );
+}
 
 export function DiscussionRoomRow({
   room,
   onToggleLike,
+  onToggleFavorite,
   onPress,
   onEdit,
   onDelete,
 }: {
   room: DiscussionRoomRowData;
   onToggleLike: () => void;
+  onToggleFavorite?: () => void;
   onPress: () => void;
   // 관리자에게만 전달된다(전달될 때만 편집/삭제 버튼 노출).
   onEdit?: () => void;
@@ -814,152 +985,90 @@ export function DiscussionRoomRow({
         borderTopColor: t.border,
       })}
     >
-      <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
-        <View
-          style={{
-            width: 28,
-            height: 28,
-            borderRadius: 999,
-            backgroundColor: stock?.color ?? t.bgMuted,
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <Text
-            style={{
-              fontSize: 12,
-              fontWeight: "700",
-              color: stock?.logoTxt ?? "#fff",
-            }}
-          >
-            {authorName.slice(0, 1)}
-          </Text>
-        </View>
-        <Text style={{ fontSize: 11, color: t.fgStrong, fontWeight: "700" }}>
-          {authorName}
-        </Text>
-        {stockLabel ? (
-          <View
-            style={{
-              paddingHorizontal: 6,
-              paddingVertical: 2,
-              backgroundColor: t.bgSubtle,
-              borderRadius: 4,
-            }}
-          >
-            <Text style={{ fontSize: 10, fontWeight: "700", color: t.fgMuted }}>
-              {stockLabel}
+      <View style={{ flexDirection: "row", gap: 8 }}>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
+            <View
+              style={{
+                width: 28,
+                height: 28,
+                borderRadius: 999,
+                backgroundColor: stock?.color ?? t.bgMuted,
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Text
+                style={{
+                  fontSize: 12,
+                  fontWeight: "700",
+                  color: stock?.logoTxt ?? "#fff",
+                }}
+              >
+                {authorName.slice(0, 1)}
+              </Text>
+            </View>
+            <Text
+              style={{ fontSize: 11, color: t.fgStrong, fontWeight: "700" }}
+            >
+              {authorName}
             </Text>
-          </View>
-        ) : null}
-        <View
-          style={{
-            marginLeft: "auto",
-            flexDirection: "row",
-            alignItems: "center",
-            gap: 2,
-          }}
-        >
-          {onEdit ? (
-            <IconButton onPress={onEdit} size={28}>
-              <Icon.pencil color={t.fgMuted} size={16} />
-            </IconButton>
-          ) : null}
-          {onDelete ? (
-            <IconButton onPress={onDelete} size={28}>
-              <Icon.trash color={t.downStrong} size={16} />
-            </IconButton>
-          ) : null}
-          <Text
-            style={{
-              fontSize: 11,
-              color: t.fgMuted,
-              fontWeight: "600",
-              marginLeft: 2,
-            }}
-          >
-            {room.time}
-          </Text>
-        </View>
-      </View>
-      <Text
-        style={{
-          fontSize: 15,
-          fontWeight: "700",
-          color: t.fgStrong,
-          marginTop: 8,
-          lineHeight: 21,
-        }}
-      >
-        {room.name}
-      </Text>
-      <Text
-        numberOfLines={2}
-        style={{ fontSize: 13, color: t.fgMuted, marginTop: 4, lineHeight: 20 }}
-      >
-        {room.description}
-      </Text>
-      <View
-        style={{
-          flexDirection: "row",
-          gap: 16,
-          marginTop: 10,
-          alignItems: "center",
-        }}
-      >
-        <Pressable
-          hitSlop={6}
-          onPress={onToggleLike}
-          style={{ flexDirection: "row", alignItems: "center", gap: 4 }}
-        >
-          <Icon.thumbsUp
-            color={room.liked ? t.upStrong : t.fgMuted}
-            filled={room.liked}
-            size={15}
-          />
-          <Text
-            style={{
-              fontSize: 12,
-              fontWeight: "700",
-              color: room.liked ? t.upStrong : t.fgMuted,
-            }}
-          >
-            {room.likesCount}
-          </Text>
-        </Pressable>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-          <Icon.reply color={t.fgMuted} size={15} />
-          <Text style={{ fontSize: 12, fontWeight: "700", color: t.fgMuted }}>
-            {room.repliesCount}
-          </Text>
-        </View>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-          <Icon.sigComm color={t.fgMuted} size={13} />
-          <Text style={{ fontSize: 12, fontWeight: "700", color: t.fgMuted }}>
-            {room.membersCount}
-          </Text>
-        </View>
-        {room.sentiment === "neutral" ? null : (
-          <View
-            style={{
-              marginLeft: "auto",
-              paddingHorizontal: 8,
-              paddingVertical: 2,
-              borderRadius: 999,
-              backgroundColor: room.sentiment === "up" ? t.upBg : t.downBg,
-            }}
-          >
+            {stockLabel ? (
+              <View
+                style={{
+                  paddingHorizontal: 6,
+                  paddingVertical: 2,
+                  backgroundColor: t.bgSubtle,
+                  borderRadius: 4,
+                }}
+              >
+                <Text
+                  style={{ fontSize: 10, fontWeight: "700", color: t.fgMuted }}
+                >
+                  {stockLabel}
+                </Text>
+              </View>
+            ) : null}
             <Text
               style={{
                 fontSize: 11,
-                fontWeight: "700",
-                color: room.sentiment === "up" ? t.upStrong : t.downStrong,
+                color: t.fgMuted,
+                fontWeight: "600",
+                marginLeft: "auto",
               }}
             >
-              {room.sentiment === "up" ? "긍정" : "부정"}
+              {room.time}
             </Text>
           </View>
-        )}
+          <Text
+            style={{
+              fontSize: 15,
+              fontWeight: "700",
+              color: t.fgStrong,
+              marginTop: 8,
+              lineHeight: 21,
+            }}
+          >
+            {room.name}
+          </Text>
+          <Text
+            numberOfLines={2}
+            style={{
+              fontSize: 13,
+              color: t.fgMuted,
+              marginTop: 4,
+              lineHeight: 20,
+            }}
+          >
+            {room.description}
+          </Text>
+          <RoomStatsRow
+            onToggleFavorite={onToggleFavorite}
+            onToggleLike={onToggleLike}
+            room={room}
+          />
+        </View>
+        <RoomAdminButtons onDelete={onDelete} onEdit={onEdit} />
       </View>
     </Pressable>
   );

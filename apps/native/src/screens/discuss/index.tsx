@@ -1,11 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useNavigation } from "expo-router";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   Pressable,
   RefreshControl,
   ScrollView,
   Text,
+  TextInput,
   View,
 } from "react-native";
 
@@ -14,24 +14,23 @@ import {
   DiscussionRoomRowSkeleton,
 } from "@/components/cards";
 import { Icon } from "@/components/icons";
-import { Chip, MrHeader, MrScreen } from "@/components/ui";
+import { Chip, IconButton, MrHeader, MrScreen } from "@/components/ui";
+import { useDiscussionListStream } from "@/hooks/use-discussion-list-stream";
 import { useMrTheme } from "@/hooks/use-mr-theme";
 import { authClient } from "@/lib/auth-client";
 import { nav } from "@/utils/nav";
 import { orpc } from "@/utils/orpc";
 
-type DiscussTab = "hot" | "watch" | "recent";
+type DiscussTab = "hot" | "watch" | "recent" | "favorite";
 
 const TABS: { k: DiscussTab; l: string }[] = [
   { k: "hot", l: "인기" },
   { k: "watch", l: "관심 종목" },
   { k: "recent", l: "최신" },
+  { k: "favorite", l: "즐겨찾기" },
 ];
 
 const ROOM_SKELETON_KEYS = ["s1", "s2", "s3", "s4"] as const;
-
-// RFC 0003 D2: 목록 카운트(사람수·말풍선)를 5초마다 폴링 갱신(ADR-0001 폴링 확장).
-const POLL_INTERVAL_MS = 5000;
 
 function EmptyState({ title, body }: { title: string; body: string }) {
   const { t } = useMrTheme();
@@ -70,6 +69,11 @@ function EmptyState({ title, body }: { title: string; body: string }) {
 export default function DiscussScreen() {
   const { t } = useMrTheme();
   const [tab, setTab] = useState<DiscussTab>("watch");
+  // 검색: 아이콘으로 입력창 토글, 제출(엔터) 시에만 query에 반영해 rooms 쿼리로 넘긴다.
+  // q가 있으면 백엔드가 탭을 무시하고 이름/종목명 부분일치로 검색한다.
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchInput, setSearchInput] = useState("");
+  const [query, setQuery] = useState("");
   // 당겨서 새로고침 스피너는 "사용자가 당길 때"만. 5초 백그라운드 폴링엔 안 뜨게.
   const [refreshing, setRefreshing] = useState(false);
   const { data: session } = authClient.useSession();
@@ -77,29 +81,14 @@ export default function DiscussScreen() {
   const isAuthed = Boolean(session?.user);
   const queryClient = useQueryClient();
 
-  // 이 화면(토론 탭)을 실제로 보고 있을 때만 폴링. 다른 탭/화면으로 가면 멈춘다.
-  const navigation = useNavigation();
-  const [screenFocused, setScreenFocused] = useState(() =>
-    navigation.isFocused()
-  );
-  useEffect(() => {
-    const offFocus = navigation.addListener("focus", () =>
-      setScreenFocused(true)
-    );
-    const offBlur = navigation.addListener("blur", () =>
-      setScreenFocused(false)
-    );
-    return () => {
-      offFocus();
-      offBlur();
-    };
-  }, [navigation]);
+  // RFC 0004: 목록 폴링을 SSE 구독으로 교체. 이벤트 수신 시 rooms 쿼리를 무효화한다.
+  useDiscussionListStream();
 
-  const roomsOptions = orpc.discussion.rooms.queryOptions({ input: { tab } });
-  const roomsQuery = useQuery({
-    ...roomsOptions,
-    refetchInterval: screenFocused ? POLL_INTERVAL_MS : false,
+  const trimmedQuery = query.trim();
+  const roomsOptions = orpc.discussion.rooms.queryOptions({
+    input: { tab, q: trimmedQuery ? trimmedQuery : undefined },
   });
+  const roomsQuery = useQuery(roomsOptions);
 
   const toggleLike = useMutation(
     orpc.discussion.toggleLike.mutationOptions({
@@ -120,12 +109,41 @@ export default function DiscussScreen() {
     })
   );
 
+  const toggleFavorite = useMutation(
+    orpc.discussion.toggleFavorite.mutationOptions({
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: roomsOptions.queryKey });
+      },
+    })
+  );
+
   const handleToggleLike = (roomId: number) => {
     if (!isAuthed) {
       // TODO: open login sheet (consistent with other protected actions).
       return;
     }
     toggleLike.mutate({ roomId });
+  };
+
+  const handleToggleFavorite = (roomId: number) => {
+    if (!isAuthed) {
+      return;
+    }
+    toggleFavorite.mutate({ roomId });
+  };
+
+  const toggleSearch = () => {
+    if (searchOpen) {
+      // 닫을 때 검색을 초기화해 탭 결과로 되돌린다.
+      setSearchInput("");
+      setQuery("");
+    }
+    setSearchOpen(!searchOpen);
+  };
+
+  const clearSearch = () => {
+    setSearchInput("");
+    setQuery("");
   };
 
   const rooms = roomsQuery.data ?? [];
@@ -146,24 +164,72 @@ export default function DiscussScreen() {
         }
         showsVerticalScrollIndicator={false}
       >
-        <ScrollView
-          contentContainerStyle={{
-            paddingHorizontal: 16,
-            gap: 6,
-            paddingVertical: 10,
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            paddingRight: 8,
           }}
-          horizontal
-          showsHorizontalScrollIndicator={false}
         >
-          {TABS.map((c) => (
-            <Chip
-              active={tab === c.k}
-              key={c.k}
-              label={c.l}
-              onPress={() => setTab(c.k)}
+          <ScrollView
+            contentContainerStyle={{
+              paddingHorizontal: 16,
+              gap: 6,
+              paddingVertical: 10,
+            }}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={{ flex: 1 }}
+          >
+            {TABS.map((c) => (
+              <Chip
+                active={tab === c.k}
+                key={c.k}
+                label={c.l}
+                onPress={() => setTab(c.k)}
+              />
+            ))}
+          </ScrollView>
+          <IconButton onPress={toggleSearch}>
+            <Icon.search color={searchOpen ? t.primary : t.fgMuted} size={20} />
+          </IconButton>
+        </View>
+
+        {searchOpen ? (
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 8,
+              paddingHorizontal: 16,
+              paddingBottom: 10,
+            }}
+          >
+            <TextInput
+              autoFocus
+              onChangeText={setSearchInput}
+              onSubmitEditing={() => setQuery(searchInput.trim())}
+              placeholder="토론방·종목 이름 검색"
+              placeholderTextColor={t.fgSubtle}
+              returnKeyType="search"
+              style={{
+                flex: 1,
+                height: 40,
+                borderRadius: 10,
+                backgroundColor: t.bgSubtle,
+                paddingHorizontal: 12,
+                color: t.fgStrong,
+                fontSize: 14,
+              }}
+              value={searchInput}
             />
-          ))}
-        </ScrollView>
+            {searchInput || query ? (
+              <Pressable hitSlop={6} onPress={clearSearch}>
+                <Icon.close color={t.fgMuted} size={20} />
+              </Pressable>
+            ) : null}
+          </View>
+        ) : null}
 
         {roomsQuery.isPending
           ? ROOM_SKELETON_KEYS.map((key) => (
@@ -185,6 +251,7 @@ export default function DiscussScreen() {
               isAdmin ? () => nav.openEditDiscussionRoom(r.id) : undefined
             }
             onPress={() => nav.openDiscussionRoom(r.id)}
+            onToggleFavorite={() => handleToggleFavorite(r.id)}
             onToggleLike={() => handleToggleLike(r.id)}
             room={r}
           />

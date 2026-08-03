@@ -1,5 +1,4 @@
-import { useMutation } from "@tanstack/react-query";
-import { type Href, router } from "expo-router";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import {
   ActivityIndicator,
@@ -27,6 +26,7 @@ const NAME_MAX = 30;
 
 export default function ProfileScreen() {
   const { t } = useMrTheme();
+  const queryClient = useQueryClient();
   const { data: session } = authClient.useSession();
   const user = session?.user;
   const currentName = user?.name?.trim() ?? "";
@@ -62,7 +62,8 @@ export default function ProfileScreen() {
       return res?.data;
     },
     onSuccess: () => {
-      router.replace("/(moneyroad)/login" as Href);
+      queryClient.clear();
+      nav.home();
     },
   });
 
@@ -84,7 +85,10 @@ export default function ProfileScreen() {
       Alert.alert("계정 삭제 완료", "계정이 삭제되었습니다.", [
         {
           text: "확인",
-          onPress: () => router.replace("/(moneyroad)/login" as Href),
+          onPress: () => {
+            queryClient.clear();
+            nav.home();
+          },
         },
       ]);
     },

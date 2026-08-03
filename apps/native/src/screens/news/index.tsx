@@ -25,6 +25,7 @@ import { AiChip, Chip, MrHeader, MrScreen, StockLogo } from "@/components/ui";
 import { useLiveQuote } from "@/hooks/use-live-quotes";
 import { useMrTheme } from "@/hooks/use-mr-theme";
 import { type NewsTab, useNewsStream } from "@/hooks/use-news-stream";
+import { useProtectedAction } from "@/hooks/use-protected-action";
 import { authClient } from "@/lib/auth-client";
 import { findStock, type NewsItem } from "@/utils/data";
 import { changeColor, fmt } from "@/utils/format";
@@ -445,15 +446,16 @@ function NewsTabs({
   );
 }
 
-export default function NewsScreen() {
+export default function NewsScreen({ initialTab }: { initialTab?: NewsTab }) {
   const { t } = useMrTheme();
   const { data: session } = authClient.useSession();
   const isLoggedIn = !!session?.user;
   const isAdmin = session?.user.role === "admin";
   // 기본 탭: 로그인 상태면 관심 종목, 비로그인이면 전체. 세션이 처음 resolve될 때
   // 한 번만 시드해, 이후 사용자가 직접 탭을 바꾸면 그 선택을 유지한다.
-  const [tab, setTab] = useState<NewsTab>("all");
-  const seededRef = useRef(false);
+  const [tab, setTab] = useState<NewsTab>(initialTab ?? "all");
+  const seededRef = useRef(Boolean(initialTab));
+  const { runProtected } = useProtectedAction();
   useEffect(() => {
     if (seededRef.current || !session) {
       return;
@@ -463,6 +465,16 @@ export default function NewsScreen() {
     }
     seededRef.current = true;
   }, [session, isLoggedIn]);
+  const selectTab = (nextTab: NewsTab) => {
+    if (nextTab === "watch") {
+      runProtected({
+        returnTo: "/(moneyroad)/(tabs)/news?tab=watch",
+        action: () => setTab(nextTab),
+      });
+      return;
+    }
+    setTab(nextTab);
+  };
   const [openNews, setOpenNews] = useState<NewsItem | null>(null);
   // 푸시 등에서 newsId로 진입하면 해당 기사 시트를 자동으로 연다.
   const params = useLocalSearchParams<{ newsId?: string }>();
@@ -556,7 +568,7 @@ export default function NewsScreen() {
             style={{ height: tabBarHeight + (feed.hasNextPage ? 56 : 16) }}
           />
         }
-        ListHeaderComponent={<NewsTabs onChange={setTab} tab={tab} />}
+        ListHeaderComponent={<NewsTabs onChange={selectTab} tab={tab} />}
         onContentSizeChange={(_w, h) => {
           contentHeight.current = h;
           fillViewport();

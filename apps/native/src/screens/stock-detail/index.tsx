@@ -27,13 +27,13 @@ import {
 } from "@/components/ui";
 import { type LiveQuote, useLiveQuote } from "@/hooks/use-live-quotes";
 import { useMrTheme } from "@/hooks/use-mr-theme";
+import { useProtectedAction } from "@/hooks/use-protected-action";
 import {
   STOCK_CHART_RANGE_LABELS,
   STOCK_CHART_RANGES,
   type StockChartRange,
   useStockChart,
 } from "@/hooks/use-stock-chart";
-import { authClient } from "@/lib/auth-client";
 import { findStock, type Stock } from "@/utils/data";
 import { changeColor, fmt } from "@/utils/format";
 import { nav } from "@/utils/nav";
@@ -192,13 +192,13 @@ function StockDetailContent({ stock }: { stock: Stock }) {
         }
       : seriesRaw;
   const queryClient = useQueryClient();
-  const { data: session } = authClient.useSession();
-  const isAuthed = Boolean(session?.user);
+  const { canRun, runProtected } = useProtectedAction();
+  const returnTo = `/(moneyroad)/stock/${stock.code}` as const;
 
   // 워치리스트 server state로 별 토글 상태를 결정. 로컬 starred state 없이도
   // 다른 화면에서의 변경(워치리스트 화면 추가/제거)이 즉시 반영된다.
   const watchlistQuery = useQuery(
-    orpc.watchlist.list.queryOptions({ enabled: isAuthed })
+    orpc.watchlist.list.queryOptions({ enabled: canRun })
   );
   const watchlistKey = orpc.watchlist.list.queryKey();
   const isWatched = (watchlistQuery.data ?? []).some(
@@ -216,26 +216,19 @@ function StockDetailContent({ stock }: { stock: Stock }) {
   // 가격 알림 시트 + 헤더 종 아이콘의 dot(이 종목에 활성 알림이 있는지).
   const [alertOpen, setAlertOpen] = useState(false);
   const priceAlertsQuery = useQuery(
-    orpc.priceAlert.list.queryOptions({ enabled: isAuthed })
+    orpc.priceAlert.list.queryOptions({ enabled: canRun })
   );
   const hasActiveAlert = (priceAlertsQuery.data ?? []).some(
     (a) => a.stockCode === stock.code && a.active
   );
 
   const openAlerts = () => {
-    if (!isAuthed) {
-      Alert.alert(
-        "로그인이 필요해요",
-        "가격 알림은 로그인 후 이용할 수 있어요."
-      );
-      return;
-    }
-    setAlertOpen(true);
+    runProtected({ returnTo, action: () => setAlertOpen(true) });
   };
 
   // 시트의 "주식 정보" 토글 — 확인 알림 없이 관심 종목을 즉시 켜고 끈다.
   const setWatched = (next: boolean) => {
-    if (!isAuthed) {
+    if (!canRun) {
       return;
     }
     if (next) {
@@ -246,44 +239,43 @@ function StockDetailContent({ stock }: { stock: Stock }) {
   };
 
   const toggleWatch = () => {
-    if (!isAuthed) {
-      Alert.alert(
-        "로그인이 필요해요",
-        "관심 종목 등록은 로그인 후 이용할 수 있어요."
-      );
-      return;
-    }
-    if (isWatched) {
-      Alert.alert(
-        "관심 종목 해제",
-        `${stock.name}을(를) 관심 종목에서 해제할까요?`,
-        [
-          { text: "취소", style: "cancel" },
-          {
-            text: "해제",
-            style: "destructive",
-            onPress: () => removeWatchMut.mutate({ stockCode: stock.code }),
-          },
-        ]
-      );
-      return;
-    }
-    Alert.alert(
-      "관심 종목 등록",
-      `${stock.name}을(를) 관심 종목에 추가할까요?`,
-      [
-        { text: "취소", style: "cancel" },
-        {
-          text: "등록",
-          onPress: () => addWatchMut.mutate({ stockCode: stock.code }),
-        },
-      ]
-    );
+    runProtected({
+      returnTo,
+      action: () => {
+        if (isWatched) {
+          Alert.alert(
+            "관심 종목 해제",
+            `${stock.name}을(를) 관심 종목에서 해제할까요?`,
+            [
+              { text: "취소", style: "cancel" },
+              {
+                text: "해제",
+                style: "destructive",
+                onPress: () => removeWatchMut.mutate({ stockCode: stock.code }),
+              },
+            ]
+          );
+          return;
+        }
+        Alert.alert(
+          "관심 종목 등록",
+          `${stock.name}을(를) 관심 종목에 추가할까요?`,
+          [
+            { text: "취소", style: "cancel" },
+            {
+              text: "등록",
+              onPress: () => addWatchMut.mutate({ stockCode: stock.code }),
+            },
+          ]
+        );
+      },
+    });
   };
 
   const relSignalsQuery = useQuery(
     orpc.signal.feed.queryOptions({
       input: { code: stock.code, window: "all", limit: 2 },
+      enabled: canRun,
     })
   );
   const relSignals = relSignalsQuery.data?.items ?? [];
@@ -310,10 +302,10 @@ function StockDetailContent({ stock }: { stock: Stock }) {
     })
   );
   const handleToggleLike = (roomId: number) => {
-    if (!isAuthed) {
-      return;
-    }
-    toggleLike.mutate({ roomId });
+    runProtected({
+      returnTo,
+      action: () => toggleLike.mutate({ roomId }),
+    });
   };
 
   const toggleFavorite = useMutation(
@@ -323,10 +315,10 @@ function StockDetailContent({ stock }: { stock: Stock }) {
     })
   );
   const handleToggleFavorite = (roomId: number) => {
-    if (!isAuthed) {
-      return;
-    }
-    toggleFavorite.mutate({ roomId });
+    runProtected({
+      returnTo,
+      action: () => toggleFavorite.mutate({ roomId }),
+    });
   };
 
   return (
@@ -531,7 +523,7 @@ function StockDetailContent({ stock }: { stock: Stock }) {
 
       <PriceAlertSheet
         currentPrice={live?.price}
-        isAuthed={isAuthed}
+        isAuthed={canRun}
         isWatched={isWatched}
         onClose={() => setAlertOpen(false)}
         onSetWatched={setWatched}

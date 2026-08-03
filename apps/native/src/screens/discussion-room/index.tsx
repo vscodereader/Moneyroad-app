@@ -36,6 +36,7 @@ import {
   uploadDiscussionFile,
   uploadDiscussionImage,
 } from "@/lib/discussion-upload";
+import type { MoneyRoadReturnTo } from "@/utils/auth-navigation";
 import { findStock, type Stock } from "@/utils/data";
 import { changeColor, fmt } from "@/utils/format";
 import { nav } from "@/utils/nav";
@@ -932,12 +933,18 @@ function Composer({
   );
 }
 
-// 비로그인 시 메시지 리스트 위에 반투명 레이어를 깔아 텍스트는 못 읽지만
-// 말풍선의 흐름은 어렴풋이 보이게 한다(대화 활성도는 짐작 가능).
-function GuestOverlay({ t }: { t: MrTokens }) {
+// 비로그인은 메시지 query 자체를 실행하지 않는다. 빈 메시지 영역 위에 로그인
+// 안내를 표시하고, 방 헤더·고정 토픽 같은 공개 메타데이터만 남긴다.
+function GuestOverlay({
+  returnTo,
+  t,
+}: {
+  returnTo: MoneyRoadReturnTo;
+  t: MrTokens;
+}) {
   return (
     <Pressable
-      onPress={nav.openLogin}
+      onPress={() => nav.openLogin({ returnTo })}
       style={[
         StyleSheet.absoluteFillObject,
         {
@@ -1259,6 +1266,7 @@ function useDiscussionRoom(
 ) {
   const { data: session } = authClient.useSession();
   const queryClient = useQueryClient();
+  const canReadMessages = isValid && Boolean(session?.user);
 
   /* ----(앵커 모드 — RFC 0008 §4-8, D15)---- */
   // "내 글·답글" 목록이나 인용에서 들어오면 특정 메시지 주변을 봐야 한다. 기본
@@ -1277,7 +1285,7 @@ function useDiscussionRoom(
   const loadingRef = useRef(false);
 
   useEffect(() => {
-    if (!(isValid && anchorId !== null)) {
+    if (!(canReadMessages && anchorId !== null)) {
       setAnchored(null);
       return;
     }
@@ -1303,7 +1311,7 @@ function useDiscussionRoom(
     return () => {
       cancelled = true;
     };
-  }, [roomId, anchorId, isValid]);
+  }, [roomId, anchorId, canReadMessages]);
 
   const loadOlder = async () => {
     if (!anchored || anchored.nextCursor === null || loadingRef.current) {
@@ -1377,7 +1385,7 @@ function useDiscussionRoom(
   const messagesQuery = useQuery({
     ...messagesOptions,
     /* ----(앵커 중에는 폴링 정지 — RFC 0008 §4-8)---- */
-    enabled: isValid && anchorId === null,
+    enabled: canReadMessages && anchorId === null,
     /* ----(~앵커 중에는 폴링 정지 여기까지)---- */
     refetchInterval: POLL_INTERVAL_MS,
     // TODO: pause polling on AppState=background via focusManager.
@@ -1442,7 +1450,9 @@ function useDiscussionRoom(
       ? anchored.messages
       : (messagesQuery.data?.messages ?? []),
     // 앵커 조회는 react-query 를 안 타므로 로딩 판정도 여기서 한다.
-    listPending: anchorId === null ? messagesQuery.isPending : !anchored,
+    listPending:
+      canReadMessages &&
+      (anchorId === null ? messagesQuery.isPending : !anchored),
     /* ----(~앵커 모드 여기까지)---- */
   };
 }
@@ -1484,6 +1494,11 @@ export default function DiscussionRoomScreen() {
   /* ----(~앵커 파라미터 여기까지)---- */
   const roomId = Number(idParam);
   const isValidRoomId = Number.isFinite(roomId) && roomId > 0;
+  const roomReturnTo = (
+    initialAnchorId === null
+      ? `/(moneyroad)/discussion-room/${roomId}`
+      : `/(moneyroad)/discussion-room/${roomId}?anchorId=${initialAnchorId}`
+  ) as MoneyRoadReturnTo;
 
   const {
     session,
@@ -2029,7 +2044,7 @@ export default function DiscussionRoomScreen() {
             selectionMode={selectionMode}
             t={t}
           />
-          {isLoggedIn ? null : <GuestOverlay t={t} />}
+          {isLoggedIn ? null : <GuestOverlay returnTo={roomReturnTo} t={t} />}
         </View>
         {renderBottom({
           inSelection,

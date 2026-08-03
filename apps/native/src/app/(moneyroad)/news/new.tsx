@@ -1,19 +1,34 @@
 import { Redirect, useLocalSearchParams } from "expo-router";
 
+import { AuthGate } from "@/components/auth-gate";
 import { authClient } from "@/lib/auth-client";
 import NewsFormScreen from "@/screens/news-new";
+import type { MoneyRoadReturnTo } from "@/utils/auth-navigation";
 
-export default function NewsFormRoute() {
+function AdminNewsForm({ newsId }: { newsId?: string }) {
   const { data: session, isPending } = authClient.useSession();
-  const { id } = useLocalSearchParams<{ id?: string }>();
   if (isPending) {
     return null;
   }
   if (!session?.user) {
-    return <Redirect href="/(moneyroad)/login" />;
+    return null;
   }
   if (session.user.role !== "admin") {
     return <Redirect href="/(moneyroad)/(tabs)/news" />;
   }
-  return <NewsFormScreen newsId={id || undefined} />;
+  return <NewsFormScreen newsId={newsId} />;
+}
+
+export default function NewsFormRoute() {
+  const { id } = useLocalSearchParams<{ id?: string }>();
+  const returnTo = (
+    id
+      ? `/(moneyroad)/news/new?id=${encodeURIComponent(id)}`
+      : "/(moneyroad)/news/new"
+  ) as MoneyRoadReturnTo;
+  return (
+    <AuthGate returnTo={returnTo}>
+      <AdminNewsForm newsId={id || undefined} />
+    </AuthGate>
+  );
 }

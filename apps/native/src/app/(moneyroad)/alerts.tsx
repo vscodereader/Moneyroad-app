@@ -3,7 +3,7 @@ import AlertsScreen from "@/screens/alerts";
 
 export default function AlertsRoute() {
   return (
-    <AuthGate>
+    <AuthGate returnTo="/(moneyroad)/alerts">
       <AlertsScreen />
     </AuthGate>
   );

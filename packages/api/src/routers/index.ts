@@ -6,6 +6,7 @@ import { inquiryRouter } from "./inquiry";
 import { newsRouter } from "./news";
 import { noticeRouter } from "./notice";
 import { notificationRouter } from "./notification";
+import { onboardingRouter } from "./onboarding";
 import { priceAlertRouter } from "./price-alert";
 import { signalRouter } from "./signal";
 import { stockRouter } from "./stock";
@@ -23,6 +24,7 @@ export const appRouter = {
   news: newsRouter,
   notice: noticeRouter,
   notification: notificationRouter,
+  onboarding: onboardingRouter,
   signal: signalRouter,
   stock: stockRouter,
   watchlist: watchlistRouter,

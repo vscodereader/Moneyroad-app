@@ -10,19 +10,22 @@ internal)와 **동일한 워크플로**(`.github/workflows/native.yml`)를 쓰�
 
 ---
 
-## 현재 상태 (2026-05-25 확인)
+<!-- vscodereader 2026-07-30 수정: 기존 미완료였던 App Store Connect 앱 ID 입력과
+암호화 선언이 저장소 설정에 반영되어, 코드로 확인 가능한 항목만 완료 처리. -->
+## 현재 상태 (2026-07-30 저장소 코드 기준)
 
 | 항목 | 상태 |
 |---|---|
 | Apple Developer Program 멤버십 | ✅ 가입됨 |
-| App Store Connect 앱(`kr.ai.moneyroad`) 생성 | ⬜ 필요 (→ `ascAppId` 획득) |
-| iOS 빌드 자격증명(인증서·프로비저닝) EAS 등록 | ⬜ 필요 |
-| App Store Connect API 키(제출용) EAS 등록 | ⬜ 필요 |
-| `eas.json`의 `ascAppId` 실제 값 입력 | ⬜ 필요 (현재 `REPLACE_WITH_ASC_APP_ID`) |
+| App Store Connect 앱(`kr.ai.moneyroad`) 생성 | `ascAppId=6772923139` 설정 확인. 실제 ASC 상태는 외부 계정에서 확인 필요 |
+| iOS 빌드 자격증명(인증서·프로비저닝) EAS 등록 | 외부 EAS 계정에서 확인 필요 |
+| App Store Connect API 키(제출용) EAS 등록 | 외부 EAS 계정에서 확인 필요 |
+| `eas.json`의 `ascAppId` 실제 값 입력 | ✅ production/internal/closed/open 모두 입력 |
+| `ITSAppUsesNonExemptEncryption: false` | ✅ `app.json` 입력 |
 | `EXPO_TOKEN` GitHub Secret | ✅ 완료(Android 때 등록) |
 
-iOS는 처음이라 아래 1~5를 한 번씩 하면 된다. 대부분 **로컬에서 Apple 로그인**이 필요한
-대화식 작업이라(=EAS 서버에 자격증명을 적재) 직접 진행해야 한다.
+아래 절은 최초 설정 또는 자격증명 재생성이 필요할 때의 절차다. EAS 자격증명과 ASC API
+키는 저장소 코드로 확인할 수 없으므로 실제 계정에서 상태를 확인한다.
 
 ---
 
@@ -42,19 +45,19 @@ eas build --platform ios --profile production
 
 빌드가 끝나면 `.ipa`가 나온다(아직 제출 안 함). 이 시점에 번들 ID가 Apple에 등록된다.
 
-## 2. App Store Connect에 앱 생성 → `ascAppId` 확보
+## 2. App Store Connect 앱·`ascAppId` 확인(완료, 재설정 참고)
 
 1. https://appstoreconnect.apple.com → **나의 앱 → ＋ → 새로운 앱**
 2. 플랫폼 **iOS**, 이름, 기본 언어, **번들 ID = `kr.ai.moneyroad`**(1단계에서 등록됨), SKU(임의 고유값)
 3. 생성 후 **앱 정보** 페이지에서 **Apple ID**(숫자) 확인 → 이게 `ascAppId`다.
    - (URL에서도 보임: `.../apps/<이 숫자>/...`)
 
-## 3. eas.json에 ascAppId 입력
+## 3. eas.json의 ascAppId 확인(완료)
 
-`apps/native/eas.json`의 `submit.internal.ios.ascAppId`와 `submit.production.ios.ascAppId`의
-`REPLACE_WITH_ASC_APP_ID`를 2단계 숫자로 교체.
-
-> 이 숫자만 알려주면 대신 채워 넣어줄 수 있다.
+<!-- vscodereader 2026-07-30 수정: placeholder였던 ascAppId가 실제 값으로
+입력되어 완료 상태와 적용 프로필을 기록. -->
+`apps/native/eas.json`의 production/internal/closed/open iOS submit 프로필에
+`ascAppId: "6772923139"`가 입력되어 있다.
 
 ## 4. App Store Connect API 키 등록 (제출용, CI 비대화식 업로드의 핵심)
 
@@ -100,9 +103,11 @@ eas build --platform ios --profile production --non-interactive \
 빌드 번호는 `eas.json`의 `autoIncrement: true`로 매 빌드 자동 증가.
 
 ## 자주 보는 실패
-- `ascAppId`가 placeholder → 3단계 미완료
+- `ascAppId` 누락·오입력 → `6772923139`와 App Store Connect 앱을 대조
 - "No App Store Connect API Key" (CI에서) → 4단계 미완료(키가 EAS에 없음)
 - "Invalid Provisioning Profile" → 1단계 자격증명 재생성(`eas credentials -p ios`)
-- TestFlight에서 "Missing Compliance" 표시 → ASC에서 수출 규정(암호화) 질문에 1회 응답
-  필요(앱 빌드 후 ASC에서 처리). 자동 응답하려면 app.json ios에
-  `infoPlist.ITSAppUsesNonExemptEncryption: false` 추가 가능.
+<!-- vscodereader 2026-07-30 수정: 기존 추가 예정이었던 암호화 선언이 app.json에
+이미 반영되어 현재 설정을 명시. -->
+- TestFlight에서 "Missing Compliance" 표시 → `app.json`에는 이미
+  `infoPlist.ITSAppUsesNonExemptEncryption: false`가 있으므로 빌드 반영 여부와
+  ASC 처리 상태를 확인

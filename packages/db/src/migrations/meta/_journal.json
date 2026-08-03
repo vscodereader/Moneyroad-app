@@ -92,6 +92,83 @@
       "when": 1781675367138,
       "tag": "0012_brown_madame_hydra",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1784786399247,
+      "tag": "0013_tough_onslaught",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1784793460135,
+      "tag": "0014_demonic_diamondback",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1784875419750,
+      "tag": "0015_burly_mystique",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1784876189700,
+      "tag": "0016_dark_forge",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1784877171268,
+      "tag": "0017_dark_masked_marvel",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1784878100877,
+      "tag": "0018_familiar_morbius",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1785228232854,
+      "tag": "0019_remarkable_martin_li",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1785315035204,
+      "tag": "0020_brave_lockheed",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1785315934905,
+      "tag": "0021_classy_omega_red",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1785380309440,
+      "tag": "0022_calm_emma_frost",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1785380340308,
+      "tag": "0023_slow_veda",
+      "breakpoints": true
     }
   ]
 }

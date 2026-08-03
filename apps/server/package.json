@@ -13,6 +13,8 @@
     "@ai-sdk/devtools": "^0.0.2",
     "@ai-sdk/google": "^3.0.1",
     "@fastify/cors": "^11.0.1",
+    "@fastify/multipart": "^10.1.0",
+    "@google-cloud/storage": "^7.21.0",
     "@orpc/openapi": "catalog:",
     "@orpc/server": "catalog:",
     "@orpc/zod": "catalog:",
@@ -22,6 +24,8 @@
     "drizzle-orm": "catalog:",
     "evlog": "catalog:",
     "fastify": "^5.3.3",
+    "file-type": "^22.0.1",
+    "jimp": "^1.6.1",
     "pg": "^8.17.1",
     "zod": "catalog:"
   },

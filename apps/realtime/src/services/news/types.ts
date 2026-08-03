@@ -16,6 +16,7 @@ export interface PreparedNews {
   description: string;
   id: string;
   link: string;
+  newsThumbnail: string | null;
   originallink: string;
   pubDate: Date;
   query: string;

@@ -4,7 +4,11 @@ import { and, count, desc, eq, gte, inArray, lt, type SQL } from "drizzle-orm";
 import z from "zod";
 
 import { adminProcedure, protectedProcedure, publicProcedure } from "../index";
-import { refreshRealtimePins } from "../lib/realtime-trigger";
+import {
+  notifyRealtimeSignal,
+  refreshRealtimePins,
+  refreshRealtimeSignal,
+} from "../lib/realtime-trigger";
 
 const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 50;
@@ -13,9 +17,19 @@ const DAY_MS = 86_400_000;
 const actionSchema = z.enum(["buy", "sell", "hold"]);
 // 시그널은 관리자가 삭제하기 전까지 노출된다. 시간 윈도우는 기본적으로 무제한.
 const windowSchema = z.enum(["24h", "7d", "all"]).default("all");
+const feedInputSchema = z.object({
+  action: actionSchema.optional(),
+  // Limit to one stock (used by the stock detail screen).
+  code: z.string().optional(),
+  window: windowSchema,
+  // Keyset cursor: createdAt (ISO) of the last item from the prev page.
+  cursor: z.string().optional(),
+  limit: z.number().int().min(1).max(MAX_LIMIT).default(DEFAULT_LIMIT),
+});
 
 type Action = z.infer<typeof actionSchema>;
 type Window = z.infer<typeof windowSchema>;
+type FeedInput = z.infer<typeof feedInputSchema>;
 
 // Screen-facing item shape (mirrors apps/native Signal).
 export interface SignalItem {
@@ -66,77 +80,74 @@ async function stockNames(codes: string[]): Promise<Map<string, string>> {
   return new Map(rows.map((r) => [r.code, r.name]));
 }
 
+async function querySignals(input: FeedInput) {
+  const filters: SQL[] = [];
+  const since = sinceOf(input.window);
+  if (since) {
+    filters.push(gte(signal.createdAt, since));
+  }
+  if (input.action) {
+    filters.push(eq(signal.action, input.action));
+  }
+  if (input.code) {
+    filters.push(eq(signal.stockCode, input.code));
+  }
+  if (input.cursor) {
+    const cursorDate = new Date(input.cursor);
+    if (!Number.isNaN(cursorDate.getTime())) {
+      filters.push(lt(signal.createdAt, cursorDate));
+    }
+  }
+
+  const rows = await db
+    .select({
+      id: signal.id,
+      code: signal.stockCode,
+      action: signal.action,
+      source: signal.source,
+      strength: signal.strength,
+      title: signal.title,
+      body: signal.body,
+      createdAt: signal.createdAt,
+    })
+    .from(signal)
+    .where(filters.length > 0 ? and(...filters) : undefined)
+    .orderBy(desc(signal.createdAt))
+    .limit(input.limit + 1);
+
+  const hasMore = rows.length > input.limit;
+  const page = hasMore ? rows.slice(0, input.limit) : rows;
+  const names = await stockNames([...new Set(page.map((r) => r.code))]);
+
+  const items: SignalItem[] = page.map((r) => ({
+    id: r.id,
+    code: r.code,
+    action: r.action,
+    source: r.source,
+    strength: r.strength,
+    title: r.title,
+    body: r.body,
+    name: names.get(r.code) ?? r.code,
+    time: formatSignalDate(r.createdAt),
+  }));
+  const last = page.at(-1);
+  const nextCursor = hasMore && last ? last.createdAt.toISOString() : null;
+  return { items, nextCursor };
+}
+
 export const signalRouter = {
+  // Home-only public preview. No caller-controlled filters or cursor.
+  preview: publicProcedure.handler(() =>
+    querySignals({ window: "24h", limit: 3 })
+  ),
+
   // Global signal feed, newest first, optionally filtered by action/window.
-  feed: publicProcedure
-    .input(
-      z.object({
-        action: actionSchema.optional(),
-        // Limit to one stock (used by the stock detail screen).
-        code: z.string().optional(),
-        window: windowSchema,
-        // Keyset cursor: createdAt (ISO) of the last item from the prev page.
-        cursor: z.string().optional(),
-        limit: z.number().int().min(1).max(MAX_LIMIT).default(DEFAULT_LIMIT),
-      })
-    )
-    .handler(async ({ input }) => {
-      const filters: SQL[] = [];
-      const since = sinceOf(input.window);
-      if (since) {
-        filters.push(gte(signal.createdAt, since));
-      }
-      if (input.action) {
-        filters.push(eq(signal.action, input.action));
-      }
-      if (input.code) {
-        filters.push(eq(signal.stockCode, input.code));
-      }
-      if (input.cursor) {
-        const cursorDate = new Date(input.cursor);
-        if (!Number.isNaN(cursorDate.getTime())) {
-          filters.push(lt(signal.createdAt, cursorDate));
-        }
-      }
-
-      const rows = await db
-        .select({
-          id: signal.id,
-          code: signal.stockCode,
-          action: signal.action,
-          source: signal.source,
-          strength: signal.strength,
-          title: signal.title,
-          body: signal.body,
-          createdAt: signal.createdAt,
-        })
-        .from(signal)
-        .where(filters.length > 0 ? and(...filters) : undefined)
-        .orderBy(desc(signal.createdAt))
-        .limit(input.limit + 1);
-
-      const hasMore = rows.length > input.limit;
-      const page = hasMore ? rows.slice(0, input.limit) : rows;
-      const names = await stockNames([...new Set(page.map((r) => r.code))]);
-
-      const items: SignalItem[] = page.map((r) => ({
-        id: r.id,
-        code: r.code,
-        action: r.action,
-        source: r.source,
-        strength: r.strength,
-        title: r.title,
-        body: r.body,
-        name: names.get(r.code) ?? r.code,
-        time: formatSignalDate(r.createdAt),
-      }));
-      const last = page.at(-1);
-      const nextCursor = hasMore && last ? last.createdAt.toISOString() : null;
-      return { items, nextCursor };
-    }),
+  feed: protectedProcedure
+    .input(feedInputSchema)
+    .handler(({ input }) => querySignals(input)),
 
   // Per-action counts within the window (for the filter chips).
-  counts: publicProcedure
+  counts: protectedProcedure
     .input(z.object({ window: windowSchema }))
     .handler(async ({ input }) => {
       const since = sinceOf(input.window);
@@ -183,6 +194,22 @@ export const signalRouter = {
       }
       // New signal stock → tell realtime to pin/whitelist it now (not in ~10s).
       refreshRealtimePins("signal.create");
+      // ----(시그널 목록 실시간 갱신)----
+      // 위 pins 갱신은 "이 종목 시세를 흘려보내라"까지만 한다. 목록 화면을 다시
+      // 불러오게 하려면 별도 broadcast가 필요하다 — 이게 없어서 관리자가 시그널을
+      // 추가해도 유저 화면이 그대로였다.
+      refreshRealtimeSignal("signal.create");
+      // ----(끝)----
+      // ----(시그널 푸시 알림 — RFC 0007)----
+      // 이 종목을 관심종목에 넣고 매수/매도 알림을 켜 둔 사용자에게 푸시한다.
+      // 삭제 때는 부르지 않는다 — 사라진 시그널을 알릴 이유가 없다.
+      notifyRealtimeSignal({
+        signalId: row.id,
+        stockCode: input.stockCode,
+        action: input.action,
+        title: input.title.trim(),
+      });
+      // ----(끝)----
       return { id: row.id };
     }),
 
@@ -194,6 +221,9 @@ export const signalRouter = {
       await db.delete(signal).where(eq(signal.id, input.id));
       // Stock may no longer be referenced → let realtime drop the pin promptly.
       refreshRealtimePins("signal.remove");
+      // ----(시그널 목록 실시간 갱신)----
+      refreshRealtimeSignal("signal.remove");
+      // ----(끝)----
       return { ok: true };
     }),
 

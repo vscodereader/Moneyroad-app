@@ -1,0 +1,30 @@
+# 로컬 개발용 PostgreSQL (도커 DB).
+# apps/server/.env 의 DATABASE_URL 과 값이 정확히 일치해야 함:
+#   postgresql://moneyroad:moneyroad@localhost:5432/moneyroad
+#
+# 사용법:
+#   docker compose up -d        # DB 켜기(백그라운드)
+#   docker compose ps           # 상태 확인
+#   docker compose down         # DB 끄기 (데이터는 볼륨에 유지됨)
+#   docker compose down -v      # DB 끄기 + 데이터 완전 삭제(초기화)
+services:
+  postgres:
+    image: postgres:16
+    container_name: moneyroad-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: moneyroad
+      POSTGRES_PASSWORD: moneyroad
+      POSTGRES_DB: moneyroad
+    ports:
+      - "5432:5432"
+    volumes:
+      - moneyroad_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U moneyroad -d moneyroad"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  moneyroad_pgdata:

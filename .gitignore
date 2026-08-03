@@ -55,3 +55,9 @@ temp
 .omx
 .pnpm-store
 artifacts
+
+# Internal-only docs (do not commit / publish)
+docs/internal/
+
+# vscodereader working notes (do not commit / publish)
+docs_vscodereader/

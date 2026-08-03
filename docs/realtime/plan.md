@@ -81,12 +81,14 @@ KIS 공식 예제(`ccnl_krx`, `auth_ws_token`, `kis_auth`) 스펙으로 구현.
 - [ ] (선택) approval_key 만료(24h) 갱신 — 현재는 재연결 시 기존 키 재사용
 - [ ] (선택) 호가(`H0STASP0`) 등 추가 TR
 
-### 클라이언트 연동 (남음)
-- [ ] **앱(React Native)**: `react-native-sse` 폴리필로 `EventSource` 사용
-      (RN엔 내장 EventSource 없음). 페이지 진입 시 종목으로 스트림 오픈, 이탈 시 닫기
+### 클라이언트 연동
+<!-- vscodereader 2026-07-30 수정: 기존 미구현이었던 React Native 시세 SSE와
+재연결·종목 ref-count가 quotes-sse 싱글턴으로 구현되어 완료 처리. -->
+- [x] **앱(React Native)**: `react-native-sse` + `quotes-sse` 싱글턴.
+      화면별 `useLiveQuote` ref-count, 종목 변경 debounce, 새 토큰 재연결, AppState 복귀 지원
 - [ ] **웹(Next.js)**: 브라우저 내장 `EventSource` 사용
-- [ ] 재연결 전략(브라우저 자동 재연결 + `Last-Event-ID` 활용 검토)
-- [ ] 종목 변경 UX: per-page 스트림 재오픈 방식 (현재 설계)
+- [x] native 재연결 전략과 종목 변경 시 스트림 재오픈
+- [ ] 웹 재연결 + `Last-Event-ID` 활용 검토
 
 ### 배포 (Cloud Run, 남음) — `apps/realtime/deploy/README.md`
 - [ ] Artifact Registry 빌드: `cloudbuild.yaml` + `_DOCKERFILE=apps/realtime/Dockerfile`
@@ -138,7 +140,10 @@ realtime은 `min=max=1 + no-cpu-throttling`로 **항상 켜져 있는** 유일�
 - `news` 워치리스트 구독자 중 `breakingNews` 설정 ON 사용자에게 Expo 푸시
 - 키워드 휴리스틱(속보/급등/급락 등)으로 속보 판정, `stockCode` 있는 뉴스만 타겟
 - 피로도 쿨다운(5분 내 동일 user·type 상한) + `notification_history` 추적
-- ⚠️ **단말 등록/실발송은 미완** — 아래 "다음 단계 — 푸시 알림" 참고
+<!-- vscodereader 2026-07-30 수정: 기존 미구현이었던 native 권한 요청·Expo token
+등록·알림 설정 UI는 구현되어, 남은 범위를 실기기 E2E 검증으로 축소. -->
+- 단말 권한 요청·Expo Push Token 등록·워치리스트·알림 설정 UI 구현 완료
+- ⚠️ 실제 기기에서 prod/dev 자격증명까지 포함한 E2E 성공 여부는 별도 검증 필요
 
 ### 종목마스터 로더 (`services/stock-master/`)
 종목 매칭·속보 푸시가 동작하려면 `stock_master` 적재가 선행돼야 한다. KIS 공식
@@ -156,15 +161,15 @@ realtime은 `min=max=1 + no-cpu-throttling`로 **항상 켜져 있는** 유일�
 - 검증됨: KOSPI 2533 + KOSDAQ 1824종목, 삼성전자/SK하이닉스/현대차/에코프로 등
   종목명·표준코드·상장일 정확
 
-### 다음 단계 — 푸시 알림 (보류)
+### 다음 단계 — 푸시 알림 실기기 검증
 서버측 발송 로직(`expo-push.ts`/`push.ts`)·쿨다운·`notification_history` 추적은
-구현 완료. 실제 단말까지 보내려면 아래가 남았다.
+구현 완료.
 
-- [ ] **native 푸시 토큰 등록** (현재 `expo-notifications` 미설치)
-  - `expo-notifications` 설치 + 알림 권한 요청
-  - `getExpoPushTokenAsync()`로 토큰 발급 → 서버 라우트로 전송해 `user_push_token`에 저장
-    (저장 라우트는 server 또는 realtime 어디에 둘지 결정 필요)
-- [ ] **워치리스트(type='news') + 알림설정 UI** — 구독자/ON 사용자가 있어야 타겟 발생
+<!-- vscodereader 2026-07-30 수정: expo-notifications 설치·토큰 저장·설정 UI 완료를
+반영하고 외부 자격증명이 필요한 실제 단말 발송만 미검증으로 유지. -->
+- [x] `expo-notifications`·`expo-device` 설치와 권한 요청
+- [x] `getExpoPushTokenAsync()` → `notification.registerPushToken`
+- [x] 워치리스트(type='news') + 알림설정 UI
 - [ ] 실발송 검증
 
 **테스트 제약 (조사 완료, SDK 55 기준)**
@@ -198,7 +203,10 @@ realtime은 `min=max=1 + no-cpu-throttling`로 **항상 켜져 있는** 유일�
 기술적 시그널을 산출해 `signal` 테이블에 적재하는 엔진. realtime에 둔다(항상
 켜져 있어 크론에 적합 — 뉴스 수집기·종목마스터 로더와 동일 이유). 화면/oRPC
 **기반은 이미 구현**됐고(커밋 `2d057ef`, [signals.md](../native/api/signals.md))
-**엔진(생성기)만 남았다** → 현재 `signal` 테이블은 비어 있어 화면은 빈 상태.
+<!-- vscodereader 2026-07-30 수정: 관리자 수동 시그널 생성이 구현되어
+signal 테이블이 항상 비어 있다는 설명을 제거하고 자동 생성 범위만 미구현으로 구분. -->
+**자동 엔진(생성기)만 남았다.** 관리자는 현재 `signal.create`로 수동 시그널을
+등록할 수 있으나, 시스템이 주기적으로 시그널을 생성하지는 않는다.
 
 ### 결정된 설계 (사용자 확인)
 - **모델**: 액션 기반(매수/매도/관망). 소스는 `tech`만 생성(나머지 향후).
@@ -207,28 +215,32 @@ realtime은 `min=max=1 + no-cpu-throttling`로 **항상 켜져 있는** 유일�
 
 ### 파이프라인 (예정 — `services/signal/`)
 1. 유니버스 수집: `selectDistinct(stockCode) from user_watchlist`
-2. **KIS REST 클라이언트** (신설): `/oauth2/tokenP` 액세스 토큰 발급/갱신
-   (WS approval_key와 별개), 일봉 `inquire_daily_itemchartprice` 호출 래퍼,
-   레이트리밋·에러 정규화
+<!-- vscodereader 2026-07-30 수정: 기존 신설 예정이던 KIS REST 토큰·차트 기능이
+index-intraday/stock-chart에 구현되어 엔진에서 재사용하는 단계로 변경. -->
+2. **기존 KIS REST 재사용**: `/oauth2/tokenP` 토큰 발급·DB 영속화와
+   `stock-chart.ts`의 일봉 조회·throttle·캐시를 엔진에서 호출
 3. 종목별 일봉 → 지표 계산: 골든크로스(MA), RSI, 거래량 급증
 4. 지표 → **매수/매도/관망** 분류 + `strength`(1~5) + `title`/`body` 생성,
    근거를 `indicators`(jsonb)에 저장
 5. `signal` 테이블 upsert (중복/쿨다운 정책 적용)
-6. (선택) 신규 시그널 → `notification_history` + Expo 푸시(뉴스 속보 경로 재사용)
+6. 신규 시그널 → 기존 `notifyRealtimeSignal`/`signal-push.ts` 푸시 경로 재사용
 
 ### 작업 체크리스트
-- [ ] **KIS REST 클라이언트** (`services/kis-rest.ts`): 토큰 캐시/갱신 + 일봉 조회.
-      (native API plan.md의 "공통 인프라"와 공유 가능 — 위치 결정 필요)
+<!-- vscodereader 2026-07-30 수정: KIS REST 선행 기능과 관리자 시그널 푸시는
+완료되어 자동 엔진에 연결하는 작업만 남김. -->
+- [x] KIS REST 토큰 캐시/DB 영속화 + 일봉 조회(`index-intraday.ts`, `stock-chart.ts`)
 - [ ] 지표 계산 순수 함수(MA/RSI/volume) + 단위 테스트(합성 일봉)
 - [ ] 분류기: 지표 → action/strength/title/body, 임계값 상수화
 - [ ] `services/signal/collector.ts`: 유니버스 순회 + 동시성 제한 + upsert
 - [ ] `plugins/scheduler.ts`에 시그널 크론 추가 (주기/장중 한정 결정)
-- [ ] (선택) 시그널 푸시 연동(알림설정 ON·`buy_signal`/`sell_signal` 타입)
+- [x] 관리자 수동 시그널 푸시(`buy_signal`/`sell_signal`/`hold_signal`)
+- [ ] 자동 엔진 생성 결과에서 기존 시그널 푸시 경로 호출
 - [ ] env 추가: 시그널 크론/주기, 지표 임계값(필요 시)
 
 ### 미정 / 결정 필요
 - [ ] 실행 주기(장중 N분 vs 장마감 후 1회)와 중복 시그널 쿨다운.
-- [ ] 시그널 푸시 연동 여부.
+- [x] 관리자 수동 시그널 푸시 연동
+- [ ] 자동 엔진 생성 시그널 푸시 호출 시점·실패 정책
 - [ ] RSI 경계·거래량 배수 등 임계값, `strength` 산출 공식.
 
 ---

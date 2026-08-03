@@ -1,0 +1,1 @@
+ALTER TYPE "public"."notification_type" ADD VALUE 'hold_signal' BEFORE 'price_alert';

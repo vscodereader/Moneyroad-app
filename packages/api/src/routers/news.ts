@@ -53,6 +53,11 @@ const authorInput = z.object({
   title: z.string().min(1).max(120),
   content: z.string().min(1).max(4000),
   link: z.string().url().optional(),
+  // ----(뉴스 썸네일: 업로드 라우트가 돌려준 GCS 공개 URL)----
+  // 안 보내면 컬럼이 null이 되고 앱이 머니로드 기본 이미지를 그린다(RFC 0006 Q6).
+  // 즉 update에서 이 필드를 비우는 것이 "썸네일 해제"다.
+  thumbnailUrl: z.string().url().optional(),
+  // ----(끝)----
 });
 // ----(끝)----
 
@@ -62,6 +67,11 @@ export interface FeedItem {
   aiGenerated: boolean;
   category: string;
   code: string;
+  // ----(머니로드 독점 기사 표식)----
+  // 앱이 source 문구("머니로드 독점")로 비교하면 표시 문구를 다듬는 순간 조용히
+  // 깨진다. 판별은 서버가 sourceType으로 하고 앱은 불리언만 본다.
+  exclusive: boolean;
+  // ----(끝)----
   id: string;
   imageUrl: string | null;
   pinned: boolean;
@@ -164,6 +174,7 @@ interface NewsRow {
   pinned: boolean;
   pubDate: Date;
   source: string | null;
+  sourceType: "auto" | "manual";
   stockCode: string | null;
   summary: string | null;
   tags: string[] | null;
@@ -185,6 +196,10 @@ function toFeedItem(row: NewsRow, stockName: string | null): FeedItem {
     aiGenerated: Boolean(row.summary),
     pinned: row.pinned,
     imageUrl: row.newsThumbnail,
+    // ----(머니로드 독점 기사 표식)----
+    // 관리자 작성 기사(create가 넣는 sourceType)만 독점이다.
+    exclusive: row.sourceType === "manual",
+    // ----(끝)----
     stockName,
   };
 }
@@ -214,6 +229,9 @@ const feedColumns = {
   pubDate: news.pubDate,
   pinned: news.pinned,
   newsThumbnail: news.newsThumbnail,
+  // ----(머니로드 독점 기사 표식: FeedItem.exclusive 계산용)----
+  sourceType: news.sourceType,
+  // ----(끝)----
 };
 
 function fetchNewsRows(where: SQL | undefined, limit: number) {
@@ -437,6 +455,9 @@ export const newsRouter = {
         description: body,
         content: body,
         link: input.link ?? null,
+        // ----(뉴스 썸네일: 미첨부면 null → 앱이 기본 이미지로 그린다)----
+        newsThumbnail: input.thumbnailUrl ?? null,
+        // ----(끝)----
         pubDate: new Date(),
         authorId: context.session.user.id,
       });
@@ -461,6 +482,11 @@ export const newsRouter = {
           description: body,
           content: body,
           link: input.link ?? null,
+          // ----(뉴스 썸네일: 교체·해제)----
+          // 폼이 항상 현재 값을 실어 보내므로 빈 값 = 관리자가 ✕로 뗀 것이다.
+          // null로 덮어 써야 기본 이미지로 되돌아간다.
+          newsThumbnail: input.thumbnailUrl ?? null,
+          // ----(끝)----
         })
         .where(and(eq(news.id, input.id), eq(news.sourceType, "manual")))
         .returning({ id: news.id });

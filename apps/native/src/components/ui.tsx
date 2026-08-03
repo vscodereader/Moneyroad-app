@@ -508,7 +508,9 @@ export function Tag({
 }
 
 // ── AI summary chip (gradient pill) ───────────────────────────
-export function AiChip({ label = "AI 요약" }: { label?: string }) {
+// 기본 문구는 label을 안 넘긴 호출부에만 쓰인다. 뉴스 파이프라인이 더 이상 AI
+// 요약을 만들지 않아 "AI 요약"은 사실과 어긋나므로 기본값도 함께 옮겼다.
+export function AiChip({ label = "머니로드 요약" }: { label?: string }) {
   const { t } = useMrTheme();
   // Approximate the gradient with a mid blend; full gradient lives in cards.
   return (

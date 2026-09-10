@@ -1,0 +1,14 @@
+{
+  "sqltools.connections": [
+    {
+      "name": "MoneyRoad Local (Docker)",
+      "driver": "PostgreSQL",
+      "server": "127.0.0.1",
+      "port": 5432,
+      "database": "moneyroad",
+      "username": "moneyroad",
+      "password": "moneyroad",
+      "connectionTimeout": 15
+    }
+  ]
+}

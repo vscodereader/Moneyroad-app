@@ -45,5 +45,4 @@
 | `refs/heads/local-snapshot/rebuild/pr28-all-in-one` | `2e3700f922420022d9160a435fa8f4ec610b5e04` |
 | `refs/heads/local-snapshot/verify/pr-stack-20260729-v2` | `0034bdf539e0bd31363c3ce1ffc572939f6f72bc` |
 | `refs/heads/main` | `158dc102f48a022eba9eb88df9617b2ded880dd8` |
-| `refs/heads/portfolio` | `27e05952ce829f338cffd6a8125e1ea783cf4286` |
 | `refs/heads/wip-snapshot/all_in_one` | `4b6cdc746bbb554713b5300667499e517f4e60ad` |

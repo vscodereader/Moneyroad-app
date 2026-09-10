@@ -3,10 +3,10 @@
 - 원본: https://github.com/beyondsoft-kr/moneyroad-app
 - 개인 저장소: https://github.com/vscodereader/Moneyroad-app
 - 문서 기준 브랜치: `main`
-- 원격·로컬 보존 브랜치: 11개
+- 원격·로컬 보존 브랜치: 43개
 - 태그: 0개
-- 전체 고유 커밋: 290개
-- 확인 계정 author 커밋: 269개(병합·재작성·스냅샷 포함, 기능 수 아님)
+- 전체 고유 커밋: 291개
+- 확인 계정 author 커밋: 270개(병합·재작성·스냅샷 포함, 기능 수 아님)
 - 전체 PR: 31개
 - 본인 작성 PR: 9개
 - 원본 코드·브랜치에는 문서화 커밋을 추가하지 않음. 별도 `portfolio` 브랜치에 문서와 안내 README를 추가함.

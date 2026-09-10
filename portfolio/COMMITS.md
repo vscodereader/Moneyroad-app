@@ -4,6 +4,7 @@
 
 | SHA | 일시 | Git author | 제목 | 본인 분류 |
 |---|---|---|---|---|
+| `27e05952ce829f338cffd6a8125e1ea783cf4286` | 2026-09-10T14:31:01+09:00 | vscodereader | docs: archive project technology, contribution evidence and branch inventory | 확인 계정 |
 | `4b6cdc746bbb554713b5300667499e517f4e60ad` | 2026-09-10T14:30:23+09:00 | vscodereader | archive: preserve uncommitted worktree snapshot (environment files excluded) | 확인 계정 |
 | `158dc102f48a022eba9eb88df9617b2ded880dd8` | 2026-08-03T13:08:13+09:00 | Jonghyeon Kim | Merge pull request #39 from beyondsoft-kr/develop | 확인 계정 |
 | `d82c7c29f1c544422c0c1686e3c8ad95e8e2c60f` | 2026-08-03T13:06:23+09:00 | Jonghyeon Kim | Merge pull request #38 from beyondsoft-kr/feat/rfc-0010-company-website-redesign | 확인 계정 |
